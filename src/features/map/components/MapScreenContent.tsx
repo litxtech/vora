@@ -9,7 +9,7 @@ import { MapDetailSheet } from '@/features/map/components/MapDetailSheet';
 import { MapLayerChips } from '@/features/map/components/MapLayerChips';
 import { MapSearchBar } from '@/features/map/components/MapSearchBar';
 import { PlatformMap } from '@/features/map/components/PlatformMap';
-import { KARADENIZ_MAP_CENTER, NEARBY_RADIUS_KM } from '@/features/map/constants';
+import { DEFAULT_ENABLED_LAYERS, KARADENIZ_MAP_CENTER, MAP_LAYERS, NEARBY_RADIUS_KM } from '@/features/map/constants';
 import { useMapLocation } from '@/features/map/hooks/useMapLocation';
 import { useMapMarkers } from '@/features/map/hooks/useMapMarkers';
 import { navigateToMapDetail } from '@/features/map/services/mapNavigation';
@@ -19,7 +19,7 @@ import type { MapLayerId, MapMarker } from '@/features/map/types';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const ALL_LAYERS: MapLayerId[] = ['incidents', 'posts', 'businesses', 'events', 'lost_found'];
+const ALL_LAYERS: MapLayerId[] = MAP_LAYERS.map((layer) => layer.id);
 
 export function MapScreenContent() {
   const insets = useSafeAreaInsets();

@@ -1,4 +1,4 @@
-import { findDemoMarker, JOB_TYPE_LABELS, POI_CATEGORY_LABELS } from '@/features/map/constants';
+import { findDemoMarker, POI_CATEGORY_LABELS } from '@/features/map/constants';
 import { jobTypeLabel } from '@/features/map/services/mapData';
 import type { MapDetailType } from '@/features/map/types';
 import { supabase } from '@/lib/supabase/client';

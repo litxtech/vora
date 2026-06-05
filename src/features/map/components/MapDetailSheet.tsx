@@ -1,11 +1,13 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
+import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { LAYER_BY_ID } from '@/features/map/constants';
-import type { MapCoordinate, MapMarker } from '@/features/map/types';
+import { useContentFollow } from '@/features/map/hooks/useContentFollow';
+import type { ContentFollowType, MapCoordinate, MapMarker } from '@/features/map/types';
 import { distanceKm, formatDistance, formatMapDate } from '@/features/map/utils/geo';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -37,6 +39,12 @@ function MetaChip({
   );
 }
 
+function followTypeForMarker(marker: MapMarker): ContentFollowType | null {
+  if (marker.layer === 'events') return 'event';
+  if (marker.layer === 'incidents') return 'incident';
+  return null;
+}
+
 export function MapDetailSheet({
   marker,
   userCoords,
@@ -45,9 +53,16 @@ export function MapDetailSheet({
   onOpenDetail,
 }: MapDetailSheetProps) {
   const { colors, isDark } = useTheme();
+  const { requireAuth } = useRequireAuth();
   const insets = useSafeAreaInsets();
 
   if (!marker) return null;
+
+  const followType = followTypeForMarker(marker);
+  const { following, toggle: toggleFollow } = useContentFollow(
+    followType ?? 'event',
+    followType ? marker.sourceId : null,
+  );
 
   const layer = LAYER_BY_ID[marker.layer];
   const isPremium = marker.layer === 'businesses' && marker.meta?.verified === true;
@@ -56,6 +71,13 @@ export function MapDetailSheet({
       ? formatDistance(distanceKm(userCoords, marker))
       : undefined;
   const dateLabel = formatMapDate(marker.createdAt);
+
+  const handleFollow = async () => {
+    if (!followType || !requireAuth('Takip')) return;
+    const result = await toggleFollow();
+    if (result?.error) Alert.alert('Hata', result.error);
+    else if (result?.following) Alert.alert('Takip', 'Yeni gelişmeler bildirim olarak gelecek.');
+  };
 
   return (
     <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
@@ -130,12 +152,31 @@ export function MapDetailSheet({
                   Yorum Yap
                 </Text>
               </Pressable>
-              <Pressable style={[styles.iconAction, { borderColor: colors.border }]} onPress={() => onOpenDetail(marker)}>
-                <Ionicons name="bookmark-outline" size={18} color={colors.textSecondary} />
-                <Text variant="caption" secondary>
-                  Takip Et
-                </Text>
-              </Pressable>
+              {followType ? (
+                <Pressable
+                  style={[
+                    styles.iconAction,
+                    { borderColor: following ? colors.accent : colors.border, backgroundColor: following ? `${colors.accent}12` : 'rgba(255,255,255,0.03)' },
+                  ]}
+                  onPress={handleFollow}
+                >
+                  <Ionicons
+                    name={following ? 'bookmark' : 'bookmark-outline'}
+                    size={18}
+                    color={following ? colors.accent : colors.textSecondary}
+                  />
+                  <Text variant="caption" secondary={!following} style={following ? { color: colors.accent } : undefined}>
+                    {following ? 'Takipte' : 'Takip Et'}
+                  </Text>
+                </Pressable>
+              ) : marker.layer === 'jobs' ? (
+                <Pressable style={[styles.iconAction, { borderColor: colors.border }]} onPress={() => onOpenDetail(marker)}>
+                  <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
+                  <Text variant="caption" secondary>
+                    Başvur
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
         </View>

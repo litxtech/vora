@@ -41,7 +41,8 @@ export async function fetchUnifiedItems(
     const { data } = await supabase
       .from('job_listings')
       .select(
-        `id, title, description, created_at, author_id, region_id,
+        `id, title, description, salary_range, location_label, latitude, longitude, created_at, author_id, region_id,
+         businesses (name, latitude, longitude),
          profiles!job_listings_author_id_fkey (id, username, full_name, avatar_url, role, is_verified)`,
       )
       .eq('region_id', regionId)
@@ -53,14 +54,22 @@ export async function fetchUnifiedItems(
       id: string;
       title: string;
       description: string;
+      salary_range: string | null;
+      location_label: string | null;
+      latitude: number | null;
+      longitude: number | null;
       created_at: string;
       author_id: string;
       region_id: string;
+      businesses: { name: string | null; latitude: number | null; longitude: number | null } | { name: string | null; latitude: number | null; longitude: number | null }[] | null;
       profiles: ProfileRow | ProfileRow[] | null;
     };
 
     for (const row of (data ?? []) as unknown as JobRow[]) {
       const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+      const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
+      const latitude = row.latitude ?? business?.latitude ?? null;
+      const longitude = row.longitude ?? business?.longitude ?? null;
       items.push({
         id: `job-${row.id}`,
         sourceType: 'job',
@@ -72,9 +81,9 @@ export async function fetchUnifiedItems(
         category: 'job',
         regionId: row.region_id,
         district: null,
-        locationLabel: null,
-        latitude: null,
-        longitude: null,
+        locationLabel: row.location_label ?? business?.name ?? null,
+        latitude,
+        longitude,
         likeCount: 0,
         commentCount: 0,
         quoteCount: 0,
