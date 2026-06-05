@@ -9,11 +9,19 @@ function detailHref(marker: MapMarker): Href {
     businesses: `/detail/businesses/${marker.sourceId}${demoQuery}`,
     events: `/detail/events/${marker.sourceId}${demoQuery}`,
     lost_found: `/detail/lost-found/${marker.sourceId}${demoQuery}`,
+    jobs: `/detail/jobs/${marker.sourceId}${demoQuery}`,
+    staff: `/detail/staff/${marker.sourceId}${demoQuery}`,
+    job_seekers: `/detail/job-seekers/${marker.sourceId}${demoQuery}`,
+    emergency_pois: `/detail/emergency-pois/${marker.sourceId}${demoQuery}`,
   } as const;
 
   return paths[marker.layer] as Href;
 }
 
 export function navigateToMapDetail(marker: MapMarker) {
+  if (marker.layer === 'incidents' && !marker.isDemo) {
+    router.push(`/detail/incidents/${marker.sourceId}` as Href);
+    return;
+  }
   router.push(detailHref(marker));
 }

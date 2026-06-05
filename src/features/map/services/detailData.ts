@@ -1,4 +1,5 @@
-import { findDemoMarker } from '@/features/map/constants';
+import { findDemoMarker, JOB_TYPE_LABELS, POI_CATEGORY_LABELS } from '@/features/map/constants';
+import { jobTypeLabel } from '@/features/map/services/mapData';
 import type { MapDetailType } from '@/features/map/types';
 import { supabase } from '@/lib/supabase/client';
 
@@ -72,6 +73,15 @@ function demoToRecord(type: MapDetailType, sourceId: string): MapDetailRecord | 
   }
   if (demo.meta?.verified) {
     fields.unshift({ label: 'Durum', value: 'Doğrulanmış işletme' });
+  }
+  if (demo.meta?.jobType) {
+    fields.unshift({ label: 'Çalışma', value: jobTypeLabel(String(demo.meta.jobType)) });
+  }
+  if (demo.meta?.salaryRange) {
+    fields.unshift({ label: 'Maaş', value: String(demo.meta.salaryRange) });
+  }
+  if (demo.meta?.category) {
+    fields.unshift({ label: 'Tür', value: POI_CATEGORY_LABELS[String(demo.meta.category)] ?? String(demo.meta.category) });
   }
 
   return {
@@ -229,6 +239,123 @@ export async function fetchMapDetail(
           { label: 'İletişim', value: data.contact_info ?? '—' },
           { label: 'Bölge', value: regionName(data.region_id) ?? '—' },
           { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+        ],
+      };
+    }
+
+    case 'jobs': {
+      const { data } = await supabase
+        .from('job_listings')
+        .select(
+          `id, title, description, job_type, salary_range, housing_provided, location_label, district,
+           latitude, longitude, region_id, created_at,
+           businesses (name, phone, address)`,
+        )
+        .eq('id', id)
+        .maybeSingle();
+      if (!data) return null;
+      const business = Array.isArray(data.businesses) ? data.businesses[0] : data.businesses;
+      return {
+        type,
+        id: data.id,
+        title: data.title,
+        subtitle: business?.name ?? data.location_label ?? 'İş ilanı',
+        description: data.description,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        createdAt: data.created_at,
+        fields: [
+          { label: 'Pozisyon', value: data.title },
+          { label: 'Maaş', value: data.salary_range ?? '—' },
+          { label: 'Çalışma', value: jobTypeLabel(data.job_type) },
+          { label: 'Konaklama', value: data.housing_provided ? 'Sağlanır' : '—' },
+          { label: 'Konum', value: data.location_label ?? data.district ?? regionName(data.region_id) ?? '—' },
+          { label: 'İşletme', value: business?.name ?? '—' },
+          { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+        ],
+      };
+    }
+
+    case 'staff': {
+      const { data } = await supabase
+        .from('staff_requests')
+        .select(
+          `id, title, description, positions, salary_range, location_label, district,
+           latitude, longitude, region_id, created_at,
+           businesses (name, phone)`,
+        )
+        .eq('id', id)
+        .maybeSingle();
+      if (!data) return null;
+      const business = Array.isArray(data.businesses) ? data.businesses[0] : data.businesses;
+      return {
+        type,
+        id: data.id,
+        title: data.title,
+        subtitle: business?.name ?? 'Personel arayan',
+        description: data.description,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        createdAt: data.created_at,
+        fields: [
+          { label: 'Pozisyonlar', value: data.positions?.join(', ') || '—' },
+          { label: 'Maaş', value: data.salary_range ?? '—' },
+          { label: 'Konum', value: data.location_label ?? data.district ?? regionName(data.region_id) ?? '—' },
+          { label: 'İşletme', value: business?.name ?? '—' },
+          { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+        ],
+      };
+    }
+
+    case 'job_seekers': {
+      const { data } = await supabase
+        .from('job_seekers')
+        .select('id, title, occupation, experience_years, skills, description, district, region_id, latitude, longitude, phone_visible, created_at, user_id')
+        .eq('id', id)
+        .maybeSingle();
+      if (!data) return null;
+      return {
+        type,
+        id: data.id,
+        title: data.title,
+        subtitle: data.occupation,
+        description: data.description ?? undefined,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        createdAt: data.created_at,
+        fields: [
+          { label: 'Meslek', value: data.occupation },
+          { label: 'Deneyim', value: `${data.experience_years} yıl` },
+          { label: 'Beceriler', value: data.skills?.join(', ') || '—' },
+          { label: 'Şehir', value: data.district ?? regionName(data.region_id) ?? '—' },
+          { label: 'Telefon', value: data.phone_visible ? 'Profilde görünür' : 'Gizli' },
+          { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+        ],
+      };
+    }
+
+    case 'emergency_pois': {
+      const { data } = await supabase
+        .from('emergency_pois')
+        .select('id, name, category, phone, address, description, is_24h, region_id, latitude, longitude, created_at')
+        .eq('id', id)
+        .maybeSingle();
+      if (!data) return null;
+      return {
+        type,
+        id: data.id,
+        title: data.name,
+        subtitle: POI_CATEGORY_LABELS[data.category] ?? data.category,
+        description: data.description ?? undefined,
+        latitude: data.latitude,
+        longitude: data.longitude,
+        createdAt: data.created_at,
+        fields: [
+          { label: 'Tür', value: POI_CATEGORY_LABELS[data.category] ?? data.category },
+          { label: 'Telefon', value: data.phone ?? '—' },
+          { label: 'Adres', value: data.address ?? '—' },
+          { label: '7/24', value: data.is_24h ? 'Evet' : 'Hayır' },
+          { label: 'Bölge', value: regionName(data.region_id) ?? '—' },
         ],
       };
     }
