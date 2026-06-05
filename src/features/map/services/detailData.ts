@@ -253,25 +253,43 @@ export async function fetchMapDetail(
         )
         .eq('id', id)
         .maybeSingle();
-      if (!data) return null;
-      const business = Array.isArray(data.businesses) ? data.businesses[0] : data.businesses;
+
+      type JobDetailRow = {
+        id: string;
+        title: string;
+        description: string;
+        job_type: string;
+        salary_range: string | null;
+        housing_provided: boolean;
+        location_label: string | null;
+        district: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        region_id: string;
+        created_at: string;
+        businesses: { name: string | null; phone: string | null; address: string | null } | { name: string | null; phone: string | null; address: string | null }[] | null;
+      };
+
+      const row = data as JobDetailRow | null;
+      if (!row) return null;
+      const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
       return {
         type,
-        id: data.id,
-        title: data.title,
-        subtitle: business?.name ?? data.location_label ?? 'İş ilanı',
-        description: data.description,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        createdAt: data.created_at,
+        id: row.id,
+        title: row.title,
+        subtitle: business?.name ?? row.location_label ?? 'İş ilanı',
+        description: row.description,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        createdAt: row.created_at,
         fields: [
-          { label: 'Pozisyon', value: data.title },
-          { label: 'Maaş', value: data.salary_range ?? '—' },
-          { label: 'Çalışma', value: jobTypeLabel(data.job_type) },
-          { label: 'Konaklama', value: data.housing_provided ? 'Sağlanır' : '—' },
-          { label: 'Konum', value: data.location_label ?? data.district ?? regionName(data.region_id) ?? '—' },
+          { label: 'Pozisyon', value: row.title },
+          { label: 'Maaş', value: row.salary_range ?? '—' },
+          { label: 'Çalışma', value: jobTypeLabel(row.job_type) },
+          { label: 'Konaklama', value: row.housing_provided ? 'Sağlanır' : '—' },
+          { label: 'Konum', value: row.location_label ?? row.district ?? regionName(row.region_id) ?? '—' },
           { label: 'İşletme', value: business?.name ?? '—' },
-          { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+          { label: 'İlan', value: formatDate(row.created_at) ?? '—' },
         ],
       };
     }
@@ -286,23 +304,40 @@ export async function fetchMapDetail(
         )
         .eq('id', id)
         .maybeSingle();
-      if (!data) return null;
-      const business = Array.isArray(data.businesses) ? data.businesses[0] : data.businesses;
+
+      type StaffDetailRow = {
+        id: string;
+        title: string;
+        description: string;
+        positions: string[];
+        salary_range: string | null;
+        location_label: string | null;
+        district: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        region_id: string;
+        created_at: string;
+        businesses: { name: string | null; phone: string | null } | { name: string | null; phone: string | null }[] | null;
+      };
+
+      const row = data as StaffDetailRow | null;
+      if (!row) return null;
+      const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
       return {
         type,
-        id: data.id,
-        title: data.title,
+        id: row.id,
+        title: row.title,
         subtitle: business?.name ?? 'Personel arayan',
-        description: data.description,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        createdAt: data.created_at,
+        description: row.description,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        createdAt: row.created_at,
         fields: [
-          { label: 'Pozisyonlar', value: data.positions?.join(', ') || '—' },
-          { label: 'Maaş', value: data.salary_range ?? '—' },
-          { label: 'Konum', value: data.location_label ?? data.district ?? regionName(data.region_id) ?? '—' },
+          { label: 'Pozisyonlar', value: row.positions?.join(', ') || '—' },
+          { label: 'Maaş', value: row.salary_range ?? '—' },
+          { label: 'Konum', value: row.location_label ?? row.district ?? regionName(row.region_id) ?? '—' },
           { label: 'İşletme', value: business?.name ?? '—' },
-          { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+          { label: 'İlan', value: formatDate(row.created_at) ?? '—' },
         ],
       };
     }
@@ -313,23 +348,40 @@ export async function fetchMapDetail(
         .select('id, title, occupation, experience_years, skills, description, district, region_id, latitude, longitude, phone_visible, created_at, user_id')
         .eq('id', id)
         .maybeSingle();
-      if (!data) return null;
+
+      type SeekerRow = {
+        id: string;
+        title: string;
+        occupation: string;
+        experience_years: number;
+        skills: string[];
+        description: string | null;
+        district: string | null;
+        region_id: string;
+        latitude: number | null;
+        longitude: number | null;
+        phone_visible: boolean;
+        created_at: string;
+      };
+
+      const row = data as SeekerRow | null;
+      if (!row) return null;
       return {
         type,
-        id: data.id,
-        title: data.title,
-        subtitle: data.occupation,
-        description: data.description ?? undefined,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        createdAt: data.created_at,
+        id: row.id,
+        title: row.title,
+        subtitle: row.occupation,
+        description: row.description ?? undefined,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        createdAt: row.created_at,
         fields: [
-          { label: 'Meslek', value: data.occupation },
-          { label: 'Deneyim', value: `${data.experience_years} yıl` },
-          { label: 'Beceriler', value: data.skills?.join(', ') || '—' },
-          { label: 'Şehir', value: data.district ?? regionName(data.region_id) ?? '—' },
-          { label: 'Telefon', value: data.phone_visible ? 'Profilde görünür' : 'Gizli' },
-          { label: 'İlan', value: formatDate(data.created_at) ?? '—' },
+          { label: 'Meslek', value: row.occupation },
+          { label: 'Deneyim', value: `${row.experience_years} yıl` },
+          { label: 'Beceriler', value: row.skills?.join(', ') || '—' },
+          { label: 'Şehir', value: row.district ?? regionName(row.region_id) ?? '—' },
+          { label: 'Telefon', value: row.phone_visible ? 'Profilde görünür' : 'Gizli' },
+          { label: 'İlan', value: formatDate(row.created_at) ?? '—' },
         ],
       };
     }
@@ -340,22 +392,38 @@ export async function fetchMapDetail(
         .select('id, name, category, phone, address, description, is_24h, region_id, latitude, longitude, created_at')
         .eq('id', id)
         .maybeSingle();
-      if (!data) return null;
+
+      type PoiRow = {
+        id: string;
+        name: string;
+        category: keyof typeof POI_CATEGORY_LABELS;
+        phone: string | null;
+        address: string | null;
+        description: string | null;
+        is_24h: boolean;
+        region_id: string;
+        latitude: number;
+        longitude: number;
+        created_at: string;
+      };
+
+      const row = data as PoiRow | null;
+      if (!row) return null;
       return {
         type,
-        id: data.id,
-        title: data.name,
-        subtitle: POI_CATEGORY_LABELS[data.category] ?? data.category,
-        description: data.description ?? undefined,
-        latitude: data.latitude,
-        longitude: data.longitude,
-        createdAt: data.created_at,
+        id: row.id,
+        title: row.name,
+        subtitle: POI_CATEGORY_LABELS[row.category] ?? row.category,
+        description: row.description ?? undefined,
+        latitude: row.latitude,
+        longitude: row.longitude,
+        createdAt: row.created_at,
         fields: [
-          { label: 'Tür', value: POI_CATEGORY_LABELS[data.category] ?? data.category },
-          { label: 'Telefon', value: data.phone ?? '—' },
-          { label: 'Adres', value: data.address ?? '—' },
-          { label: '7/24', value: data.is_24h ? 'Evet' : 'Hayır' },
-          { label: 'Bölge', value: regionName(data.region_id) ?? '—' },
+          { label: 'Tür', value: POI_CATEGORY_LABELS[row.category] ?? row.category },
+          { label: 'Telefon', value: row.phone ?? '—' },
+          { label: 'Adres', value: row.address ?? '—' },
+          { label: '7/24', value: row.is_24h ? 'Evet' : 'Hayır' },
+          { label: 'Bölge', value: regionName(row.region_id) ?? '—' },
         ],
       };
     }

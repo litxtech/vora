@@ -15,6 +15,7 @@ import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { HashtagText } from '@/features/feed/components/HashtagText';
 import { blockUser, createQuotePost } from '@/features/feed/services/engagement';
 import { recordPostView } from '@/features/feed/services/feedData';
+import { navigateToFeedDetail } from '@/features/feed/services/feedNavigation';
 import type { FeedItem } from '@/features/feed/types';
 import { formatFeedTime } from '@/features/feed/utils';
 import { REGIONS } from '@/constants/regions';
@@ -79,6 +80,10 @@ export function FeedPostCard({ item, onUpdate }: FeedPostCardProps) {
     Alert.alert('Paylaşıldı', 'Alıntın akışa eklendi.');
   };
 
+  const openDetail = () => {
+    navigateToFeedDetail(item.sourceType, item.sourceId, item.isDemo);
+  };
+
   const openLocation = () => {
     if (item.latitude == null || item.longitude == null) return;
     Linking.openURL(
@@ -122,8 +127,14 @@ export function FeedPostCard({ item, onUpdate }: FeedPostCardProps) {
         </View>
       ) : null}
 
-      {item.title ? <Text variant="h3">{item.title}</Text> : null}
-      <HashtagText content={item.content} />
+      {item.title ? (
+        <Pressable onPress={openDetail}>
+          <Text variant="h3">{item.title}</Text>
+        </Pressable>
+      ) : null}
+      <Pressable onPress={openDetail}>
+        <HashtagText content={item.content} />
+      </Pressable>
 
       {item.quotedPost ? <QuotedPostPreview quoted={item.quotedPost} /> : null}
       <MediaCarousel urls={item.mediaUrls} />

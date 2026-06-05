@@ -136,6 +136,20 @@ create trigger incident_update_notify_followers
   after insert on public.incident_updates
   for each row execute function public.notify_incident_followers();
 
+-- İş arayan konum güncelleme
+create or replace function public.set_job_seeker_location(seeker_user_id uuid, lng double precision, lat double precision)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.job_seekers
+  set location = st_setsrid(st_makepoint(lng, lat), 4326)::geography
+  where user_id = seeker_user_id;
+end;
+$$;
+
 -- Trabzon acil noktaları (örnek seed)
 insert into public.emergency_pois (region_id, name, category, phone, address, is_24h, location)
 values
@@ -192,8 +206,7 @@ values
     'Kaşüstü, Trabzon',
     false,
     st_setsrid(st_makepoint(39.728, 40.998), 4326)::geography
-  )
-on conflict do nothing;
+  );
 
 -- RLS: iş ilanları ve personel
 create policy "job_listings_public_read" on public.job_listings

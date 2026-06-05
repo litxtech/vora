@@ -342,6 +342,11 @@ export interface Database {
           description: string;
           job_type: 'full_time' | 'part_time' | 'seasonal' | 'remote';
           salary_range: string | null;
+          location_label: string | null;
+          district: string | null;
+          latitude: number | null;
+          longitude: number | null;
+          housing_provided: boolean;
           status: ContentStatus;
           created_at: string;
         };
@@ -363,6 +368,11 @@ export interface Database {
           title: string;
           description: string;
           positions: string[];
+          salary_range: string | null;
+          location_label: string | null;
+          district: string | null;
+          latitude: number | null;
+          longitude: number | null;
           status: ContentStatus;
           created_at: string;
         };
@@ -424,6 +434,80 @@ export interface Database {
           description: string;
         };
         Update: Partial<Database['public']['Tables']['lost_items']['Row']>;
+        Relationships: [];
+      };
+      job_seekers: {
+        Row: {
+          id: string;
+          user_id: string;
+          region_id: string;
+          title: string;
+          occupation: string;
+          experience_years: number;
+          skills: string[];
+          job_types: ('full_time' | 'part_time' | 'seasonal' | 'remote')[];
+          description: string | null;
+          phone_visible: boolean;
+          latitude: number | null;
+          longitude: number | null;
+          district: string | null;
+          is_visible_on_map: boolean;
+          status: ContentStatus;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['job_seekers']['Row']> & {
+          user_id: string;
+          region_id: string;
+          title: string;
+          occupation: string;
+        };
+        Update: Partial<Database['public']['Tables']['job_seekers']['Row']>;
+        Relationships: [];
+      };
+      emergency_pois: {
+        Row: {
+          id: string;
+          region_id: string;
+          name: string;
+          category: 'hospital' | 'pharmacy' | 'police' | 'fire' | 'veterinary' | 'afad' | 'other';
+          phone: string | null;
+          address: string | null;
+          description: string | null;
+          is_24h: boolean;
+          latitude: number;
+          longitude: number;
+          source: string;
+          created_at: string;
+        };
+        Insert: Partial<Database['public']['Tables']['emergency_pois']['Row']> & {
+          region_id: string;
+          name: string;
+          category: 'hospital' | 'pharmacy' | 'police' | 'fire' | 'veterinary' | 'afad' | 'other';
+        };
+        Update: Partial<Database['public']['Tables']['emergency_pois']['Row']>;
+        Relationships: [];
+      };
+      event_follows: {
+        Row: {
+          user_id: string;
+          event_id: string;
+          notify_on_update: boolean;
+          created_at: string;
+        };
+        Insert: { user_id: string; event_id: string; notify_on_update?: boolean };
+        Update: Partial<Database['public']['Tables']['event_follows']['Row']>;
+        Relationships: [];
+      };
+      incident_follows: {
+        Row: {
+          user_id: string;
+          incident_id: string;
+          notify_on_update: boolean;
+          created_at: string;
+        };
+        Insert: { user_id: string; incident_id: string; notify_on_update?: boolean };
+        Update: Partial<Database['public']['Tables']['incident_follows']['Row']>;
         Relationships: [];
       };
       conversations: {

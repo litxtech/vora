@@ -180,7 +180,32 @@ export async function fetchMapMarkers(): Promise<MapMarker[]> {
     });
   }
 
-  for (const row of jobs.data ?? []) {
+  type JobMapRow = {
+    id: string;
+    title: string;
+    description: string;
+    job_type: string;
+    salary_range: string | null;
+    housing_provided: boolean;
+    latitude: number | null;
+    longitude: number | null;
+    created_at: string;
+    businesses: BusinessCoords | BusinessCoords[] | null;
+  };
+
+  type StaffMapRow = {
+    id: string;
+    title: string;
+    description: string;
+    positions: string[];
+    salary_range: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    created_at: string;
+    businesses: BusinessCoords | BusinessCoords[] | null;
+  };
+
+  for (const row of (jobs.data ?? []) as unknown as JobMapRow[]) {
     const coords = resolveCoords(row);
     if (!coords) continue;
     const business = Array.isArray(row.businesses) ? row.businesses[0] : row.businesses;
@@ -202,7 +227,7 @@ export async function fetchMapMarkers(): Promise<MapMarker[]> {
     });
   }
 
-  for (const row of staff.data ?? []) {
+  for (const row of (staff.data ?? []) as unknown as StaffMapRow[]) {
     const coords = resolveCoords(row);
     if (!coords) continue;
     markers.push({

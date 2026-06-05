@@ -20,8 +20,8 @@ export function useContentFollow(type: ContentFollowType, contentId: string | nu
     isContentFollowed(type, contentId, user.id).then(setFollowing);
   }, [type, contentId, user?.id]);
 
-  const toggle = useCallback(async () => {
-    if (!user?.id || !contentId) return { error: 'Giriş gerekli' };
+  const toggle = useCallback(async (): Promise<{ error: string | null; following: boolean }> => {
+    if (!user?.id || !contentId) return { error: 'Giriş gerekli', following: false };
 
     setLoading(true);
     const result = await toggleContentFollow(type, contentId, user.id, following);
