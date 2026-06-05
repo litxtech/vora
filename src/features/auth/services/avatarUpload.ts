@@ -1,0 +1,31 @@
+import { supabase } from '@/lib/supabase/client';
+
+function guessContentType(uri: string): string {
+  const ext = uri.split('.').pop()?.toLowerCase();
+  if (ext === 'png') return 'image/png';
+  if (ext === 'webp') return 'image/webp';
+  if (ext === 'heic' || ext === 'heif') return 'image/heic';
+  return 'image/jpeg';
+}
+
+export async function uploadAvatar(userId: string, localUri: string): Promise<{ url: string | null; error: string | null }> {
+  try {
+    const response = await fetch(localUri);
+    const arrayBuffer = await response.arrayBuffer();
+    const contentType = guessContentType(localUri);
+    const ext = contentType.split('/')[1] ?? 'jpg';
+    const path = `${userId}/avatar.${ext}`;
+
+    const { error: uploadError } = await supabase.storage.from('avatars').upload(path, arrayBuffer, {
+      contentType,
+      upsert: true,
+    });
+
+    if (uploadError) return { url: null, error: uploadError.message };
+
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path);
+    return { url: data.publicUrl, error: null };
+  } catch (err) {
+    return { url: null, error: String(err) };
+  }
+}
