@@ -85,6 +85,7 @@ const config: ExpoConfig = {
         photosPermission: 'Profil fotoğrafı eklemek için galeri erişimi gerekir.',
       },
     ],
+    'expo-document-picker',
   ],
   experiments: {
     typedRoutes: true,

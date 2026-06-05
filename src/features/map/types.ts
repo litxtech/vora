@@ -1,6 +1,17 @@
-export type MapLayerId = 'incidents' | 'posts' | 'businesses' | 'events' | 'lost_found';
+export type MapLayerId =
+  | 'incidents'
+  | 'posts'
+  | 'businesses'
+  | 'events'
+  | 'lost_found'
+  | 'jobs'
+  | 'staff'
+  | 'job_seekers'
+  | 'emergency_pois';
 
 export type MapStyleId = 'standard' | 'dark' | 'light' | 'satellite';
+
+export type ContentFollowType = 'event' | 'incident';
 
 export type MapCoordinate = {
   latitude: number;

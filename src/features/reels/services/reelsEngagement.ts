@@ -1,3 +1,4 @@
+import { getProfileLabel, notifyUser } from '@/lib/notifications/helpers';
 import { supabase } from '@/lib/supabase/client';
 
 export async function toggleReelLike(
@@ -17,5 +18,26 @@ export async function toggleReelLike(
   }
 
   const { error } = await supabase.from('reel_likes').insert({ reel_id: reelId, user_id: userId });
+
+  if (!error) {
+    const { data: reel } = await supabase
+      .from('reels')
+      .select('author_id')
+      .eq('id', reelId)
+      .maybeSingle();
+
+    if (reel?.author_id) {
+      const actor = await getProfileLabel(userId);
+      await notifyUser(
+        reel.author_id,
+        'reel_like',
+        'Reel beğenisi',
+        `${actor} reelini beğendi`,
+        userId,
+        { reelId },
+      );
+    }
+  }
+
   return { error: error?.message ?? null };
 }

@@ -479,6 +479,107 @@ export interface Database {
           status?: 'ringing' | 'accepted' | 'declined' | 'ended' | 'missed' | 'cancelled';
         }
       >;
+      push_tokens: TableDef<
+        {
+          id: string;
+          user_id: string;
+          platform: 'ios' | 'android' | 'web';
+          expo_push_token: string | null;
+          device_push_token: string | null;
+          device_id: string | null;
+          is_active: boolean;
+          created_at: string;
+          updated_at: string;
+        },
+        {
+          user_id: string;
+          platform: 'ios' | 'android' | 'web';
+          expo_push_token?: string | null;
+          device_push_token?: string | null;
+          device_id?: string | null;
+          is_active?: boolean;
+        }
+      >;
+      notification_sound_settings: TableDef<
+        {
+          event_type: string;
+          label: string;
+          sound_storage_path: string | null;
+          sound_filename: string | null;
+          sound_url: string | null;
+          duration_seconds: number | null;
+          is_custom_enabled: boolean;
+          updated_by: string | null;
+          updated_at: string;
+        },
+        {
+          event_type: string;
+          label: string;
+          sound_storage_path?: string | null;
+          sound_filename?: string | null;
+          sound_url?: string | null;
+          duration_seconds?: number | null;
+          is_custom_enabled?: boolean;
+          updated_by?: string | null;
+        }
+      >;
+      notifications: TableDef<
+        {
+          id: string;
+          user_id: string;
+          event_type: string;
+          title: string;
+          body: string;
+          data: Json;
+          actor_id: string | null;
+          read_at: string | null;
+          created_at: string;
+        },
+        {
+          user_id: string;
+          event_type: string;
+          title: string;
+          body: string;
+          data?: Json;
+          actor_id?: string | null;
+        }
+      >;
+      friend_requests: TableDef<
+        {
+          id: string;
+          sender_id: string;
+          receiver_id: string;
+          status: 'pending' | 'accepted' | 'declined';
+          created_at: string;
+          responded_at: string | null;
+        },
+        {
+          sender_id: string;
+          receiver_id: string;
+          status?: 'pending' | 'accepted' | 'declined';
+        }
+      >;
+      notification_outbox: TableDef<
+        {
+          id: string;
+          recipient_id: string;
+          event_type: string;
+          title: string;
+          body: string;
+          data: Json;
+          actor_id: string | null;
+          processed_at: string | null;
+          created_at: string;
+        },
+        {
+          recipient_id: string;
+          event_type: string;
+          title: string;
+          body: string;
+          data?: Json;
+          actor_id?: string | null;
+        }
+      >;
       moderation_actions: {
         Row: {
           id: string;

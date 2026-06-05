@@ -13,7 +13,7 @@ Notifications.setNotificationHandler({
 });
 
 function getDeviceId(): string {
-  return Constants.sessionId ?? Constants.installationId ?? 'unknown-device';
+  return Constants.sessionId ?? `device-${Platform.OS}`;
 }
 
 export async function requestNotificationPermissions(): Promise<boolean> {
@@ -53,21 +53,34 @@ export async function registerPushTokens(userId: string): Promise<void> {
     // Simülatör
   }
 
-  const platform = Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
+  const platform: 'ios' | 'android' | 'web' =
+    Platform.OS === 'ios' ? 'ios' : Platform.OS === 'android' ? 'android' : 'web';
   const deviceId = getDeviceId();
 
-  await supabase.from('push_tokens').upsert(
-    {
-      user_id: userId,
-      platform,
-      expo_push_token: expoPushToken,
-      device_push_token: devicePushToken,
-      device_id: deviceId,
-      is_active: true,
-      updated_at: new Date().toISOString(),
-    },
-    { onConflict: 'user_id,device_id' },
-  );
+  const { data: existing } = await supabase
+    .from('push_tokens')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('device_id', deviceId)
+    .maybeSingle();
+
+  const payload = {
+    user_id: userId,
+    platform,
+    expo_push_token: expoPushToken,
+    device_push_token: devicePushToken,
+    device_id: deviceId,
+    is_active: true,
+  };
+
+  if (existing?.id) {
+    await supabase
+      .from('push_tokens')
+      .update({ ...payload, updated_at: new Date().toISOString() })
+      .eq('id', existing.id);
+  } else {
+    await supabase.from('push_tokens').insert(payload);
+  }
 }
 
 export async function deactivatePushTokens(userId: string): Promise<void> {
