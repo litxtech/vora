@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type RefObject } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -18,12 +18,14 @@ import {
   LiveSupportMessageBubble,
   liveSupportBubbleMargin,
 } from '@/features/live-support/components/LiveSupportMessageBubble';
+import { LiveSupportHistoryModal } from '@/features/live-support/components/LiveSupportHistoryModal';
 import { LiveSupportStatusStrip } from '@/features/live-support/components/LiveSupportStatusStrip';
 import { ChatConversationLayout } from '@/features/messaging/components/ChatConversationLayout';
 import { LIVE_SUPPORT_ACCENT } from '@/features/live-support/constants';
 import { useLiveSupportChat } from '@/features/live-support/hooks/useLiveSupportChat';
 import { useLiveSupportPendingVideoStore } from '@/features/live-support/store/pendingVideoStore';
 import type { LiveSupportMessage, LiveSupportStatus, LiveSupportTopic } from '@/features/live-support/types';
+import { isLiveSupportThreadInactive } from '@/features/live-support/utils/threadSession';
 import { ChatMediaViewerProvider } from '@/features/messaging/context/ChatMediaViewerContext';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -55,6 +57,7 @@ function EmptyChatHint() {
 const LiveSupportChatFooterHost = memo(function LiveSupportChatFooterHost({
   threadStatus,
   messagesCount,
+  isFreshSession,
   sending,
   initialTopic,
   suggestedDraft,
@@ -66,6 +69,7 @@ const LiveSupportChatFooterHost = memo(function LiveSupportChatFooterHost({
 }: {
   threadStatus: LiveSupportStatus | null;
   messagesCount: number;
+  isFreshSession: boolean;
   sending: boolean;
   initialTopic?: LiveSupportTopic | null;
   suggestedDraft?: string;
@@ -92,6 +96,7 @@ const LiveSupportChatFooterHost = memo(function LiveSupportChatFooterHost({
     <LiveSupportChatFooter
       threadStatus={threadStatus}
       messagesCount={messagesCount}
+      isFreshSession={isFreshSession}
       sending={sending}
       initialTopic={initialTopic}
       suggestedDraft={suggestedDraft}
@@ -177,10 +182,25 @@ export function LiveSupportChatPanel({
   suggestedDraft,
 }: LiveSupportChatPanelProps) {
   const { colors } = useTheme();
-  const { user, thread, messages, loading, sending, sendMessage, sendImage, sendVideo } =
-    useLiveSupportChat();
+  const {
+    user,
+    thread,
+    messages,
+    loading,
+    sending,
+    hasPastSession,
+    pastMessages,
+    pastLoading,
+    loadPastMessages,
+    sendMessage,
+    sendImage,
+    sendVideo,
+  } = useLiveSupportChat();
+  const [historyVisible, setHistoryVisible] = useState(false);
   const listRef = useRef<FlatList<LiveSupportMessage>>(null);
   const messageCountRef = useRef(0);
+
+  const isFreshSession = !thread || isLiveSupportThreadInactive(thread.status);
 
   const scrollToLatest = useCallback((animated = true) => {
     requestAnimationFrame(() => {
@@ -215,11 +235,17 @@ export function LiveSupportChatPanel({
   const threadStatus = thread?.status ?? null;
   const messagesCount = messages.length;
 
+  const openHistory = useCallback(() => {
+    setHistoryVisible(true);
+    void loadPastMessages();
+  }, [loadPastMessages]);
+
   const footer = useMemo(
     () => (
       <LiveSupportChatFooterHost
         threadStatus={threadStatus}
         messagesCount={messagesCount}
+        isFreshSession={isFreshSession}
         sending={sending}
         initialTopic={initialTopic}
         suggestedDraft={suggestedDraft}
@@ -231,6 +257,7 @@ export function LiveSupportChatPanel({
     ),
     [
       initialTopic,
+      isFreshSession,
       messagesCount,
       scrollToLatest,
       sendImage,
@@ -267,7 +294,12 @@ export function LiveSupportChatPanel({
   return (
     <ChatMediaViewerProvider>
       <View style={[styles.root, embedded && styles.embedded, { backgroundColor: colors.background }]}>
-        <LiveSupportStatusStrip thread={thread} compact={embedded} />
+        <LiveSupportStatusStrip
+          thread={thread}
+          compact={embedded}
+          hasPastSession={hasPastSession}
+          onOpenHistory={openHistory}
+        />
         <View style={styles.body}>
           <LiveSupportMessageList
             messages={messages}
@@ -279,6 +311,14 @@ export function LiveSupportChatPanel({
           />
         </View>
       </View>
+      <LiveSupportHistoryModal
+        visible={historyVisible}
+        thread={thread}
+        messages={pastMessages}
+        loading={pastLoading}
+        userId={user.id}
+        onClose={() => setHistoryVisible(false)}
+      />
     </ChatMediaViewerProvider>
   );
 }

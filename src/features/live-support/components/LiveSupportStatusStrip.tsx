@@ -1,5 +1,5 @@
 import { memo, useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import {
@@ -8,6 +8,7 @@ import {
   LIVE_SUPPORT_STATUS_LABELS,
 } from '@/features/live-support/constants';
 import type { LiveSupportThread } from '@/features/live-support/types';
+import { isLiveSupportThreadInactive } from '@/features/live-support/utils/threadSession';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -23,11 +24,15 @@ function formatSessionCountdown(expiresAt: string): string {
 type LiveSupportStatusStripProps = {
   thread: LiveSupportThread | null;
   compact?: boolean;
+  hasPastSession?: boolean;
+  onOpenHistory?: () => void;
 };
 
 export const LiveSupportStatusStrip = memo(function LiveSupportStatusStrip({
   thread,
   compact = false,
+  hasPastSession = false,
+  onOpenHistory,
 }: LiveSupportStatusStripProps) {
   const { colors } = useTheme();
   const [countdown, setCountdown] = useState<string | null>(null);
@@ -44,7 +49,10 @@ export const LiveSupportStatusStrip = memo(function LiveSupportStatusStrip({
     return () => clearInterval(timer);
   }, [thread?.session_expires_at, thread?.status]);
 
+  const isInactive = thread ? isLiveSupportThreadInactive(thread.status) : false;
   const isActive = thread?.status === 'waiting_support' || thread?.status === 'open';
+  const statusLabel =
+    thread && !isInactive ? LIVE_SUPPORT_STATUS_LABELS[thread.status] : 'Canlı destek';
 
   return (
     <View
@@ -67,9 +75,22 @@ export const LiveSupportStatusStrip = memo(function LiveSupportStatusStrip({
             ]}
           />
           <Text variant="caption" style={{ color: LIVE_SUPPORT_ACCENT, fontWeight: '700' }}>
-            {thread ? LIVE_SUPPORT_STATUS_LABELS[thread.status] : 'Canlı destek'}
+            {statusLabel}
           </Text>
         </View>
+
+        {hasPastSession && onOpenHistory ? (
+          <Pressable
+            onPress={onOpenHistory}
+            style={[styles.historyBtn, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}
+          >
+            <Ionicons name="time-outline" size={12} color={colors.textMuted} />
+            <Text variant="caption" style={{ color: colors.text, fontWeight: '600', fontSize: 11 }}>
+              Geçmiş Destek
+            </Text>
+            <Ionicons name="chevron-forward" size={12} color={colors.textMuted} />
+          </Pressable>
+        ) : null}
 
         {countdown ? (
           <View style={[styles.timerPill, { backgroundColor: colors.surfaceElevated }]}>
@@ -148,4 +169,13 @@ const styles = StyleSheet.create({
   },
   unreadText: { color: '#fff', fontWeight: '700', fontSize: 11 },
   hint: { lineHeight: 15, fontSize: 11 },
+  historyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
 });

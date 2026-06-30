@@ -10,6 +10,7 @@ import type { LiveSupportStatus, LiveSupportTopic } from '@/features/live-suppor
 type LiveSupportChatFooterProps = {
   threadStatus: LiveSupportStatus | null;
   messagesCount: number;
+  isFreshSession?: boolean;
   sending: boolean;
   initialTopic?: LiveSupportTopic | null;
   suggestedDraft?: string;
@@ -36,6 +37,7 @@ type LiveSupportChatFooterProps = {
 export const LiveSupportChatFooter = memo(function LiveSupportChatFooter({
   threadStatus,
   messagesCount,
+  isFreshSession = false,
   sending,
   initialTopic = null,
   suggestedDraft,
@@ -126,15 +128,17 @@ export const LiveSupportChatFooter = memo(function LiveSupportChatFooter({
   }, [clearAfterSend, selectedTopic, sendVideo]);
 
   const closedNote =
-    threadStatus === 'closed'
-      ? 'Bu sohbet kapatıldı. Yeni mesaj yazarsanız destek ekibine yeniden iletilir.'
-      : threadStatus === 'no_response'
-        ? 'Bu sohbet yanıt alınamadığı için kapatıldı. Yeni mesaj yazarsanız destek ekibine iletilir.'
-        : threadStatus === 'resolved'
-          ? 'Bu talep çözüldü olarak işaretlendi. Yeni mesaj yazarsanız destek ekibine iletilir.'
-          : threadStatus === 'waiting_user'
-            ? 'Destek ekibi ek bilgi istedi. Yanıtınızı aşağıdan yazabilirsiniz.'
-            : null;
+    isFreshSession
+      ? null
+      : threadStatus === 'closed'
+        ? 'Bu sohbet kapatıldı. Yeni mesaj yazarsanız destek ekibine yeniden iletilir.'
+        : threadStatus === 'no_response'
+          ? 'Bu sohbet yanıt alınamadığı için kapatıldı. Yeni mesaj yazarsanız destek ekibine iletilir.'
+          : threadStatus === 'resolved'
+            ? 'Bu talep çözüldü olarak işaretlendi. Yeni mesaj yazarsanız destek ekibine iletilir.'
+            : threadStatus === 'waiting_user'
+              ? 'Destek ekibi ek bilgi istedi. Yanıtınızı aşağıdan yazabilirsiniz.'
+              : null;
 
   const topicChips =
     messagesCount === 0 ? (

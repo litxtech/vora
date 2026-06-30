@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchLiveSupportMessages,
   fetchMyLiveSupportThread,
@@ -15,6 +15,10 @@ import {
   buildLiveSupportMessage,
   mergeLiveSupportMessages,
 } from '@/features/live-support/utils/messageList';
+import {
+  filterLiveSupportSessionMessages,
+  isLiveSupportThreadInactive,
+} from '@/features/live-support/utils/threadSession';
 import type {
   LiveSupportMessage,
   LiveSupportMessageType,
@@ -27,9 +31,27 @@ export function useLiveSupportChat() {
   const { user } = useAuth();
   const [thread, setThread] = useState<LiveSupportThread | null>(null);
   const [messages, setMessages] = useState<LiveSupportMessage[]>([]);
+  const [sessionStartAt, setSessionStartAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [pastMessages, setPastMessages] = useState<LiveSupportMessage[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
   const knownMessageIdsRef = useRef(new Set<string>());
+
+  const displayMessages = useMemo(
+    () => filterLiveSupportSessionMessages(messages, sessionStartAt),
+    [messages, sessionStartAt],
+  );
+
+  const hasPastSession = Boolean(
+    thread?.last_message_at && isLiveSupportThreadInactive(thread.status),
+  );
+
+  const clearActiveChat = useCallback(() => {
+    setMessages([]);
+    setSessionStartAt(null);
+    knownMessageIdsRef.current.clear();
+  }, []);
 
   const appendMessage = useCallback((message: LiveSupportMessage) => {
     if (knownMessageIdsRef.current.has(message.id)) return;
@@ -97,15 +119,15 @@ export function useLiveSupportChat() {
       const silent = options?.silent ?? false;
       if (!silent) setLoading(true);
       const nextThread = await refreshThread();
-      if (nextThread) {
+      if (nextThread && !isLiveSupportThreadInactive(nextThread.status)) {
+        setSessionStartAt(null);
         await loadMessages(nextThread.id);
       } else {
-        setMessages([]);
-        knownMessageIdsRef.current.clear();
+        clearActiveChat();
       }
       if (!silent) setLoading(false);
     },
-    [loadMessages, refreshThread],
+    [clearActiveChat, loadMessages, refreshThread],
   );
 
   useEffect(() => {
@@ -113,7 +135,13 @@ export function useLiveSupportChat() {
   }, [load]);
 
   useEffect(() => {
-    if (!thread?.session_expires_at || ['closed', 'resolved', 'no_response'].includes(thread.status)) return;
+    if (!thread || !isLiveSupportThreadInactive(thread.status)) return;
+    if (sessionStartAt) return;
+    clearActiveChat();
+  }, [clearActiveChat, sessionStartAt, thread?.id, thread?.status]);
+
+  useEffect(() => {
+    if (!thread?.session_expires_at || isLiveSupportThreadInactive(thread.status)) return;
 
     const expiresAt = new Date(thread.session_expires_at).getTime();
     const delay = expiresAt - Date.now();
@@ -132,6 +160,7 @@ export function useLiveSupportChat() {
   useLiveSupportRealtime({
     threadId: thread?.id ?? null,
     onNewMessage: (message) => {
+      if (thread && isLiveSupportThreadInactive(thread.status)) return;
       appendMessage(message);
       if (thread?.id) {
         void markLiveSupportRead(thread.id);
@@ -143,12 +172,29 @@ export function useLiveSupportChat() {
     },
   });
 
+  const loadPastMessages = useCallback(async () => {
+    if (!thread?.id) return;
+    setPastLoading(true);
+    setPastMessages(await fetchLiveSupportMessages(thread.id));
+    setPastLoading(false);
+  }, [thread?.id]);
+
+  const beginNewSession = useCallback(() => {
+    setSessionStartAt(new Date(Date.now() - 5000).toISOString());
+    setMessages([]);
+    knownMessageIdsRef.current.clear();
+  }, []);
+
   const startThread = useCallback(
     async (
       content: string,
       topic?: LiveSupportTopic | null,
       options?: { messageType?: LiveSupportMessageType; mediaUrl?: string | null },
     ) => {
+      if (thread && isLiveSupportThreadInactive(thread.status)) {
+        beginNewSession();
+      }
+
       setSending(true);
       const { threadId, error } = await startLiveSupportThread(content, topic, options);
       setSending(false);
@@ -169,10 +215,13 @@ export function useLiveSupportChat() {
       }
 
       await loadMessages(threadId);
-      await refreshThread();
+      const nextThread = await refreshThread();
+      if (nextThread && !isLiveSupportThreadInactive(nextThread.status)) {
+        setSessionStartAt(null);
+      }
       return { error: null };
     },
-    [appendMessage, loadMessages, refreshThread, user?.id],
+    [appendMessage, beginNewSession, loadMessages, refreshThread, thread, user?.id],
   );
 
   const sendMessage = useCallback(
@@ -183,6 +232,10 @@ export function useLiveSupportChat() {
     ) => {
       if (!thread?.id) {
         return startThread(content, topic, options);
+      }
+
+      if (isLiveSupportThreadInactive(thread.status)) {
+        beginNewSession();
       }
 
       setSending(true);
@@ -204,10 +257,14 @@ export function useLiveSupportChat() {
       }
 
       void loadMessages(thread.id);
-      void refreshThread();
+      void refreshThread().then((nextThread) => {
+        if (nextThread && !isLiveSupportThreadInactive(nextThread.status)) {
+          setSessionStartAt(null);
+        }
+      });
       return { error: null };
     },
-    [appendMessage, loadMessages, refreshThread, startThread, thread?.id, user?.id],
+    [appendMessage, beginNewSession, loadMessages, refreshThread, startThread, thread, user?.id],
   );
 
   const sendImage = useCallback(
@@ -258,10 +315,14 @@ export function useLiveSupportChat() {
   return {
     user,
     thread,
-    messages,
+    messages: displayMessages,
     loading,
     sending,
+    hasPastSession,
+    pastMessages,
+    pastLoading,
     load,
+    loadPastMessages,
     sendMessage,
     sendImage,
     sendVideo,

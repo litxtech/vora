@@ -1,7 +1,8 @@
-import { useEffect, type ReactNode } from 'react';
-import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { memo, useCallback, useEffect, type ReactNode } from 'react';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
+  cancelAnimation,
   Easing,
   interpolate,
   useAnimatedStyle,
@@ -22,11 +23,15 @@ import { useFeedStore } from '@/features/feed/store/feedStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const FEED_DRAWER_WIDTH_RATIO = 0.7;
-const FEED_DRAWER_OPEN_MS = 220;
-const FEED_DRAWER_CLOSE_MS = 200;
-const FEED_DRAWER_EASING = Easing.bezier(0.32, 0.72, 0, 1);
+const FEED_DRAWER_WIDTH_RATIO = 0.78;
+const FEED_DRAWER_OPEN_MS = 300;
+const FEED_DRAWER_CLOSE_MS = 280;
+const FEED_DRAWER_EASING = Easing.bezier(0.22, 1, 0.36, 1);
 const DRAWER_AVATAR_SIZE = 48;
+
+const MemoFeedChildren = memo(function MemoFeedChildren({ children }: { children: ReactNode }) {
+  return <>{children}</>;
+});
 
 type FeedSideDrawerProfileHeaderProps = {
   onNavigate?: () => void;
@@ -101,7 +106,7 @@ type FeedSideDrawerShellProps = {
 
 export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   const { width } = useWindowDimensions();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const drawerWidth = width * FEED_DRAWER_WIDTH_RATIO;
   const open = useFeedDrawerStore((s) => s.open);
   const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
@@ -114,6 +119,7 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   }, [drawerWidth, drawerWidthSv]);
 
   useEffect(() => {
+    cancelAnimation(progress);
     progress.value = withTiming(open ? 1 : 0, {
       duration: open ? FEED_DRAWER_OPEN_MS : FEED_DRAWER_CLOSE_MS,
       easing: FEED_DRAWER_EASING,
@@ -136,14 +142,31 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
     ],
   }));
 
-  const scrimStyle = useAnimatedStyle(() => ({
-    left: progress.value * drawerWidthSv.value,
-    opacity: interpolate(progress.value, [0, 1], [0, 0.42]),
+  const drawerContentStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 0.35, 1], [0, 1, 1]),
+    transform: [
+      {
+        translateX: interpolate(progress.value, [0, 1], [-18, 0]),
+      },
+    ],
   }));
 
-  const handleClose = () => {
+  const scrimMaxOpacity = isDark ? 0.48 : 0.38;
+
+  const scrimStyle = useAnimatedStyle(
+    () => ({
+      opacity: interpolate(progress.value, [0, 1], [0, scrimMaxOpacity]),
+    }),
+    [scrimMaxOpacity],
+  );
+
+  const feedShadowStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(progress.value, [0, 1], [0, 1]),
+  }));
+
+  const handleClose = useCallback(() => {
     closeDrawer();
-  };
+  }, [closeDrawer]);
 
   return (
     <View style={[shellStyles.root, { backgroundColor: colors.background }]} collapsable={false}>
@@ -155,33 +178,38 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
         ]}
         pointerEvents={open ? 'auto' : 'none'}
       >
-        <CentersDrawerMenu
-          headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
-          onCenterNavigate={closeDrawer}
-          feedRegionId={feedRegionId}
-        />
+        <Animated.View style={[shellStyles.drawerInner, drawerContentStyle]}>
+          <CentersDrawerMenu
+            headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
+            onCenterNavigate={closeDrawer}
+            feedRegionId={feedRegionId}
+          />
+        </Animated.View>
       </Animated.View>
 
       <Animated.View
         style={[shellStyles.feed, { backgroundColor: colors.background }, feedStyle]}
         collapsable={false}
-        renderToHardwareTextureAndroid
       >
-        <View style={shellStyles.feedInner} pointerEvents={open ? 'none' : 'auto'}>
-          {children}
-        </View>
-      </Animated.View>
-
-      <Animated.View
-        pointerEvents={open ? 'auto' : 'none'}
-        style={[shellStyles.feedDismiss, scrimStyle]}
-      >
-        <InstantPressable
-          style={shellStyles.feedDismissPress}
-          onPress={handleClose}
-          accessibilityRole="button"
-          accessibilityLabel="Menüyü kapat"
+        <Animated.View
+          pointerEvents="none"
+          style={[shellStyles.feedEdgeShadow, feedShadowStyle]}
         />
+        <View style={shellStyles.feedInner}>
+          <MemoFeedChildren>{children}</MemoFeedChildren>
+        </View>
+        <Animated.View
+          pointerEvents={open ? 'auto' : 'none'}
+          style={[shellStyles.scrim, scrimStyle]}
+        >
+          <Pressable
+            style={shellStyles.scrimPress}
+            onPress={handleClose}
+            accessibilityRole="button"
+            accessibilityLabel="Menüyü kapat"
+            android_ripple={{ color: 'transparent' }}
+          />
+        </Animated.View>
       </Animated.View>
     </View>
   );
@@ -221,6 +249,9 @@ const shellStyles = StyleSheet.create({
     bottom: 0,
     zIndex: 1,
   },
+  drawerInner: {
+    flex: 1,
+  },
   feed: {
     flex: 1,
     zIndex: 2,
@@ -229,15 +260,26 @@ const shellStyles = StyleSheet.create({
   feedInner: {
     flex: 1,
   },
-  feedDismiss: {
+  feedEdgeShadow: {
     position: 'absolute',
     top: 0,
-    right: 0,
     bottom: 0,
-    zIndex: 10,
+    left: 0,
+    width: 10,
+    zIndex: 3,
+    backgroundColor: 'transparent',
+    shadowColor: '#000',
+    shadowOffset: { width: -4, height: 0 },
+    shadowOpacity: 0.18,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 4,
     backgroundColor: '#000',
   },
-  feedDismissPress: {
+  scrimPress: {
     flex: 1,
   },
 });
