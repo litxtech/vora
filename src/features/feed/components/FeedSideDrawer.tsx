@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
@@ -113,10 +113,21 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   const feedRegionId = useFeedStore((s) => s.regionId);
   const progress = useSharedValue(0);
   const drawerWidthSv = useSharedValue(drawerWidth);
+  const [scrimActive, setScrimActive] = useState(false);
 
   useEffect(() => {
     drawerWidthSv.value = drawerWidth;
   }, [drawerWidth, drawerWidthSv]);
+
+  useEffect(() => {
+    if (open) {
+      setScrimActive(true);
+      return;
+    }
+
+    const timer = setTimeout(() => setScrimActive(false), FEED_DRAWER_CLOSE_MS + 40);
+    return () => clearTimeout(timer);
+  }, [open]);
 
   useEffect(() => {
     cancelAnimation(progress);
@@ -160,13 +171,10 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
     [scrimMaxOpacity],
   );
 
-  const feedShadowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, 1]),
-  }));
-
   const handleClose = useCallback(() => {
+    if (!open) return;
     closeDrawer();
-  }, [closeDrawer]);
+  }, [closeDrawer, open]);
 
   return (
     <View style={[shellStyles.root, { backgroundColor: colors.background }]} collapsable={false}>
@@ -191,25 +199,20 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
         style={[shellStyles.feed, { backgroundColor: colors.background }, feedStyle]}
         collapsable={false}
       >
-        <Animated.View
-          pointerEvents="none"
-          style={[shellStyles.feedEdgeShadow, feedShadowStyle]}
-        />
-        <View style={shellStyles.feedInner}>
+        <View style={shellStyles.feedInner} pointerEvents={open ? 'none' : 'auto'}>
           <MemoFeedChildren>{children}</MemoFeedChildren>
         </View>
-        <Animated.View
-          pointerEvents={open ? 'auto' : 'none'}
-          style={[shellStyles.scrim, scrimStyle]}
-        >
-          <Pressable
-            style={shellStyles.scrimPress}
-            onPress={handleClose}
-            accessibilityRole="button"
-            accessibilityLabel="Menüyü kapat"
-            android_ripple={{ color: 'transparent' }}
-          />
-        </Animated.View>
+        {scrimActive ? (
+          <Animated.View pointerEvents="box-none" style={[shellStyles.scrimWrap, scrimStyle]}>
+            <Pressable
+              style={shellStyles.scrimPress}
+              onPress={handleClose}
+              accessibilityRole="button"
+              accessibilityLabel="Menüyü kapat"
+              android_ripple={{ color: 'transparent' }}
+            />
+          </Animated.View>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -260,21 +263,7 @@ const shellStyles = StyleSheet.create({
   feedInner: {
     flex: 1,
   },
-  feedEdgeShadow: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: 10,
-    zIndex: 3,
-    backgroundColor: 'transparent',
-    shadowColor: '#000',
-    shadowOffset: { width: -4, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 8,
-  },
-  scrim: {
+  scrimWrap: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 4,
     backgroundColor: '#000',
