@@ -1,50 +1,107 @@
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { Text } from '@/components/ui/Text';
-import { radius, spacing } from '@/constants/theme';
+import { glassSurface, radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-export function MapEmptyState({ nearbyEnabled }: { nearbyEnabled?: boolean }) {
-  const { colors, isDark } = useTheme();
+type MapEmptyStateProps = {
+  nearbyEnabled?: boolean;
+  hasSourceData?: boolean;
+  searchQuery?: string;
+};
 
-  return (
-    <View style={styles.wrap} pointerEvents="none">
-      <BlurView intensity={isDark ? 20 : 36} tint={isDark ? 'dark' : 'light'} style={styles.card}>
-        <View style={[styles.inner, { borderColor: colors.border }]}>
-          <Ionicons name="filter-outline" size={28} color={colors.textMuted} />
-          <Text variant="label">Sonuç bulunamadı</Text>
-          <Text secondary variant="caption" style={styles.text}>
-            {nearbyEnabled
-              ? 'Yakınınızda sonuç yok. Filtreleri genişletin veya arama terimini değiştirin.'
-              : 'Filtreleri değiştirin veya arama terimini güncelleyin.'}
-          </Text>
-        </View>
-      </BlurView>
+export function MapEmptyState({
+  nearbyEnabled,
+  hasSourceData = false,
+  searchQuery = '',
+}: MapEmptyStateProps) {
+  const { colors, isDark, mode } = useTheme();
+  const surface = glassSurface[mode];
+
+  const { title, subtitle, icon } = useMemo(() => {
+    const query = searchQuery.trim();
+    if (!hasSourceData) {
+      return {
+        icon: 'earth-outline' as const,
+        title: 'Haritada henüz içerik yok',
+        subtitle: 'Olay, etkinlik veya işletme paylaşıldığında burada görünür.',
+      };
+    }
+    if (query) {
+      return {
+        icon: 'search-outline' as const,
+        title: 'Arama sonucu bulunamadı',
+        subtitle: 'Farklı bir terim deneyin veya filtreleri genişletin.',
+      };
+    }
+    if (nearbyEnabled) {
+      return {
+        icon: 'radio-outline' as const,
+        title: 'Yakınınızda sonuç yok',
+        subtitle: 'Yakınımda filtresini kapatın veya katman seçimini genişletin.',
+      };
+    }
+    return {
+      icon: 'layers-outline' as const,
+      title: 'Seçili katmanlarda sonuç yok',
+      subtitle: 'Başka bir kategori seçin veya tüm katmanları açın.',
+    };
+  }, [hasSourceData, nearbyEnabled, searchQuery]);
+
+  const inner = (
+    <View style={[styles.inner, { borderColor: colors.border, backgroundColor: surface.background }]}>
+      <View style={[styles.iconWrap, { backgroundColor: `${colors.primary}18` }]}>
+        <Ionicons name={icon} size={16} color={colors.primary} />
+      </View>
+      <View style={styles.copy}>
+        <Text variant="caption" style={styles.title}>
+          {title}
+        </Text>
+        <Text secondary variant="caption" numberOfLines={2}>
+          {subtitle}
+        </Text>
+      </View>
+    </View>
+  );
+
+  return isDark ? (
+    <BlurView intensity={24} tint="dark" style={styles.shell}>
+      {inner}
+    </BlurView>
+  ) : (
+    <View style={[styles.shell, { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 }]}>
+      {inner}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-  },
-  card: {
+  shell: {
     borderRadius: radius.lg,
     overflow: 'hidden',
-    maxWidth: 280,
   },
   inner: {
+    flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    padding: spacing.lg,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm + 2,
     borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
   },
-  text: {
-    textAlign: 'center',
+  iconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  copy: {
+    flex: 1,
+    gap: 2,
+  },
+  title: {
+    fontWeight: '600',
   },
 });

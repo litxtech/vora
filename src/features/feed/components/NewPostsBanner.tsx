@@ -18,15 +18,21 @@ export function NewPostsBanner({ onRefresh }: NewPostsBannerProps) {
 
   return (
     <Pressable
-      style={[styles.banner, { backgroundColor: colors.primary }]}
+      style={[
+        styles.banner,
+        {
+          backgroundColor: colors.primary,
+          shadowColor: colors.primary,
+        },
+      ]}
       onPress={() => {
         resetNewPosts();
         onRefresh();
       }}
     >
-      <Ionicons name="arrow-up" size={16} color="#fff" />
-      <Text variant="caption" style={{ color: '#fff', fontWeight: '600' }}>
-        Yeni {count} gönderi
+      <Ionicons name="arrow-up-circle" size={18} color="#fff" />
+      <Text variant="caption" style={styles.bannerText}>
+        {count} yeni gönderi — yenile
       </Text>
     </Pressable>
   );
@@ -42,8 +48,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     borderRadius: radius.full,
     marginBottom: spacing.sm,
-    position: 'absolute',
-    top: 0,
-    zIndex: 10,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
+  bannerText: { color: '#fff', fontWeight: '700' },
 });

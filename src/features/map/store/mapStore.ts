@@ -9,6 +9,8 @@ type MapStore = {
   focusCoordinate: { latitude: number; longitude: number; zoom?: number } | null;
   mapStyle: MapStyleId;
   nearbyEnabled: boolean;
+  hizmetlerCategoryFilter: string | null;
+  hizmetlerRadiusKm: number | null;
   setSearchQuery: (query: string) => void;
   toggleLayer: (layer: MapLayerId) => void;
   setEnabledLayers: (layers: MapLayerId[]) => void;
@@ -18,6 +20,9 @@ type MapStore = {
   setMapStyle: (style: MapStyleId) => void;
   cycleMapStyle: () => void;
   toggleNearby: () => void;
+  setHizmetlerCategoryFilter: (category: string | null) => void;
+  setHizmetlerRadiusKm: (radiusKm: number | null) => void;
+  clearHizmetlerMapPreset: () => void;
 };
 
 export const useMapStore = create<MapStore>((set) => ({
@@ -27,6 +32,8 @@ export const useMapStore = create<MapStore>((set) => ({
   focusCoordinate: null,
   mapStyle: 'dark',
   nearbyEnabled: false,
+  hizmetlerCategoryFilter: null,
+  hizmetlerRadiusKm: null,
   setSearchQuery: (query) => set({ searchQuery: query }),
   toggleLayer: (layer) =>
     set((state) => ({
@@ -47,4 +54,7 @@ export const useMapStore = create<MapStore>((set) => ({
       return { mapStyle: next.id };
     }),
   toggleNearby: () => set((state) => ({ nearbyEnabled: !state.nearbyEnabled })),
+  setHizmetlerCategoryFilter: (category) => set({ hizmetlerCategoryFilter: category }),
+  setHizmetlerRadiusKm: (radiusKm) => set({ hizmetlerRadiusKm: radiusKm }),
+  clearHizmetlerMapPreset: () => set({ hizmetlerCategoryFilter: null, hizmetlerRadiusKm: null }),
 }));

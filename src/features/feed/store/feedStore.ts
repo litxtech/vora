@@ -3,12 +3,12 @@ import type { FeedCategory } from '@/features/feed/types';
 import type { RegionId } from '@/constants/regions';
 
 type FeedStore = {
-  regionId: RegionId;
+  regionId: RegionId | null;
   district: string | null;
   category: FeedCategory;
   searchQuery: string;
   newPostsCount: number;
-  setRegionId: (id: RegionId) => void;
+  setRegionId: (id: RegionId | null) => void;
   setDistrict: (district: string | null) => void;
   setCategory: (category: FeedCategory) => void;
   setSearchQuery: (query: string) => void;
@@ -17,7 +17,7 @@ type FeedStore = {
 };
 
 export const useFeedStore = create<FeedStore>((set) => ({
-  regionId: 'trabzon',
+  regionId: null,
   district: null,
   category: 'all',
   searchQuery: '',

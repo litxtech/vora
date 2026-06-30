@@ -1,3 +1,5 @@
+import { sanitizeDisplayName } from '@/features/account-deletion/utils';
+import { toUserFacingError } from '@/lib/errors';
 import type { CallParticipant } from './types';
 
 export function uidFromUserId(userId: string): number {
@@ -11,7 +13,7 @@ export function uidFromUserId(userId: string): number {
 
 export function displayName(participant?: CallParticipant | null): string {
   if (!participant) return 'Bilinmeyen';
-  return participant.full_name?.trim() || participant.username;
+  return sanitizeDisplayName(participant.full_name, participant.username, participant.account_status);
 }
 
 export function formatCallDuration(totalSeconds: number): string {
@@ -23,4 +25,21 @@ export function formatCallDuration(totalSeconds: number): string {
 export function buildChannelName(callerId: string, calleeId: string): string {
   const sorted = [callerId, calleeId].sort().join('_');
   return `kd_${sorted.slice(0, 40)}_${Date.now()}`;
+}
+
+/** Supabase PostgrestError ve Error için okunabilir mesaj. */
+export function callErrorMessage(error: unknown, fallback = 'Arama başlatılamadı. Lütfen tekrar deneyin.'): string {
+  if (error instanceof Error && error.message) {
+    return toUserFacingError(error.message, { fallback });
+  }
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim().length > 0) {
+      return toUserFacingError(message, {
+        fallback,
+        code: (error as { code?: string }).code,
+      });
+    }
+  }
+  return fallback;
 }

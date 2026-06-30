@@ -1,8 +1,9 @@
 import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
+import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
-import { REPORT_REASONS } from '@/features/feed/constants';
+import { REPORT_REASONS, REPORT_RESPONSE_NOTE } from '@/features/moderation/constants';
 import { reportContent } from '@/features/feed/services/engagement';
 import type { ReportReason } from '@/types/database';
 import { radius, spacing } from '@/constants/theme';
@@ -22,7 +23,7 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
   const { requireAuth } = useRequireAuth();
 
   const handleReport = async (reason: ReportReason) => {
-    if (!requireAuth('Raporlama')) return;
+    if (!(await requireAuth('Raporlama'))) return;
     if (!user) return;
 
     const { error } = await reportContent(user.id, targetType, targetId, reason);
@@ -33,11 +34,17 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
       return;
     }
 
-    Alert.alert('Teşekkürler', 'Raporunuz alındı. Moderasyon ekibimiz inceleyecek.');
+    const urgent = REPORT_REASONS.find((r) => r.id === reason)?.urgent;
+    Alert.alert(
+      'Teşekkürler',
+      urgent
+        ? `Çocuk güvenliği şikayetiniz acil moderasyon sırasına alındı. ${REPORT_RESPONSE_NOTE}`
+        : `Şikayetiniz alındı. Moderasyon ekibimiz inceleyecek. ${REPORT_RESPONSE_NOTE}`,
+    );
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType={resolveModalAnimationType('slide')} onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
         <Pressable
           style={[styles.sheet, { backgroundColor: colors.surface }]}
@@ -49,6 +56,10 @@ export function ReportSheet({ visible, targetType, targetId, onClose }: ReportSh
               <Ionicons name="close" size={22} color={colors.textSecondary} />
             </Pressable>
           </View>
+
+          <Text secondary variant="caption" style={styles.note}>
+            {REPORT_RESPONSE_NOTE}
+          </Text>
 
           {REPORT_REASONS.map((reason) => (
             <Pressable
@@ -82,7 +93,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: spacing.xs,
+  },
+  note: {
     marginBottom: spacing.sm,
+    lineHeight: 18,
   },
   option: {
     flexDirection: 'row',

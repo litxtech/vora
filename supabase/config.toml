@@ -25,3 +25,39 @@ enabled = true
 
 [storage]
 enabled = true
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.process-notification-outbox]
+verify_jwt = false
+
+[functions.send-push-notification]
+verify_jwt = true
+
+[functions.share-preview]
+verify_jwt = false
+
+[functions.agora-token]
+verify_jwt = true
+
+[functions.mux-create-upload]
+verify_jwt = true
+
+[functions.mux-sync-upload]
+verify_jwt = true
+
+[functions.vora-studio-render]
+verify_jwt = true
+
+[functions.moderate-content]
+verify_jwt = true
+
+[functions.vora-studio-subtitles]
+verify_jwt = true
+
+[functions.vora-ai]
+verify_jwt = true
+
+[functions.vora-presence]
+verify_jwt = false

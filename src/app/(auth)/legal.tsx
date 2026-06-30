@@ -4,7 +4,7 @@ import { AuthHeader } from '@/components/auth/AuthHeader';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
-import { LEGAL_DOCUMENTS, type LegalSlug } from '@/constants/legal';
+import { LEGAL_DOCUMENTS, SUPPORT_EMAIL, type LegalSlug } from '@/constants/legal';
 import { spacing } from '@/constants/theme';
 
 export default function LegalScreen() {
@@ -24,6 +24,13 @@ export default function LegalScreen() {
             </Text>
           </GlassCard>
         ))}
+
+        <GlassCard style={styles.section}>
+          <Text variant="h3">Destek</Text>
+          <Text secondary style={styles.body}>
+            Sorularınız ve talepleriniz için {SUPPORT_EMAIL} adresinden bize ulaşabilirsiniz.
+          </Text>
+        </GlassCard>
       </ScrollView>
     </GradientBackground>
   );

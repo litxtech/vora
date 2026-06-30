@@ -7,14 +7,19 @@ type MapLocationState = {
   loading: boolean;
 };
 
-export function useMapLocation() {
+export function useMapLocation(enabled = true) {
   const [state, setState] = useState<MapLocationState>({
     granted: false,
     coords: null,
-    loading: true,
+    loading: enabled,
   });
 
   useEffect(() => {
+    if (!enabled) {
+      setState((prev) => (prev.loading ? { ...prev, loading: false } : prev));
+      return;
+    }
+
     let cancelled = false;
 
     async function load() {
@@ -48,7 +53,7 @@ export function useMapLocation() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [enabled]);
 
   return state;
 }

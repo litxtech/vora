@@ -9,19 +9,25 @@ import { Button } from '@/components/ui/Button';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
-import { DISTRICTS } from '@/constants/districts';
-import { PHASE_1_REGIONS } from '@/constants/regions';
+import { RegionDistrictPicker } from '@/components/location/RegionDistrictPicker';
+import type { RegionId } from '@/constants/regions';
 import { radius, spacing } from '@/constants/theme';
 import { useOnboardingStore } from '@/features/auth/store/onboardingStore';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function ProfileSetupScreen() {
   const { colors } = useTheme();
-  const { avatarUri, regionId, district, bio, occupation, setAvatarUri, setRegionId, setDistrict, setBio, setOccupation } =
-    useOnboardingStore();
+  const avatarUri = useOnboardingStore((s) => s.avatarUri);
+  const regionId = useOnboardingStore((s) => s.regionId);
+  const district = useOnboardingStore((s) => s.district);
+  const bio = useOnboardingStore((s) => s.bio);
+  const occupation = useOnboardingStore((s) => s.occupation);
+  const setAvatarUri = useOnboardingStore((s) => s.setAvatarUri);
+  const setRegionId = useOnboardingStore((s) => s.setRegionId);
+  const setDistrict = useOnboardingStore((s) => s.setDistrict);
+  const setBio = useOnboardingStore((s) => s.setBio);
+  const setOccupation = useOnboardingStore((s) => s.setOccupation);
   const [error, setError] = useState<string | null>(null);
-
-  const districts = regionId ? DISTRICTS[regionId as keyof typeof DISTRICTS] ?? [] : [];
 
   const pickAvatar = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -72,51 +78,12 @@ export default function ProfileSetupScreen() {
           )}
         </Pressable>
 
-        <Text variant="label" style={styles.sectionLabel}>
-          Şehir
-        </Text>
-        <View style={styles.chipRow}>
-          {PHASE_1_REGIONS.map((region) => (
-            <Pressable
-              key={region.id}
-              style={[
-                styles.chip,
-                {
-                  borderColor: regionId === region.id ? colors.primary : colors.border,
-                  backgroundColor: regionId === region.id ? 'rgba(30,136,229,0.15)' : colors.surface,
-                },
-              ]}
-              onPress={() => setRegionId(region.id)}
-            >
-              <Text variant="caption">{region.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        {districts.length > 0 ? (
-          <>
-            <Text variant="label" style={styles.sectionLabel}>
-              İlçe
-            </Text>
-            <View style={styles.chipRow}>
-              {districts.map((item) => (
-                <Pressable
-                  key={item}
-                  style={[
-                    styles.chip,
-                    {
-                      borderColor: district === item ? colors.primary : colors.border,
-                      backgroundColor: district === item ? 'rgba(30,136,229,0.15)' : colors.surface,
-                    },
-                  ]}
-                  onPress={() => setDistrict(item)}
-                >
-                  <Text variant="caption">{item}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </>
-        ) : null}
+        <RegionDistrictPicker
+          regionId={(regionId as RegionId) ?? null}
+          district={district}
+          onRegionChange={(id) => setRegionId(id)}
+          onDistrictChange={setDistrict}
+        />
 
         <Input
           label="Kısa Biyografi"
@@ -168,19 +135,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
-  },
-  sectionLabel: {
-    marginTop: spacing.sm,
-  },
-  chipRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  chip: {
-    borderWidth: 1,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
   },
 });

@@ -2,15 +2,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Checkbox } from '@/components/ui/Checkbox';
 import { Text } from '@/components/ui/Text';
+import { type PolicyState } from '@/constants/legal';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
-
-type PolicyState = {
-  terms: boolean;
-  privacy: boolean;
-  childProtection: boolean;
-  ageConfirm: boolean;
-};
 
 type PolicyCheckboxesProps = {
   values: PolicyState;
@@ -31,6 +25,9 @@ export function PolicyCheckboxes({ values, onChange, showErrors }: PolicyCheckbo
 
   return (
     <View style={styles.wrap}>
+      <Text variant="label" secondary>
+        Kayıt için aşağıdaki onaylar zorunludur
+      </Text>
       <Checkbox
         checked={values.terms}
         onToggle={() => onChange('terms', !values.terms)}

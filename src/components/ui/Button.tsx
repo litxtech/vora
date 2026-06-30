@@ -1,13 +1,16 @@
 import { ActivityIndicator, Pressable, StyleSheet, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
-import { radius, spacing } from '@/constants/theme';
 
 type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'outline';
+
+type ButtonSize = 'default' | 'compact';
 
 type ButtonProps = Omit<PressableProps, 'style'> & {
   title: string;
   variant?: ButtonVariant;
+  size?: ButtonSize;
   loading?: boolean;
   fullWidth?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -16,13 +19,15 @@ type ButtonProps = Omit<PressableProps, 'style'> & {
 export function Button({
   title,
   variant = 'primary',
+  size = 'default',
   loading = false,
   fullWidth = true,
   disabled,
   style,
   ...props
 }: ButtonProps) {
-  const { colors } = useTheme();
+  const { colors, metrics } = useTheme();
+  const { radius, spacing } = metrics;
 
   const variantStyles = {
     primary: { bg: colors.primary, text: '#FFFFFF', border: colors.primary },
@@ -35,7 +40,21 @@ export function Button({
   return (
     <Pressable
       style={({ pressed }) => [
-        styles.button,
+        {
+          borderRadius: radius.md,
+          borderWidth: 1,
+          paddingVertical: spacing.md,
+          paddingHorizontal: spacing.lg,
+          alignItems: 'center',
+          justifyContent: 'center',
+          minHeight: 52,
+        },
+        size === 'compact' && {
+          minHeight: 36,
+          paddingVertical: spacing.xs,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.sm,
+        },
         fullWidth && styles.fullWidth,
         {
           backgroundColor: variantStyles.bg,
@@ -45,12 +64,20 @@ export function Button({
         style,
       ]}
       disabled={disabled || loading}
+      {...getAndroidInstantPressableProps()}
       {...props}
     >
       {loading ? (
         <ActivityIndicator color={variantStyles.text} />
       ) : (
-        <Text variant="label" style={{ color: variantStyles.text, textAlign: 'center' }}>
+        <Text
+          variant="label"
+          style={{
+            color: variantStyles.text,
+            textAlign: 'center',
+            fontSize: size === 'compact' ? 13 : undefined,
+          }}
+        >
           {title}
         </Text>
       )}
@@ -59,15 +86,6 @@ export function Button({
 }
 
 const styles = StyleSheet.create({
-  button: {
-    borderRadius: radius.md,
-    borderWidth: 1,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 52,
-  },
   fullWidth: {
     width: '100%',
   },

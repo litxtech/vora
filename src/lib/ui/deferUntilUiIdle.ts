@@ -1,0 +1,70 @@
+import { isAndroid, shouldRunUiWorkImmediately } from '@/lib/device/androidPerfProfile';
+
+/**
+ * Ağır arka plan işleri (carousel fetch, inbox yenileme).
+ * Tablet dahil ertelenir — ana UI önce çizilsin.
+ */
+export function deferBackgroundWork(task: () => void): { cancel: () => void } {
+  if (!isAndroid()) {
+    return deferUntilUiIdle(task);
+  }
+
+  let cancelled = false;
+  let outerFrame = 0;
+  let innerFrame = 0;
+  const delayMs = !isAndroid() ? 0 : shouldRunUiWorkImmediately() ? 200 : 280;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+
+  const run = () => {
+    outerFrame = requestAnimationFrame(() => {
+      innerFrame = requestAnimationFrame(() => {
+        if (!cancelled) task();
+      });
+    });
+  };
+
+  if (delayMs > 0) {
+    timer = setTimeout(run, delayMs);
+  } else {
+    run();
+  }
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      cancelAnimationFrame(outerFrame);
+      cancelAnimationFrame(innerFrame);
+    },
+  };
+}
+
+/**
+ * InteractionManager Android'de uzun süre "interaction active" kalabiliyor;
+ * dokunma gecikmesine yol açar. Çift rAF ile bir sonraki frame'de çalıştır.
+ * Tablet: sıfır gecikme — iş anında çalışır.
+ */
+export function deferUntilUiIdle(task: () => void): { cancel: () => void } {
+  if (shouldRunUiWorkImmediately()) {
+    task();
+    return { cancel: () => {} };
+  }
+
+  let cancelled = false;
+  let outerFrame = 0;
+  let innerFrame = 0;
+
+  outerFrame = requestAnimationFrame(() => {
+    innerFrame = requestAnimationFrame(() => {
+      if (!cancelled) task();
+    });
+  });
+
+  return {
+    cancel: () => {
+      cancelled = true;
+      cancelAnimationFrame(outerFrame);
+      cancelAnimationFrame(innerFrame);
+    },
+  };
+}

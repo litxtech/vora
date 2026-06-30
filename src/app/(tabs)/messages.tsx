@@ -1,62 +1,53 @@
-import { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  StyleSheet,
-  View,
-} from 'react-native';
+import { useState, useEffect } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Screen } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
-import { useGuestMode } from '@/features/auth/hooks/useGuestMode';
+import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
+import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
 import { useAuth } from '@/providers/AuthProvider';
-import { useCallNavigation } from '@/providers/CallProvider';
-import { CallAvatar } from '@/features/calls/components/CallAvatar';
-import { initiateCall, fetchCallableProfiles } from '@/features/calls/services/callService';
-import type { CallParticipant } from '@/features/calls/types';
 import { useTheme } from '@/providers/ThemeProvider';
+import { CallHistoryList } from '@/features/messaging/components/CallHistoryList';
+import { ContactsList } from '@/features/messaging/components/ContactsList';
+import { ConversationInbox } from '@/features/messaging/components/ConversationInbox';
+import { MessageRequestsInbox } from '@/features/messaging/components/MessageRequestsInbox';
+import { FriendsList } from '@/features/messaging/components/FriendsList';
+import { ChannelsInbox } from '@/features/channels/components/ChannelsInbox';
+import { MessagesTabBar } from '@/features/messaging/components/MessagesTabBar';
+import { useTabMessagingBadge } from '@/features/messaging/hooks/useTabMessagingBadge';
+import type { MessagesTab } from '@/features/messaging/types';
 import { radius, spacing } from '@/constants/theme';
 
 export default function MessagesScreen() {
   const { user } = useAuth();
-  const { canInteract } = useGuestMode();
-  const { startOutgoingCall } = useCallNavigation();
   const { colors } = useTheme();
-  const [contacts, setContacts] = useState<CallParticipant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [callingId, setCallingId] = useState<string | null>(null);
+  const totalUnread = useTabMessagingBadge();
+  const [tab, setTab] = useState<MessagesTab>('chats');
+  const channelsVisible = useFeatureVisible('channels');
+  const callsVisible = useFeatureVisible('calls');
+  const requestsVisible = useFeatureVisible(MESSAGING_FEATURE.tab.requests);
+  const contactsVisible = useFeatureVisible(MESSAGING_FEATURE.tab.contacts);
+  const friendsVisible = useFeatureVisible(MESSAGING_FEATURE.tab.friends);
 
   useEffect(() => {
-    if (!user?.id) return;
+    if (tab === 'channels' && !channelsVisible) setTab('chats');
+    if (tab === 'calls' && !callsVisible) setTab('chats');
+    if (tab === 'requests' && !requestsVisible) setTab('chats');
+    if (tab === 'contacts' && !contactsVisible) setTab('chats');
+    if (tab === 'friends' && !friendsVisible) setTab('chats');
+  }, [tab, channelsVisible, callsVisible, requestsVisible, contactsVisible, friendsVisible]);
 
-    fetchCallableProfiles(user.id)
-      .then(setContacts)
-      .finally(() => setLoading(false));
-  }, [user?.id]);
-
-  const handleCall = async (contact: CallParticipant, callType: 'audio' | 'video') => {
-    if (!user?.id) return;
-
-    setCallingId(contact.id);
-    try {
-      const session = await initiateCall(contact.id, callType, user.id);
-      startOutgoingCall(session);
-    } catch (error) {
-      Alert.alert('Arama başlatılamadı', String(error));
-    } finally {
-      setCallingId(null);
-    }
-  };
-
-  if (!canInteract) {
+  if (!user) {
     return (
       <Screen>
         <Text variant="h2">Mesajlar</Text>
         <GlassCard style={styles.guestCard}>
+          <View style={[styles.guestIcon, { backgroundColor: `${colors.primary}14` }]}>
+            <Ionicons name="chatbubbles-outline" size={28} color={colors.primary} />
+          </View>
           <Text secondary>
             Mesaj göndermek ve arama yapmak için giriş yapmanız veya kayıt olmanız gerekiyor.
           </Text>
@@ -68,93 +59,75 @@ export default function MessagesScreen() {
   }
 
   return (
-    <Screen>
-      <Text variant="h2">Mesajlar</Text>
-      <Text secondary style={styles.subtitle}>
-        Kişileri arayın — Apple tarzı arama ekranı açılır
-      </Text>
-
-      {loading ? (
-        <ActivityIndicator color={colors.primary} style={styles.loader} />
-      ) : (
-        <View style={styles.list}>
-          {contacts.map((contact) => (
-            <View
-              key={contact.id}
-              style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            >
-              <View style={styles.contactInfo}>
-                <CallAvatar participant={contact} size={52} showName={false} />
-                <View>
-                  <Text variant="label">
-                    {contact.full_name?.trim() || contact.username}
-                  </Text>
-                  <Text muted>@{contact.username}</Text>
-                </View>
-              </View>
-
-              <View style={styles.actions}>
-                <Pressable
-                  style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-                  onPress={() => handleCall(contact, 'audio')}
-                  disabled={callingId === contact.id}
-                >
-                  <Ionicons name="call" size={20} color={colors.primary} />
-                </Pressable>
-                <Pressable
-                  style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-                  onPress={() => handleCall(contact, 'video')}
-                  disabled={callingId === contact.id}
-                >
-                  <Ionicons name="videocam" size={20} color={colors.accent} />
-                </Pressable>
-              </View>
+    <Screen padded={false}>
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text variant="h2">Mesajlar</Text>
+            <Text secondary>Güvenli ve gerçek zamanlı iletişim</Text>
+          </View>
+          {totalUnread > 0 ? (
+            <View style={[styles.unreadPill, { backgroundColor: colors.primary }]}>
+              <Text variant="caption" style={styles.unreadPillText}>
+                {totalUnread > 99 ? '99+' : totalUnread} yeni
+              </Text>
             </View>
-          ))}
+          ) : null}
         </View>
-      )}
+        <MessagesTabBar active={tab} onChange={setTab} unreadCount={totalUnread} />
+      </View>
+
+      <View style={styles.body}>
+        {tab === 'chats' ? <ConversationInbox /> : null}
+        {tab === 'channels' ? <ChannelsInbox /> : null}
+        {tab === 'requests' ? <MessageRequestsInbox /> : null}
+        {tab === 'contacts' ? <ContactsList /> : null}
+        {tab === 'friends' ? <FriendsList /> : null}
+        {tab === 'calls' ? <CallHistoryList /> : null}
+      </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  subtitle: {
-    marginTop: spacing.sm,
-    marginBottom: spacing.lg,
+  header: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    gap: spacing.sm,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+  },
+  unreadPill: {
+    borderRadius: radius.full,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  unreadPillText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+  body: {
+    flex: 1,
+    minHeight: 0,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.md,
   },
   guestCard: {
     marginTop: spacing.lg,
     gap: spacing.sm,
-  },
-  loader: {
-    marginTop: spacing.xl,
-  },
-  list: {
-    gap: spacing.sm,
-  },
-  row: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  contactInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  guestIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.xs,
   },
 });

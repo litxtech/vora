@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -8,13 +9,15 @@ import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
+import { AccountDataExportCard } from '@/features/account-data-export';
+import { DeleteAccountSection } from '@/features/account-deletion';
 import { validatePassword } from '@/features/auth/services/validation';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function AccountSettingsScreen() {
   const { colors } = useTheme();
-  const { profile, changePassword, updateAccountStatus, requestAccountDeletion, cancelAccountDeletion, signOut } = useAuth();
+  const { changePassword, requestAccountFreeze, signOut } = useAuth();
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -55,35 +58,12 @@ export default function AccountSettingsScreen() {
           text: 'Dondur',
           style: 'destructive',
           onPress: async () => {
-            const { error: freezeError } = await updateAccountStatus('frozen');
+            const { error: freezeError } = await requestAccountFreeze();
             if (freezeError) {
               Alert.alert('Hata', freezeError);
               return;
             }
-            await signOut();
-            router.replace('/(welcome)/lobby');
-          },
-        },
-      ],
-    );
-  };
-
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      'Hesabı Sil',
-      'Kalıcı silme talebi oluşturulacak. 30 gün içinde giriş yaparak iptal edebilirsiniz. Verilerinizi indirmek için destek ile iletişime geçebilirsiniz.',
-      [
-        { text: 'Vazgeç', style: 'cancel' },
-        {
-          text: 'Silme Talebi Oluştur',
-          style: 'destructive',
-          onPress: async () => {
-            const { error: deleteError } = await requestAccountDeletion();
-            if (deleteError) {
-              Alert.alert('Hata', deleteError);
-              return;
-            }
-            await signOut();
+            await signOut('frozen');
             router.replace('/(welcome)/lobby');
           },
         },
@@ -93,28 +73,16 @@ export default function AccountSettingsScreen() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        <AuthHeader title="Hesap Güvenliği" subtitle="Şifre, dondurma ve silme işlemleri" />
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={32}
+        extraKeyboardSpace={24}
+      >
+        <AuthHeader title="Hesap Güvenliği" subtitle="Şifre, dondurma ve silme işlemleri" showBack />
 
-        {profile?.account_status === 'deletion_pending' ? (
-          <GlassCard style={styles.section}>
-            <Text style={{ color: colors.warning }}>
-              Hesabınız için kalıcı silme talebi oluşturuldu. 30 gün içinde iptal edebilirsiniz.
-            </Text>
-            <Button
-              title="Silme Talebini İptal Et"
-              variant="secondary"
-              onPress={async () => {
-                const { error: cancelError } = await cancelAccountDeletion();
-                if (cancelError) {
-                  Alert.alert('Hata', cancelError);
-                  return;
-                }
-                Alert.alert('Başarılı', 'Hesap silme talebiniz iptal edildi.');
-              }}
-            />
-          </GlassCard>
-        ) : null}
+        <Button title="Güven Merkezi" variant="outline" onPress={() => router.push('/settings/security' as never)} />
+        <Button title="Mesajlaşma Gizliliği" variant="outline" onPress={() => router.push('/settings/messaging' as never)} />
 
         <GlassCard style={styles.section}>
           <Text variant="h3">Şifre Değiştir</Text>
@@ -124,23 +92,18 @@ export default function AccountSettingsScreen() {
           <Button title="Şifreyi Güncelle" loading={loading} onPress={handleChangePassword} />
         </GlassCard>
 
-        <GlassCard style={styles.section}>
-          <Text variant="h3">Veri İndirme</Text>
-          <Text secondary>
-            Hesap verilerinizin bir kopyasını talep etmek için destek ekibimizle iletişime geçebilirsiniz.
-          </Text>
-          <Button title="Veri İndirme Talebi" variant="secondary" onPress={() => Alert.alert('Bilgi', 'Talebiniz destek ekibine iletilecek.')} />
-        </GlassCard>
+        <AccountDataExportCard />
 
         <GlassCard style={styles.section}>
           <Text variant="h3">Hesap Yönetimi</Text>
           <Text secondary variant="caption">
-            Yeni cihaz girişlerinde e-posta bildirimi gönderilir. Şüpheli aktivite tespit edildiğinde oturumunuz korunur.
+            Oturumunuz yalnızca siz çıkış yaptığınızda, hesabınız banlandığında veya silme talebi oluşturduğunuzda sonlanır.
           </Text>
           <Button title="Hesabı Dondur" variant="secondary" onPress={handleFreezeAccount} />
-          <Button title="Hesabı Kalıcı Sil" variant="danger" onPress={handleDeleteAccount} />
         </GlassCard>
-      </ScrollView>
+
+        <DeleteAccountSection />
+      </KeyboardAwareScrollView>
     </GradientBackground>
   );
 }
@@ -150,7 +113,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: spacing.lg,
     paddingTop: spacing.xl,
-    paddingBottom: spacing.xxl,
+    paddingBottom: spacing.xxl * 2,
     gap: spacing.lg,
   },
   section: {

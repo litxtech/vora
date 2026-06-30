@@ -12,7 +12,8 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 export default function PreferencesScreen() {
   const { colors } = useTheme();
-  const { interests, toggleInterest } = useOnboardingStore();
+  const interests = useOnboardingStore((s) => s.interests);
+  const toggleInterest = useOnboardingStore((s) => s.toggleInterest);
 
   return (
     <GradientBackground>

@@ -1,3 +1,4 @@
+import { readLocalFileBytes } from '@/lib/files/readLocalFile';
 import { supabase } from '@/lib/supabase/client';
 
 function guessContentType(uri: string): string {
@@ -10,8 +11,7 @@ function guessContentType(uri: string): string {
 
 export async function uploadAvatar(userId: string, localUri: string): Promise<{ url: string | null; error: string | null }> {
   try {
-    const response = await fetch(localUri);
-    const arrayBuffer = await response.arrayBuffer();
+    const arrayBuffer = await readLocalFileBytes(localUri);
     const contentType = guessContentType(localUri);
     const ext = contentType.split('/')[1] ?? 'jpg';
     const path = `${userId}/avatar.${ext}`;
@@ -24,7 +24,7 @@ export async function uploadAvatar(userId: string, localUri: string): Promise<{ 
     if (uploadError) return { url: null, error: uploadError.message };
 
     const { data } = supabase.storage.from('avatars').getPublicUrl(path);
-    return { url: data.publicUrl, error: null };
+    return { url: `${data.publicUrl}?t=${Date.now()}`, error: null };
   } catch (err) {
     return { url: null, error: String(err) };
   }

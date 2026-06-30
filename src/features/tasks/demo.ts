@@ -1,0 +1,53 @@
+import { DAILY_TASK_TRUST_POINTS } from '@/features/tasks/constants';
+import type { DailyTask } from '@/features/tasks/types';
+
+export const DEMO_DAILY_TASKS: DailyTask[] = [
+  {
+    taskKey: 'share_post',
+    title: 'Gönderi paylaş',
+    description: 'Bugün yayınlanmış bir gönderi paylaşın',
+    targetCount: 1,
+    progress: 0,
+    rewardType: 'points',
+    rewardValue: DAILY_TASK_TRUST_POINTS.share_post,
+    completedAt: null,
+    claimedAt: null,
+    sortOrder: 1,
+  },
+  {
+    taskKey: 'comment',
+    title: 'Yorum yap',
+    description: 'Akıştaki bir gönderiye yorum yazın',
+    targetCount: 1,
+    progress: 0,
+    rewardType: 'points',
+    rewardValue: DAILY_TASK_TRUST_POINTS.comment,
+    completedAt: null,
+    claimedAt: null,
+    sortOrder: 2,
+  },
+  {
+    taskKey: 'verify_news',
+    title: 'Haber doğrula',
+    description: 'Muhabir hesabıyla bir haberi doğrulayın',
+    targetCount: 1,
+    progress: 0,
+    rewardType: 'points',
+    rewardValue: DAILY_TASK_TRUST_POINTS.verify_news,
+    completedAt: null,
+    claimedAt: null,
+    sortOrder: 3,
+  },
+  {
+    taskKey: 'join_event',
+    title: 'Etkinliğe katıl',
+    description: 'Bir etkinlik için «Katılıyorum» bildirin',
+    targetCount: 1,
+    progress: 0,
+    rewardType: 'points',
+    rewardValue: DAILY_TASK_TRUST_POINTS.join_event,
+    completedAt: null,
+    claimedAt: null,
+    sortOrder: 4,
+  },
+];

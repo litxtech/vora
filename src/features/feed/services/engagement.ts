@@ -1,7 +1,17 @@
 import type { FeedComment } from '@/features/feed/types';
-import { getProfileLabel, notifyPostAuthor, notifyUser } from '@/lib/notifications/helpers';
+import { toggleBusinessFollow } from '@/features/profile/services/businessFollow';
+import { canFollowUser } from '@/features/moderation/services/interactions';
+import { filterRestrictedComments } from '@/features/moderation/services/commentVisibility';
+import { fetchHiddenAuthors } from '@/features/moderation/services/relationships';
+import { getProfileLabel, notifyCommentReplyTargets, notifyPostAuthor, notifyUser } from '@/lib/notifications/helpers';
+import { notifyMentionedUsers } from '@/lib/notifications/mentions';
+import { buildNotificationData } from '@/lib/notifications/notificationPayload';
+import { isUniqueViolation } from '@/lib/supabase/postgresErrors';
 import { supabase } from '@/lib/supabase/client';
 import type { ReportReason, UserRole } from '@/types/database';
+import { supabaseErrorMessage } from '@/lib/errors';
+import { trackReferralEvent } from '@/features/referral-earnings/services/referralTracking';
+import { notifyMapMarkerRemovedBySource } from '@/features/map/services/mapMarkerSync';
 
 type CommentRow = {
   id: string;
@@ -19,6 +29,7 @@ type CommentRow = {
     avatar_url: string | null;
     role: UserRole;
     is_verified: boolean;
+    hidden_badges?: string[] | null;
   } | null;
 };
 
@@ -34,6 +45,7 @@ function mapComment(row: CommentRow, likedIds: Set<string>): FeedComment {
       avatarUrl: profile?.avatar_url ?? null,
       role: profile?.role ?? 'user',
       isVerified: profile?.is_verified ?? false,
+      hiddenBadges: profile?.hidden_badges ?? [],
     },
     content: row.content,
     likeCount: row.like_count,
@@ -61,7 +73,11 @@ function nestComments(flat: FeedComment[]): FeedComment[] {
   return roots;
 }
 
-export async function fetchPostComments(postId: string, userId: string | null): Promise<FeedComment[]> {
+export async function fetchPostComments(
+  postId: string,
+  userId: string | null,
+  postAuthorId?: string,
+): Promise<FeedComment[]> {
   if (postId.startsWith('demo-')) {
     return [
       {
@@ -109,7 +125,7 @@ export async function fetchPostComments(postId: string, userId: string | null): 
     .from('post_comments')
     .select(
       `id, post_id, author_id, parent_id, content, like_count, is_edited, created_at,
-       profiles!post_comments_author_id_fkey (id, username, full_name, avatar_url, role, is_verified)`,
+       profiles!post_comments_author_id_fkey (id, username, full_name, avatar_url, role, is_verified, hidden_badges)`,
     )
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
@@ -127,7 +143,12 @@ export async function fetchPostComments(postId: string, userId: string | null): 
     likedIds = new Set((likes ?? []).map((l) => l.comment_id));
   }
 
-  return nestComments(rows.map((row) => mapComment(row, likedIds)));
+  const nested = nestComments(rows.map((row) => mapComment(row, likedIds)));
+
+  if (!userId) return nested;
+
+  const hidden = await fetchHiddenAuthors(userId);
+  return filterRestrictedComments(nested, postAuthorId, userId, hidden.restricted);
 }
 
 export async function addComment(
@@ -148,19 +169,80 @@ export async function addComment(
   });
 
   if (!error) {
-    const actor = await getProfileLabel(authorId);
-    const eventType = parentId ? 'comment_reply' : 'comment';
-    const title = parentId ? 'Yorumuna yanıt' : 'Yeni yorum';
-    await notifyPostAuthor(
-      postId,
+    const trimmed = content.trim();
+    void trackReferralEvent('interaction');
+    await notifyCommentReplyTargets(postId, authorId, parentId, trimmed);
+    await notifyMentionedUsers(
+      trimmed,
       authorId,
-      eventType,
-      title,
-      `${actor}: ${content.trim().slice(0, 80)}`,
+      'Senden bahsetti',
+      `${await getProfileLabel(authorId)}: ${trimmed.slice(0, 80)}`,
+      buildNotificationData({ postId }),
     );
   }
 
-  return { error: error?.message ?? null };
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function deletePost(
+  postId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  if (postId.startsWith('demo-')) return { error: null };
+
+  const { data: post, error: fetchError } = await supabase
+    .from('posts')
+    .select('author_id')
+    .eq('id', postId)
+    .maybeSingle();
+
+  if (fetchError) return { error: fetchError.message };
+  if (!post || post.author_id !== userId) {
+    return { error: 'Bu gönderiyi silme yetkiniz yok.' };
+  }
+
+  const { error } = await supabase
+    .from('posts')
+    .update({ status: 'removed' })
+    .eq('id', postId)
+    .eq('author_id', userId);
+
+  if (!error) {
+    notifyMapMarkerRemovedBySource('posts', postId);
+  }
+
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function deleteComment(
+  commentId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  if (commentId.startsWith('demo-')) return { error: null };
+
+  const { error } = await supabase
+    .from('post_comments')
+    .delete()
+    .eq('id', commentId)
+    .eq('author_id', userId);
+
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function editComment(
+  commentId: string,
+  userId: string,
+  content: string,
+): Promise<{ error: string | null }> {
+  if (commentId.startsWith('demo-')) return { error: null };
+
+  const { error } = await supabase
+    .from('post_comments')
+    .update({ content: content.trim(), is_edited: true })
+    .eq('id', commentId)
+    .eq('author_id', userId);
+
+  return { error: supabaseErrorMessage(error) };
 }
 
 export async function togglePostLike(
@@ -176,23 +258,31 @@ export async function togglePostLike(
       .delete()
       .eq('post_id', postId)
       .eq('user_id', userId);
-    return { error: error?.message ?? null };
+    return { error: supabaseErrorMessage(error) };
   }
 
   const { error } = await supabase.from('post_likes').insert({ post_id: postId, user_id: userId });
 
-  if (!error) {
-    const actor = await getProfileLabel(userId);
-    await notifyPostAuthor(postId, userId, 'like', 'Yeni beğeni', `${actor} gönderini beğendi`);
+  if (error && !isUniqueViolation(error)) {
+    return { error: supabaseErrorMessage(error)! };
   }
 
-  return { error: error?.message ?? null };
+  if (!error) {
+    void trackReferralEvent('interaction');
+    const actor = await getProfileLabel(userId);
+    await notifyPostAuthor(postId, userId, 'like', 'Yeni beğeni', `${actor} gönderini beğendi`);
+  } else if (isUniqueViolation(error)) {
+    // Paralel çift dokunma: beğeni zaten var, bildirim gönderme.
+  }
+
+  return { error: null };
 }
 
 export async function togglePostSave(
   postId: string,
   userId: string,
   isSaved: boolean,
+  collectionId?: string | null,
 ): Promise<{ error: string | null }> {
   if (postId.startsWith('demo-')) return { error: null };
 
@@ -202,17 +292,25 @@ export async function togglePostSave(
       .delete()
       .eq('post_id', postId)
       .eq('user_id', userId);
-    return { error: error?.message ?? null };
+    return { error: supabaseErrorMessage(error) };
   }
 
-  const { error } = await supabase.from('post_saves').insert({ post_id: postId, user_id: userId });
+  const { error } = await supabase.from('post_saves').insert({
+    post_id: postId,
+    user_id: userId,
+    collection_id: collectionId ?? null,
+  });
+
+  if (error && !isUniqueViolation(error)) {
+    return { error: supabaseErrorMessage(error)! };
+  }
 
   if (!error) {
     const actor = await getProfileLabel(userId);
     await notifyPostAuthor(postId, userId, 'save', 'Kaydedildi', `${actor} gönderini kaydetti`);
   }
 
-  return { error: error?.message ?? null };
+  return { error: null };
 }
 
 export async function toggleCommentLike(
@@ -228,13 +326,18 @@ export async function toggleCommentLike(
       .delete()
       .eq('comment_id', commentId)
       .eq('user_id', userId);
-    return { error: error?.message ?? null };
+    return { error: supabaseErrorMessage(error) };
   }
 
   const { error } = await supabase
     .from('comment_likes')
     .insert({ comment_id: commentId, user_id: userId });
-  return { error: error?.message ?? null };
+
+  if (error && !isUniqueViolation(error)) {
+    return { error: supabaseErrorMessage(error)! };
+  }
+
+  return { error: null };
 }
 
 export async function toggleFollow(
@@ -244,31 +347,75 @@ export async function toggleFollow(
 ): Promise<{ error: string | null }> {
   if (followingId.startsWith('demo-')) return { error: null };
 
+  if (!isFollowing) {
+    const followCheck = await canFollowUser(followerId, followingId);
+    if (!followCheck.allowed) return { error: followCheck.error };
+  }
+
   if (isFollowing) {
     const { error } = await supabase
       .from('follows')
       .delete()
       .eq('follower_id', followerId)
       .eq('following_id', followingId);
-    return { error: error?.message ?? null };
+    return { error: supabaseErrorMessage(error) };
   }
 
-  const { error } = await supabase
+  const { data: inserted, error } = await supabase
     .from('follows')
-    .insert({ follower_id: followerId, following_id: followingId });
+    .insert(
+      { follower_id: followerId, following_id: followingId },
+      { ignoreDuplicates: true },
+    )
+    .select('follower_id')
+    .maybeSingle();
 
-  if (!error) {
-    const actor = await getProfileLabel(followerId);
-    await notifyUser(
-      followingId,
-      'follow',
-      'Yeni takipçi',
-      `${actor} seni takip etmeye başladı`,
-      followerId,
-    );
+  if (error && !isUniqueViolation(error)) {
+    return { error: supabaseErrorMessage(error)! };
   }
 
-  return { error: error?.message ?? null };
+  if (inserted) {
+    const actor = await getProfileLabel(followerId);
+    const { data: reverseFollow } = await supabase
+      .from('follows')
+      .select('follower_id')
+      .eq('follower_id', followingId)
+      .eq('following_id', followerId)
+      .maybeSingle();
+
+    if (reverseFollow) {
+      await notifyUser(
+        followingId,
+        'friend_accepted',
+        'Artık arkadaşsınız',
+        `${actor} ile karşılıklı takipleştiniz`,
+        followerId,
+      );
+    } else {
+      await notifyUser(
+        followingId,
+        'follow',
+        'Yeni takipçi',
+        `${actor} seni takip etmeye başladı`,
+        followerId,
+      );
+    }
+  }
+
+  return { error: null };
+}
+
+/** Bireysel takip + varsa işletme takibini senkron tutar. */
+export async function toggleAuthorFollow(
+  authorId: string,
+  followerId: string,
+  isFollowing: boolean,
+  businessId?: string | null,
+): Promise<{ error: string | null }> {
+  const userResult = await toggleFollow(authorId, followerId, isFollowing);
+  if (userResult.error) return userResult;
+  if (!businessId) return { error: null };
+  return toggleBusinessFollow(businessId, followerId, isFollowing);
 }
 
 export async function reportContent(
@@ -288,7 +435,7 @@ export async function reportContent(
     details: details ?? null,
   });
 
-  return { error: error?.message ?? null };
+  return { error: supabaseErrorMessage(error) };
 }
 
 export async function blockUser(
@@ -303,7 +450,7 @@ export async function blockUser(
     { onConflict: 'blocker_id,blocked_id' },
   );
 
-  return { error: error?.message ?? null };
+  return { error: supabaseErrorMessage(error) };
 }
 
 export async function unblockUser(
@@ -315,7 +462,7 @@ export async function unblockUser(
     .delete()
     .eq('blocker_id', blockerId)
     .eq('blocked_id', blockedId);
-  return { error: error?.message ?? null };
+  return { error: supabaseErrorMessage(error) };
 }
 
 export async function createQuotePost(
@@ -358,5 +505,5 @@ export async function createQuotePost(
     );
   }
 
-  return { error: error?.message ?? null };
+  return { error: supabaseErrorMessage(error) };
 }

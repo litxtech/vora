@@ -16,13 +16,13 @@ export const colors = {
     overlay: 'rgba(0, 0, 0, 0.6)',
   },
   light: {
-    background: '#F5F7FA',
+    background: '#F1F5F9',
     surface: '#FFFFFF',
     surfaceElevated: '#FFFFFF',
-    border: '#E2E8F0',
+    border: '#CBD5E1',
     text: '#0F172A',
-    textSecondary: '#475569',
-    textMuted: '#94A3B8',
+    textSecondary: '#334155',
+    textMuted: '#64748B',
     primary: '#1565C0',
     primaryMuted: '#0D47A1',
     accent: '#00897B',
@@ -57,6 +57,36 @@ export const typography = {
   body: { fontSize: 16, fontWeight: '400' as const, lineHeight: 22 },
   caption: { fontSize: 13, fontWeight: '400' as const, lineHeight: 18 },
   label: { fontSize: 14, fontWeight: '600' as const, lineHeight: 18 },
+} as const;
+
+export const gradients = {
+  dark: {
+    karadeniz: ['#050810', '#0A1220', '#0D1B2E', '#0A0E14'] as const,
+    default: ['#0B1220', '#141C2B', '#1A2236', '#0A0E14'] as const,
+    waveAccent: 'rgba(30, 136, 229, 0.08)',
+  },
+  light: {
+    karadeniz: ['#D4DEE9', '#E2EAF3', '#EEF2F7', '#F5F7FA'] as const,
+    default: ['#D8E0EA', '#E6ECF3', '#F0F3F7', '#F5F7FA'] as const,
+    waveAccent: 'rgba(21, 101, 192, 0.1)',
+  },
+} as const;
+
+export const glassSurface = {
+  dark: {
+    border: 'rgba(255, 255, 255, 0.1)',
+    background: 'rgba(255, 255, 255, 0.04)',
+    overlay: 'rgba(255, 255, 255, 0.03)',
+    chip: 'rgba(255, 255, 255, 0.05)',
+    handle: 'rgba(255, 255, 255, 0.2)',
+  },
+  light: {
+    border: '#CBD5E1',
+    background: '#FFFFFF',
+    overlay: '#F8FAFC',
+    chip: '#F8FAFC',
+    handle: '#CBD5E1',
+  },
 } as const;
 
 export type ThemeMode = 'dark' | 'light';

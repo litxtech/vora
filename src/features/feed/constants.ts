@@ -1,30 +1,73 @@
-import type { FeedCategory, FeedItem } from '@/features/feed/types';
+import type { FeedCategory } from '@/features/feed/types';
 import type { UserRole } from '@/types/database';
+import type { Ionicons } from '@expo/vector-icons';
+import { DISTRICTS } from '@/constants/districts';
+import type { RegionId } from '@/constants/regions';
 
 export const FEED_PAGE_SIZE = 15;
 
-export const FEED_FILTERS: { id: FeedCategory; label: string }[] = [
-  { id: 'all', label: 'Tümü' },
-  { id: 'news', label: 'Haberler' },
-  { id: 'emergency', label: 'Acil Durumlar' },
-  { id: 'traffic', label: 'Trafik' },
-  { id: 'event', label: 'Etkinlikler' },
-  { id: 'job', label: 'İş İlanları' },
-  { id: 'business', label: 'İşletmeler' },
-  { id: 'lost_found', label: 'Kayıp İlanları' },
-  { id: 'reels', label: 'Reels' },
-  { id: 'following', label: 'Takip Ettiklerim' },
+export const FEED_ALL_REGIONS_LABEL = 'Tüm iller';
+export const FEED_ALL_DISTRICTS_LABEL = 'Tüm ilçeler';
+
+export function getFeedDistrictOptions(regionId: RegionId | null): string[] {
+  if (regionId) return DISTRICTS[regionId] ?? [];
+
+  const unique = new Set<string>();
+  for (const districts of Object.values(DISTRICTS)) {
+    for (const name of districts) unique.add(name);
+  }
+  return [...unique].sort((a, b) => a.localeCompare(b, 'tr'));
+}
+
+/** Akış kartında tam genişlik medya yüksekliği = genişlik × bu oran (4:5 ≈ 1.25) */
+export const FEED_MEDIA_ASPECT_RATIO = 1.25;
+
+/** Akış inline medya üst sınırı (px) */
+export const FEED_MEDIA_MAX_HEIGHT = 420;
+
+/** Gönderi detayında video kartı üst sınırı (px) */
+export const FEED_DETAIL_VIDEO_MAX_HEIGHT = 560;
+
+/** Dış paylaşım kartı genişliği (galeri / sosyal medya) */
+export const POST_SHARE_CARD_WIDTH = 360;
+
+export const FEED_FILTERS: {
+  id: FeedCategory;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}[] = [
+  { id: 'all', label: 'Tümü', icon: 'grid-outline' },
+  { id: 'news', label: 'Haberler', icon: 'newspaper-outline' },
+  { id: 'emergency', label: 'Acil', icon: 'warning-outline' },
+  { id: 'traffic', label: 'Trafik', icon: 'car-outline' },
+  { id: 'event', label: 'Etkinlik', icon: 'calendar-outline' },
+  { id: 'job', label: 'İş', icon: 'briefcase-outline' },
+  { id: 'business', label: 'İşletme', icon: 'storefront-outline' },
+  { id: 'lost_found', label: 'Kayıp', icon: 'search-outline' },
+  { id: 'entertainment', label: 'Eğlence', icon: 'happy-outline' },
+  { id: 'daily', label: 'Günlük', icon: 'sunny-outline' },
+  { id: 'reels', label: 'Reels', icon: 'play-circle-outline' },
+  { id: 'following', label: 'Takip', icon: 'people-outline' },
 ];
 
-export const REPORT_REASONS = [
-  { id: 'spam', label: 'Spam' },
-  { id: 'harassment', label: 'Hakaret / Taciz' },
-  { id: 'fraud', label: 'Dolandırıcılık' },
-  { id: 'abuse', label: 'Taciz' },
-  { id: 'misinformation', label: 'Yalan Bilgi' },
-  { id: 'child_safety', label: 'Çocuk Güvenliği' },
-  { id: 'violence', label: 'Şiddet İçeriği' },
-] as const;
+export const CATEGORY_STYLES: Record<
+  string,
+  { label: string; color: string; icon: keyof typeof Ionicons.glyphMap }
+> = {
+  news: { label: 'Haber', color: '#1E88E5', icon: 'newspaper-outline' },
+  emergency: { label: 'Acil', color: '#EF5350', icon: 'warning-outline' },
+  traffic: { label: 'Trafik', color: '#FFB300', icon: 'car-outline' },
+  event: { label: 'Etkinlik', color: '#7B1FA2', icon: 'calendar-outline' },
+  job: { label: 'İş İlanı', color: '#1E88E5', icon: 'briefcase-outline' },
+  business: { label: 'İşletme', color: '#5C6BC0', icon: 'storefront-outline' },
+  lost_found: { label: 'Kayıp', color: '#FF7043', icon: 'search-outline' },
+  entertainment: { label: 'Eğlence', color: '#EC407A', icon: 'happy-outline' },
+  daily: { label: 'Günlük', color: '#26A69A', icon: 'sunny-outline' },
+  reels: { label: 'Reels', color: '#E91E63', icon: 'play-circle-outline' },
+  general: { label: 'Genel', color: '#64748B', icon: 'chatbubble-outline' },
+};
+
+export { REPORT_REASONS } from '@/features/moderation/constants';
 
 export const BADGE_CONFIG: Record<
   UserRole,
@@ -37,106 +80,4 @@ export const BADGE_CONFIG: Record<
   super_admin: { label: 'Admin', color: '#D32F2F', icon: 'star' },
 };
 
-const DEMO_AUTHOR = {
-  id: 'demo-author-1',
-  username: 'trabzonhaber',
-  fullName: 'Trabzon Haber',
-  avatarUrl: null,
-  role: 'verified_reporter' as UserRole,
-  isVerified: true,
-};
-
-export const DEMO_FEED_ITEMS: FeedItem[] = [
-  {
-    id: 'demo-post-1',
-    sourceType: 'post',
-    sourceId: 'demo-post-1',
-    author: DEMO_AUTHOR,
-    title: 'Meydan trafik kazası',
-    content: "Trabzon Meydan'da iki araç çarpıştı. Yol tek şeride düştü, ekipler olay yerinde.",
-    mediaUrls: [],
-    category: 'traffic',
-    regionId: 'trabzon',
-    district: 'Ortahisar',
-    locationLabel: 'Trabzon Meydan',
-    latitude: 41.0015,
-    longitude: 39.7178,
-    likeCount: 128,
-    commentCount: 34,
-    quoteCount: 12,
-    saveCount: 45,
-    viewCount: 2840,
-    createdAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
-    isLiked: false,
-    isSaved: false,
-    isFollowing: false,
-    quotedPost: null,
-    isDemo: true,
-  },
-  {
-    id: 'demo-post-2',
-    sourceType: 'post',
-    sourceId: 'demo-post-2',
-    author: {
-      id: 'demo-author-2',
-      username: 'yomra_gundem',
-      fullName: 'Yomra Gündem',
-      avatarUrl: null,
-      role: 'user',
-      isVerified: false,
-    },
-    title: null,
-    content: 'Yomra sahilinde bu akşam canlı müzik etkinliği var. #Yomra #Etkinlik',
-    mediaUrls: [],
-    category: 'event',
-    regionId: 'trabzon',
-    district: 'Yomra',
-    locationLabel: 'Yomra Sahil',
-    latitude: 40.9589,
-    longitude: 39.8567,
-    likeCount: 56,
-    commentCount: 8,
-    quoteCount: 3,
-    saveCount: 21,
-    viewCount: 920,
-    createdAt: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
-    isLiked: false,
-    isSaved: false,
-    isFollowing: true,
-    quotedPost: null,
-    isDemo: true,
-  },
-  {
-    id: 'demo-post-3',
-    sourceType: 'post',
-    sourceId: 'demo-post-3',
-    author: {
-      id: 'demo-author-3',
-      username: 'karadeniz_is',
-      fullName: 'Karadeniz İş',
-      avatarUrl: null,
-      role: 'user',
-      isVerified: true,
-    },
-    title: 'Otel personeli aranıyor',
-    content: 'Yaz sezonu için resepsiyon ve servis personeli alınacaktır. Detaylar için DM.',
-    mediaUrls: [],
-    category: 'job',
-    regionId: 'trabzon',
-    district: 'Akçaabat',
-    locationLabel: 'Akçaabat',
-    latitude: null,
-    longitude: null,
-    likeCount: 19,
-    commentCount: 5,
-    quoteCount: 1,
-    saveCount: 67,
-    viewCount: 540,
-    createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
-    isLiked: false,
-    isSaved: false,
-    isFollowing: false,
-    quotedPost: null,
-    isDemo: true,
-  },
-];
+export { DEMO_FEED_ITEMS } from '@/features/feed/constants/demoFeedItems';

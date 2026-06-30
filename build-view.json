@@ -1,0 +1,48 @@
+﻿{
+  "id": "2997ffc9-1040-4fb8-8348-78a7c7b86c5e",
+  "status": "ERRORED",
+  "platform": "ANDROID",
+  "error": {
+    "errorCode": "EAS_BUILD_UNKNOWN_GRADLE_ERROR",
+    "message": "Gradle build failed with unknown error. See logs for the \"Run gradlew\" phase for more information."
+  },
+  "artifacts": {},
+  "fingerprint": {
+    "id": "019eab7e-4c75-7567-b945-27399d87028a",
+    "hash": "15962d9725ca4ff1b01e5f8ccea9285ac8b9102b"
+  },
+  "initiatingActor": {
+    "id": "c002b060-a185-4301-9aeb-d31dec4ad583",
+    "displayName": "luvolive"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/fddc3166-8869-44c7-987e-1f15dea17e0b/2997ffc9-1040-4fb8-8348-78a7c7b86c5e/2026-06-09T08%3A28%3A37Z-c904f7f6-4c14-470e-b5b0-c2786fd25131.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260609%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260609T083210Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=17f3a47eec3987d777e160d123b47ab116e483a6ac089f584cc2cac80f1f322897cf88149475b3b2036d6f5c950890c2a52acdff73629873ba58f1da3ba05f9ce2fe663cadd88d060806d35004f782097e39f6a936903407074e09765c06bcbc55f5358779f848d4d60d0531232df02b75196d0f52c966bc83a3db8b264777c124cb95649bf390aa9d39fb9bd2f286a72eb18d61ef80d296f57d900c17e3b19901f2bb75eaac912118cef9e9a23e3ef16b486c1156ad018eac40351b22e8689ff8195d457e599033208de73c178128a993c641dca6c90e41150a437c8e2722198e0b4a3972e58f3da1046cca3d0cfd1a54f3c590ceaa4a351a40a0805fac7272"
+  ],
+  "project": {
+    "id": "fddc3166-8869-44c7-987e-1f15dea17e0b",
+    "name": "voralive",
+    "slug": "voralive",
+    "ownerAccount": {
+      "id": "e5a6dcb3-89e4-48d3-856b-ea78cdb37166",
+      "name": "voralive"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "development",
+  "sdkVersion": "56.0.0",
+  "appVersion": "2.2.1",
+  "appBuildVersion": "1",
+  "gitCommitHash": "29b9e3e19ab166d11cb942b5b0f62ded7e3e3c8f",
+  "gitCommitMessage": "Feed navigasyon, i┼ş arayanlar ve personel ├Âzellikleri\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "priority": "NORMAL",
+  "createdAt": "2026-06-09T08:27:21.549Z",
+  "updatedAt": "2026-06-09T08:32:33.841Z",
+  "completedAt": "2026-06-09T08:32:33.669Z",
+  "expirationDate": "2026-06-23T08:27:21.582Z",
+  "isForIosSimulator": false,
+  "metrics": {
+    "buildWaitTime": 578,
+    "buildQueueTime": 79544,
+    "buildDuration": 231998
+  }
+}

@@ -1,3 +1,4 @@
+// Requires: npm install --save-dev sharp
 import sharp from 'sharp';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';

@@ -14,13 +14,17 @@ export type AgoraTokenResponse = {
  * Agora RTC token'ı Supabase Edge Function ile alınır.
  * react-native-agora entegrasyonu development build gerektirir.
  */
-export async function fetchAgoraToken(channelName: string, callType: CallType, uid = 0) {
+export async function fetchAgoraToken(
+  channelName: string,
+  callType: CallType,
+  sessionId: string,
+) {
   if (!env.agoraAppId) {
     throw new Error('EXPO_PUBLIC_AGORA_APP_ID tanımlanmalı.');
   }
 
   const { data, error } = await supabase.functions.invoke<AgoraTokenResponse>('agora-token', {
-    body: { channelName, callType, uid },
+    body: { channelName, callType, sessionId },
   });
 
   if (error) throw error;

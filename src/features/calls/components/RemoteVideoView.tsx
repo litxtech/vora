@@ -1,69 +1,133 @@
-import { StyleSheet, View } from 'react-native';
-import { RtcSurfaceView } from 'react-native-agora';
-import { CallAvatar } from './CallAvatar';
+import { StyleSheet, Text as RNText, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { CallRtcView } from '@/features/calls/components/CallRtcView';
+import { CALL_DESIGN } from '@/features/calls/constants';
+import { buildRemoteVideoCanvas } from '@/features/calls/services/callVideoCanvas';
 import type { CallParticipant } from '../types';
+import { displayName as callParticipantName } from '../utils';
+import { CallAvatar } from './CallAvatar';
 
 type RemoteVideoViewProps = {
   remoteUid: number | null;
   participant?: CallParticipant | null;
   isVideoCall: boolean;
-  isCameraOn: boolean;
+  remoteCameraOff?: boolean;
+  remoteConnected?: boolean;
 };
 
 export function RemoteVideoView({
   remoteUid,
   participant,
   isVideoCall,
-  isCameraOn,
+  remoteCameraOff = false,
+  remoteConnected = false,
 }: RemoteVideoViewProps) {
   if (isVideoCall && remoteUid) {
     return (
-      <View style={styles.videoContainer}>
-        <RtcSurfaceView
-          style={styles.remoteVideo}
-          canvas={{ uid: remoteUid }}
+      <Animated.View entering={FadeIn.duration(420)} style={videoStyles.videoContainer}>
+        <CallRtcView style={videoStyles.remoteVideo} canvas={buildRemoteVideoCanvas(remoteUid)} />
+        <LinearGradient
+          colors={[...CALL_DESIGN.gradients.videoTopFade]}
+          style={videoStyles.topFade}
+          pointerEvents="none"
         />
-      </View>
+        <LinearGradient
+          colors={[...CALL_DESIGN.gradients.videoBottomFade]}
+          style={videoStyles.bottomFade}
+          pointerEvents="none"
+        />
+        {!remoteCameraOff ? null : (
+          <View style={videoStyles.cameraOffOverlay} pointerEvents="none">
+            <CallAvatar participant={participant} size={96} showName={false} />
+            <RNText style={videoStyles.cameraOffText}>{callParticipantName(participant)}</RNText>
+            <RNText style={videoStyles.cameraOffHint}>Kamera kapalı</RNText>
+          </View>
+        )}
+      </Animated.View>
     );
   }
 
+  const waitingHint = isVideoCall
+    ? 'Görüntü bekleniyor…'
+    : remoteConnected
+      ? null
+      : 'Bağlanıyor…';
+  const showWaitingName = isVideoCall || !remoteConnected;
+
   return (
-    <View style={styles.avatarStage}>
-      <CallAvatar
-        participant={participant}
-        size={148}
-        showName={false}
-      />
-      {isVideoCall && !isCameraOn ? (
-        <View style={styles.cameraOffBadge}>
-          <CallAvatar participant={participant} size={72} showName={false} />
-        </View>
+    <View style={videoStyles.waitingStage}>
+      <CallAvatar participant={participant} size={128} showName={false} glow />
+      {showWaitingName ? (
+        <RNText style={videoStyles.waitingName}>{callParticipantName(participant)}</RNText>
       ) : null}
+      {waitingHint ? <RNText style={videoStyles.waitingHint}>{waitingHint}</RNText> : null}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const videoStyles = StyleSheet.create({
   videoContainer: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: '#000',
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    backgroundColor: CALL_DESIGN.videoBg,
   },
   remoteVideo: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
-  avatarStage: {
-    flex: 1,
+  topFade: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
+  },
+  bottomFade: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 220,
+  },
+  cameraOffOverlay: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 48,
+    gap: 12,
+    backgroundColor: 'rgba(0,0,0,0.62)',
   },
-  cameraOffBadge: {
-    position: 'absolute',
-    bottom: 180,
-    right: 24,
-    borderRadius: 40,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.3)',
+  cameraOffText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '600',
+  },
+  cameraOffHint: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  waitingStage: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 14,
+    paddingBottom: 120,
+  },
+  waitingName: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: '600',
+  },
+  waitingHint: {
+    color: 'rgba(255,255,255,0.62)',
+    fontSize: 15,
+    fontWeight: '500',
   },
 });

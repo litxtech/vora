@@ -17,12 +17,19 @@ import { useTheme } from '@/providers/ThemeProvider';
 export default function LocationScreen() {
   const { colors } = useTheme();
   const { user, completeOnboarding } = useAuth();
-  const onboarding = useOnboardingStore();
+  const regionId = useOnboardingStore((s) => s.regionId);
+  const district = useOnboardingStore((s) => s.district);
+  const avatarUri = useOnboardingStore((s) => s.avatarUri);
+  const bio = useOnboardingStore((s) => s.bio);
+  const occupation = useOnboardingStore((s) => s.occupation);
+  const interests = useOnboardingStore((s) => s.interests);
+  const notificationPrefs = useOnboardingStore((s) => s.notificationPrefs);
+  const resetOnboarding = useOnboardingStore((s) => s.reset);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const finishOnboarding = async () => {
-    if (!onboarding.regionId || !onboarding.district) {
+    if (!regionId || !district) {
       setError('Profil bilgileri eksik. Lütfen geri dönüp şehir ve ilçe seçin.');
       return;
     }
@@ -31,8 +38,8 @@ export default function LocationScreen() {
     setError(null);
 
     let avatarUrl: string | null = null;
-    if (onboarding.avatarUri && user?.id) {
-      const { url, error: uploadError } = await uploadAvatar(user.id, onboarding.avatarUri);
+    if (avatarUri && user?.id) {
+      const { url, error: uploadError } = await uploadAvatar(user.id, avatarUri);
       if (uploadError) {
         setLoading(false);
         setError('Profil fotoğrafı yüklenemedi. Lütfen tekrar deneyin.');
@@ -43,12 +50,12 @@ export default function LocationScreen() {
 
     const { error: saveError } = await completeOnboarding({
       avatarUrl,
-      regionId: onboarding.regionId,
-      district: onboarding.district,
-      bio: onboarding.bio || undefined,
-      occupation: onboarding.occupation || undefined,
-      interests: onboarding.interests,
-      notificationPrefs: onboarding.notificationPrefs,
+      regionId,
+      district,
+      bio: bio || undefined,
+      occupation: occupation || undefined,
+      interests,
+      notificationPrefs,
     });
 
     setLoading(false);
@@ -58,7 +65,7 @@ export default function LocationScreen() {
       return;
     }
 
-    onboarding.reset();
+    resetOnboarding();
     router.replace('/(tabs)');
   };
 
@@ -87,8 +94,7 @@ export default function LocationScreen() {
         {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
 
         <View style={styles.actions}>
-          <Button title="İzin Ver" loading={loading} onPress={requestLocation} />
-          <Button title="Şimdilik Geç" variant="secondary" loading={loading} onPress={finishOnboarding} />
+          <Button title="Devam Et" loading={loading} onPress={requestLocation} />
         </View>
       </View>
     </GradientBackground>

@@ -1,15 +1,20 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
-import { assertRequiredEnv, env } from '@/config/env';
+import { env, isEnvConfigured } from '@/config/env';
 import type { Database } from '@/types/database';
+import { supabaseAuthStorage } from './storage';
 
-assertRequiredEnv();
-
-export const supabase = createClient<Database>(env.supabaseUrl, env.supabaseAnonKey, {
-  auth: {
-    storage: AsyncStorage,
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: false,
+export const supabase = createClient<Database>(
+  env.supabaseUrl || 'https://invalid.local',
+  env.supabaseAnonKey || 'invalid-anon-key',
+  {
+    auth: {
+      storage: supabaseAuthStorage,
+      storageKey: 'vora.auth.session',
+      autoRefreshToken: true,
+      persistSession: true,
+      detectSessionInUrl: false,
+    },
   },
-});
+);
+
+export { isEnvConfigured };

@@ -1,0 +1,2 @@
+-- Remote veritabanında bu sürüm zaten uygulanmış (geçmiş senkronu).
+-- Yerel migration dizini ile uzak geçmişi hizalamak için boş placeholder.

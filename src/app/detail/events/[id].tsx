@@ -1,5 +1,5 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { EventDetailScreen } from '@/features/events/components/EventDetailScreen';
 
-export default function EventDetailScreen() {
-  return <MapDetailScreen type="events" />;
+export default function EventDetailScreenRoute() {
+  return <EventDetailScreen />;
 }

@@ -1,32 +1,32 @@
-import { Pressable, StyleSheet, View } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import type { ReactNode } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
+import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { spacing } from '@/constants/theme';
-import { useTheme } from '@/providers/ThemeProvider';
 
 type AuthHeaderProps = {
   title: string;
   subtitle?: string;
   showBack?: boolean;
+  compact?: boolean;
+  trailing?: ReactNode;
 };
 
-export function AuthHeader({ title, subtitle, showBack = true }: AuthHeaderProps) {
-  const { colors } = useTheme();
-
+export function AuthHeader({ title, subtitle, showBack = true, compact = false, trailing }: AuthHeaderProps) {
   return (
-    <View style={styles.header}>
-      {showBack ? (
-        <Pressable style={styles.back} onPress={() => router.back()} hitSlop={12}>
-          <Ionicons name="arrow-back" size={22} color={colors.text} />
-        </Pressable>
-      ) : (
-        <View style={styles.backPlaceholder} />
-      )}
+    <View style={[styles.header, compact && styles.headerCompact]}>
+      <View style={[styles.topRow, compact && styles.topRowCompact]}>
+        {showBack ? (
+          <ScreenBackButton />
+        ) : (
+          <View style={styles.backPlaceholder} />
+        )}
+        {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
+      </View>
       <View style={styles.titles}>
-        <Text variant="h2">{title}</Text>
+        <Text variant={compact ? 'h3' : 'h2'}>{title}</Text>
         {subtitle ? (
-          <Text secondary style={styles.subtitle}>
+          <Text secondary variant={compact ? 'caption' : 'body'} style={compact ? undefined : styles.subtitle}>
             {subtitle}
           </Text>
         ) : null}
@@ -37,15 +37,26 @@ export function AuthHeader({ title, subtitle, showBack = true }: AuthHeaderProps
 
 const styles = StyleSheet.create({
   header: {
-    marginBottom: spacing.xl,
+    marginBottom: spacing.lg,
   },
-  back: {
+  headerCompact: {
+    marginBottom: spacing.sm,
+  },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: spacing.md,
-    alignSelf: 'flex-start',
+  },
+  topRowCompact: {
+    marginBottom: spacing.xs,
   },
   backPlaceholder: {
+    width: 22,
     height: 22,
-    marginBottom: spacing.md,
+  },
+  trailing: {
+    alignItems: 'flex-end',
   },
   titles: {
     gap: spacing.xs,

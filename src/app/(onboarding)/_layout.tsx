@@ -1,18 +1,14 @@
-import { ActivityIndicator, View } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
+import { StyleSheet, View } from 'react-native';
+import { BOOT_SPLASH_BACKGROUND } from '@/components/splash';
 import { useOnboardingGuard } from '@/features/auth/hooks/useRouteGuard';
-import { useTheme } from '@/providers/ThemeProvider';
+import { getDefaultStackScreenOptions } from '@/constants/navigation';
 
 export default function OnboardingLayout() {
-  const { colors } = useTheme();
   const guard = useOnboardingGuard();
 
   if (guard.status === 'loading') {
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator color={colors.primary} />
-      </View>
-    );
+    return <View style={styles.bootPlaceholder} />;
   }
 
   if (guard.status === 'redirect') {
@@ -20,7 +16,7 @@ export default function OnboardingLayout() {
   }
 
   return (
-    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+    <Stack screenOptions={getDefaultStackScreenOptions()}>
       <Stack.Screen name="profile-setup" />
       <Stack.Screen name="preferences" />
       <Stack.Screen name="notifications" />
@@ -28,3 +24,10 @@ export default function OnboardingLayout() {
     </Stack>
   );
 }
+
+const styles = StyleSheet.create({
+  bootPlaceholder: {
+    flex: 1,
+    backgroundColor: BOOT_SPLASH_BACKGROUND,
+  },
+});

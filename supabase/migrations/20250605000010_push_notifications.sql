@@ -175,7 +175,7 @@ values (
   'notification-sounds',
   true,
   524288,
-  array['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/aac', 'audio/m4a', 'audio/x-m4a']
+  array['audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/x-wav', 'audio/wave', 'audio/aac', 'audio/m4a', 'audio/x-m4a', 'audio/x-caf']
 )
 on conflict (id) do nothing;
 
@@ -217,3 +217,4 @@ using (
 );
 
 alter publication supabase_realtime add table public.notifications;
+alter publication supabase_realtime add table public.notification_sound_settings;

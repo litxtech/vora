@@ -1,3 +1,4 @@
+import { canCallUser } from '@/features/moderation/services/interactions';
 import { supabase } from '@/lib/supabase/client';
 import type { CallSession, CallType } from '../types';
 import { buildChannelName } from '../utils';
@@ -20,6 +21,11 @@ export async function fetchCallSession(sessionId: string): Promise<CallSession |
 }
 
 export async function initiateCall(calleeId: string, callType: CallType, callerId: string) {
+  const callCheck = await canCallUser(callerId, calleeId);
+  if (!callCheck.allowed) {
+    throw new Error(callCheck.error ?? 'Arama başlatılamadı');
+  }
+
   const channelName = buildChannelName(callerId, calleeId);
 
   const { data, error } = await supabase
@@ -73,6 +79,19 @@ export async function cancelCall(sessionId: string) {
       ended_at: new Date().toISOString(),
     })
     .eq('id', sessionId);
+
+  if (error) throw error;
+}
+
+export async function markCallMissed(sessionId: string) {
+  const { error } = await supabase
+    .from('call_sessions')
+    .update({
+      status: 'missed',
+      ended_at: new Date().toISOString(),
+    })
+    .eq('id', sessionId)
+    .eq('status', 'ringing');
 
   if (error) throw error;
 }

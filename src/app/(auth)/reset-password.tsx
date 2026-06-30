@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -9,6 +10,7 @@ import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
 import { validatePassword } from '@/features/auth/services/validation';
+import { supabaseErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -72,7 +74,7 @@ export default function ResetPasswordScreen() {
     setLoading(false);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(supabaseErrorMessage(updateError) ?? 'Şifre güncellenemedi.');
       return;
     }
 
@@ -99,7 +101,12 @@ export default function ResetPasswordScreen() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
+      <KeyboardAwareScrollView
+        contentContainerStyle={styles.scroll}
+        keyboardShouldPersistTaps="handled"
+        bottomOffset={24}
+        extraKeyboardSpace={16}
+      >
         <AuthHeader
           title={step === 'verify' ? 'Kodu Doğrula' : 'Yeni Şifre'}
           subtitle={email ? `${email} adresine gönderilen kod` : undefined}
@@ -128,7 +135,7 @@ export default function ResetPasswordScreen() {
             </View>
           )}
         </GlassCard>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </GradientBackground>
   );
 }

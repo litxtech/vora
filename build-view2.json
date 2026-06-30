@@ -1,0 +1,38 @@
+﻿{
+  "id": "df6641aa-13fc-4f09-b0d5-ffa1066ab2db",
+  "status": "IN_PROGRESS",
+  "platform": "ANDROID",
+  "artifacts": {},
+  "fingerprint": {
+    "id": "019eab8b-c988-75ca-93cd-5ef16f56d43a",
+    "hash": "35104d9465a9a21a61b6d09679940c8f14739b0b"
+  },
+  "initiatingActor": {
+    "id": "c002b060-a185-4301-9aeb-d31dec4ad583",
+    "displayName": "luvolive"
+  },
+  "logFiles": [
+    "https://storage.googleapis.com/eas-workflows-production/logs/fddc3166-8869-44c7-987e-1f15dea17e0b/df6641aa-13fc-4f09-b0d5-ffa1066ab2db/2026-06-09T08%3A44%3A37Z-3aa5084d-9810-430d-8234-508c571863d0.txt?X-Goog-Algorithm=GOOG4-RSA-SHA256&X-Goog-Credential=www-production%40exponentjs.iam.gserviceaccount.com%2F20260609%2Fauto%2Fstorage%2Fgoog4_request&X-Goog-Date=20260609T084742Z&X-Goog-Expires=900&X-Goog-SignedHeaders=host&X-Goog-Signature=1406a3f6d89f966e44b855e8f58262a58fc323eb2b7a4c128f257b3bc2ef991483737b41c53d6377ea96c423ff4ad602afad90526d0480713e94a3cd7c0121eabb617c03e72d40ae196bb9bbe8d722c37907c8dd1b0fc00d3d9f56b25d2eba72db598b3356f4116f34f0bd709136dc47f4b9fe9500f8eb0ea7cd0e977c52ad2aa183ec446c25c4ba997ea0a74d154758cab294e5be5b75b14069f7ff4aa4f6c6cb9c0660bed318ce2848debc93e405106574c30f4c1ce8f3d562c3258df357c8fec33f86a46b45fb5db2e88364fc812e1ee2b4057ea886f053bc5c2f1cd1a306301cd50bdc5fc6ee8d142282ccb2ab93a1985d602ace1c3e0d9055975fe20d56"
+  ],
+  "project": {
+    "id": "fddc3166-8869-44c7-987e-1f15dea17e0b",
+    "name": "voralive",
+    "slug": "voralive",
+    "ownerAccount": {
+      "id": "e5a6dcb3-89e4-48d3-856b-ea78cdb37166",
+      "name": "voralive"
+    }
+  },
+  "distribution": "INTERNAL",
+  "buildProfile": "development",
+  "sdkVersion": "56.0.0",
+  "appVersion": "2.2.1",
+  "appBuildVersion": "1",
+  "gitCommitHash": "29b9e3e19ab166d11cb942b5b0f62ded7e3e3c8f",
+  "gitCommitMessage": "Feed navigasyon, i┼ş arayanlar ve personel ├Âzellikleri\n\nCo-authored-by: Cursor <cursoragent@cursor.com>",
+  "priority": "NORMAL",
+  "createdAt": "2026-06-09T08:42:05.534Z",
+  "updatedAt": "2026-06-09T08:44:41.822Z",
+  "expirationDate": "2026-06-23T08:42:05.571Z",
+  "isForIosSimulator": false
+}

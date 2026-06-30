@@ -27,7 +27,11 @@ export const env = {
 } as const;
 
 export function assertRequiredEnv(): void {
-  if (!env.supabaseUrl || !env.supabaseAnonKey) {
+  if (!isEnvConfigured()) {
     throw new Error('Supabase URL ve anon key .env dosyasında tanımlanmalı.');
   }
+}
+
+export function isEnvConfigured(): boolean {
+  return Boolean(env.supabaseUrl && env.supabaseAnonKey);
 }

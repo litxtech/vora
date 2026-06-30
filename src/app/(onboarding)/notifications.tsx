@@ -1,6 +1,5 @@
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { OnboardingProgress } from '@/components/auth/OnboardingProgress';
 import { Button } from '@/components/ui/Button';
@@ -11,12 +10,14 @@ import { Text } from '@/components/ui/Text';
 import { NOTIFICATION_OPTIONS } from '@/constants/auth';
 import { spacing } from '@/constants/theme';
 import { useOnboardingStore } from '@/features/auth/store/onboardingStore';
+import { requestNotificationPermissions } from '@/lib/notifications/register';
 
 export default function NotificationsScreen() {
-  const { notificationPrefs, toggleNotification } = useOnboardingStore();
+  const notificationPrefs = useOnboardingStore((s) => s.notificationPrefs);
+  const toggleNotification = useOnboardingStore((s) => s.toggleNotification);
 
   const requestPermission = async () => {
-    await Notifications.requestPermissionsAsync();
+    await requestNotificationPermissions();
     router.push('/(onboarding)/location');
   };
 
@@ -48,8 +49,7 @@ export default function NotificationsScreen() {
           ))}
         </GlassCard>
 
-        <Button title="Bildirim İzni Ver" onPress={requestPermission} />
-        <Button title="Şimdilik Geç" variant="ghost" onPress={() => router.push('/(onboarding)/location')} />
+        <Button title="Devam Et" onPress={requestPermission} />
       </ScrollView>
     </GradientBackground>
   );

@@ -1,4 +1,6 @@
-import type { MapCoordinate } from '@/features/map/types';
+import type { MapCoordinate, MapMarker } from '@/features/map/types';
+
+export const LIVE_MARKER_MINUTES = 30;
 
 const EARTH_RADIUS_KM = 6371;
 
@@ -28,6 +30,13 @@ export function filterByRadius<T extends MapCoordinate>(
   radiusKm: number,
 ): T[] {
   return markers.filter((marker) => distanceKm(center, marker) <= radiusKm);
+}
+
+export function isLiveMarker(marker: MapMarker): boolean {
+  if (marker.isDemo) return true;
+  if (!marker.createdAt) return false;
+  const ageMs = Date.now() - new Date(marker.createdAt).getTime();
+  return ageMs >= 0 && ageMs < LIVE_MARKER_MINUTES * 60 * 1000;
 }
 
 export function formatMapDate(value: string | undefined): string | undefined {

@@ -1,5 +1,5 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { StaffDetailScreen } from '@/features/personnel-center/components/StaffDetailScreen';
 
-export default function StaffDetailScreen() {
-  return <MapDetailScreen type="staff" />;
+export default function StaffDetailRoute() {
+  return <StaffDetailScreen />;
 }

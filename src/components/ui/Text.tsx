@@ -1,6 +1,5 @@
-import { Text as RNText, StyleSheet, type TextProps as RNTextProps } from 'react-native';
+import { Text as RNText, type TextProps as RNTextProps } from 'react-native';
 import { useTheme } from '@/providers/ThemeProvider';
-import { typography } from '@/constants/theme';
 
 type Variant = 'h1' | 'h2' | 'h3' | 'body' | 'caption' | 'label';
 
@@ -17,13 +16,13 @@ export function Text({
   style,
   ...props
 }: TextProps) {
-  const { colors } = useTheme();
+  const { colors, metrics } = useTheme();
 
   const color = muted ? colors.textMuted : secondary ? colors.textSecondary : colors.text;
 
   return (
     <RNText
-      style={[typography[variant], { color }, style]}
+      style={[metrics.typography[variant], { color }, style]}
       {...props}
     />
   );

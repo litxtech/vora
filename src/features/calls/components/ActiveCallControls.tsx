@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { CallControlButton } from './CallControlButton';
+import { CallGlassBar } from './CallGlassBar';
 
 type ActiveCallControlsProps = {
   isMuted: boolean;
@@ -9,6 +10,7 @@ type ActiveCallControlsProps = {
   onToggleMute: () => void;
   onToggleSpeaker: () => void;
   onToggleCamera: () => void;
+  onSwitchCamera: () => void;
   onEndCall: () => void;
 };
 
@@ -20,51 +22,58 @@ export function ActiveCallControls({
   onToggleMute,
   onToggleSpeaker,
   onToggleCamera,
+  onSwitchCamera,
   onEndCall,
 }: ActiveCallControlsProps) {
   return (
-    <View style={styles.container}>
-      <View style={styles.row}>
-        <CallControlButton
-          icon={isMuted ? 'mic-off' : 'mic'}
-          label={isMuted ? 'Sessiz' : 'Mikrofon'}
-          onPress={onToggleMute}
-          active={isMuted}
-        />
-        <CallControlButton
-          icon={isSpeakerOn ? 'volume-high' : 'ear'}
-          label={isSpeakerOn ? 'Hoparlör' : 'Ahize'}
-          onPress={onToggleSpeaker}
-          active={isSpeakerOn}
-        />
-        {isVideoCall ? (
+    <CallGlassBar>
+      <View style={styles.stack}>
+        <View style={styles.row}>
           <CallControlButton
-            icon={isCameraOn ? 'videocam' : 'videocam-off'}
-            label={isCameraOn ? 'Kamera' : 'Kapalı'}
-            onPress={onToggleCamera}
-            active={!isCameraOn}
+            icon={isMuted ? 'mic-off' : 'mic'}
+            label={isMuted ? 'Sessiz' : 'Mikrofon'}
+            onPress={onToggleMute}
+            active={isMuted}
           />
-        ) : null}
+          <CallControlButton
+            icon={isSpeakerOn ? 'volume-high' : 'ear'}
+            label={isSpeakerOn ? 'Hoparlör' : 'Ahize'}
+            onPress={onToggleSpeaker}
+            active={isSpeakerOn}
+          />
+          <CallControlButton icon="call" label="Bitir" onPress={onEndCall} danger size="lg" />
+          {isVideoCall ? (
+            <>
+              <CallControlButton
+                icon={isCameraOn ? 'videocam' : 'videocam-off'}
+                label={isCameraOn ? 'Kamera' : 'Kapalı'}
+                onPress={onToggleCamera}
+                active={!isCameraOn}
+              />
+              <CallControlButton
+                icon="camera-reverse"
+                label="Çevir"
+                onPress={onSwitchCamera}
+              />
+            </>
+          ) : null}
+        </View>
       </View>
-
-      <View style={styles.endRow}>
-        <CallControlButton icon="call" label="Kapat" onPress={onEndCall} danger size="lg" />
-      </View>
-    </View>
+    </CallGlassBar>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    gap: 28,
+  stack: {
     width: '100%',
+    gap: 4,
   },
   row: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
-    alignItems: 'flex-start',
-  },
-  endRow: {
-    alignItems: 'center',
+    alignItems: 'flex-end',
+    flexWrap: 'wrap',
+    rowGap: 10,
+    width: '100%',
   },
 });

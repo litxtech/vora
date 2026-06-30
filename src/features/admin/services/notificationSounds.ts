@@ -1,8 +1,15 @@
-import { Audio } from 'expo-av';
 import type { NotificationEventType } from '@/constants/notifications';
 import { MAX_NOTIFICATION_SOUND_SECONDS } from '@/constants/notifications';
-import { validateSoundDuration } from '@/lib/notifications/soundSync';
+import {
+  ALLOWED_SOUND_EXTENSIONS,
+  SOUND_MIME_TYPES,
+  parseSoundExtension,
+  soundSlugForEvent,
+} from '@/lib/notifications/soundConstants';
+import { validateSoundDuration, getAudioDurationSeconds } from '@/lib/notifications/soundSync';
+import { readLocalFileBytes } from '@/lib/files/readLocalFile';
 import { supabase } from '@/lib/supabase/client';
+import { supabaseErrorMessage } from '@/lib/errors';
 
 export async function uploadNotificationSound(
   adminId: string,
@@ -10,24 +17,30 @@ export async function uploadNotificationSound(
   localUri: string,
   originalName: string,
 ): Promise<{ error: string | null }> {
-  const duration = await getDuration(localUri);
+  const ext = parseSoundExtension(originalName);
+  if (!ext) {
+    return {
+      error: `Desteklenen formatlar: ${ALLOWED_SOUND_EXTENSIONS.join(', ').toUpperCase()}. WAV önerilir.`,
+    };
+  }
+
+  const duration = await getAudioDurationSeconds(localUri);
   if (!validateSoundDuration(duration)) {
     return {
       error: `Ses dosyası en fazla ${MAX_NOTIFICATION_SOUND_SECONDS} saniye olabilir (mevcut: ${duration.toFixed(1)}s).`,
     };
   }
 
-  const ext = originalName.split('.').pop()?.toLowerCase() ?? 'mp3';
-  const filename = `${eventType}.${ext}`;
+  const slug = soundSlugForEvent(eventType);
+  const filename = `${slug}.${ext}`;
   const storagePath = `sounds/${filename}`;
 
-  const response = await fetch(localUri);
-  const buffer = await response.arrayBuffer();
+  const buffer = await readLocalFileBytes(localUri);
 
   const { error: uploadError } = await supabase.storage
     .from('notification-sounds')
     .upload(storagePath, buffer, {
-      contentType: guessMime(ext),
+      contentType: SOUND_MIME_TYPES[ext],
       upsert: true,
     });
 
@@ -74,27 +87,5 @@ export async function removeNotificationSound(
     })
     .eq('event_type', eventType);
 
-  return { error: error?.message ?? null };
-}
-
-async function getDuration(uri: string): Promise<number> {
-  const { sound } = await Audio.Sound.createAsync({ uri }, { shouldPlay: false });
-  try {
-    const status = await sound.getStatusAsync();
-    if (!status.isLoaded) return 0;
-    return (status.durationMillis ?? 0) / 1000;
-  } finally {
-    await sound.unloadAsync();
-  }
-}
-
-function guessMime(ext: string): string {
-  const map: Record<string, string> = {
-    mp3: 'audio/mpeg',
-    wav: 'audio/wav',
-    m4a: 'audio/mp4',
-    aac: 'audio/aac',
-    caf: 'audio/x-caf',
-  };
-  return map[ext] ?? 'audio/mpeg';
+  return { error: supabaseErrorMessage(error) };
 }

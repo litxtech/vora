@@ -1,5 +1,11 @@
-import { Image, StyleSheet, View } from 'react-native';
+import { memo } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { OptimizedImage } from '@/components/media/OptimizedImage';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui/Text';
+import { isHiddenPublicAccount, sanitizeAvatarUrl } from '@/features/account-deletion/utils';
+import { CALL_DESIGN } from '@/features/calls/constants';
 import type { CallParticipant } from '../types';
 import { displayName } from '../utils';
 
@@ -8,15 +14,19 @@ type CallAvatarProps = {
   size?: number;
   showName?: boolean;
   subtitle?: string;
+  glow?: boolean;
 };
 
-export function CallAvatar({
+export const CallAvatar = memo(function CallAvatar({
   participant,
   size = 128,
   showName = true,
   subtitle,
+  glow = false,
 }: CallAvatarProps) {
+  const hidden = isHiddenPublicAccount(participant?.account_status);
   const name = displayName(participant);
+  const avatarUrl = sanitizeAvatarUrl(participant?.avatar_url, participant?.account_status);
   const initials = name
     .split(' ')
     .map((part) => part[0])
@@ -24,18 +34,29 @@ export function CallAvatar({
     .slice(0, 2)
     .toUpperCase();
 
+  const ringSize = size + CALL_DESIGN.heroAvatarRing * 2 + 10;
+
   return (
     <View style={styles.wrapper}>
       <View
         style={[
           styles.ring,
           {
-            width: size + 16,
-            height: size + 16,
-            borderRadius: (size + 16) / 2,
+            width: ringSize,
+            height: ringSize,
+            borderRadius: ringSize / 2,
           },
+          glow && styles.ringGlow,
         ]}
       >
+        {glow ? (
+          <LinearGradient
+            colors={['rgba(0,191,165,0.55)', 'rgba(30,136,229,0.45)', 'rgba(0,191,165,0.55)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={[styles.gradientRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2 }]}
+          />
+        ) : null}
         <View
           style={[
             styles.avatar,
@@ -46,10 +67,19 @@ export function CallAvatar({
             },
           ]}
         >
-          {participant?.avatar_url ? (
-            <Image source={{ uri: participant.avatar_url }} style={styles.image} />
+          {hidden ? (
+            <Ionicons name="person-remove-outline" size={size * 0.42} color="#9AA8BC" />
+          ) : avatarUrl ? (
+            <OptimizedImage
+              uri={avatarUrl}
+              tier="avatar"
+              layoutWidth={size}
+              recyclingKey={avatarUrl}
+              style={styles.image}
+              transition={0}
+            />
           ) : (
-            <Text variant="h1" style={styles.initials}>
+            <Text variant="h1" style={[styles.initials, { fontSize: size * 0.3, lineHeight: size * 0.34 }]}>
               {initials}
             </Text>
           )}
@@ -70,7 +100,7 @@ export function CallAvatar({
       ) : null}
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -80,13 +110,23 @@ const styles = StyleSheet.create({
   ring: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+  },
+  ringGlow: {
+    backgroundColor: 'transparent',
+    padding: 3,
+  },
+  gradientRing: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.9,
   },
   avatar: {
     overflow: 'hidden',
     backgroundColor: '#243044',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.14)',
   },
   image: {
     width: '100%',
@@ -94,8 +134,7 @@ const styles = StyleSheet.create({
   },
   initials: {
     color: '#F4F7FB',
-    fontSize: 42,
-    lineHeight: 48,
+    fontWeight: '700',
   },
   name: {
     color: '#FFFFFF',

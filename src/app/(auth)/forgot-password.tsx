@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
 import { validateEmail } from '@/features/auth/services/validation';
+import { supabaseErrorMessage } from '@/lib/errors';
 import { supabase } from '@/lib/supabase/client';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -33,7 +34,7 @@ export default function ForgotPasswordScreen() {
     setLoading(false);
 
     if (resetError) {
-      setError(resetError.message);
+      setError(supabaseErrorMessage(resetError) ?? 'Şifre sıfırlama kodu gönderilemedi.');
       return;
     }
 

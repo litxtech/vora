@@ -8,11 +8,19 @@ export type CallStatus =
   | 'missed'
   | 'cancelled';
 
+export const TERMINAL_CALL_STATUSES: CallStatus[] = [
+  'declined',
+  'ended',
+  'cancelled',
+  'missed',
+];
+
 export type CallParticipant = {
   id: string;
   username: string;
   full_name: string | null;
   avatar_url: string | null;
+  account_status?: 'active' | 'frozen' | 'deletion_pending' | 'deleted';
 };
 
 export type CallSession = {
@@ -35,5 +43,7 @@ export type CallMediaState = {
   isMuted: boolean;
   isSpeakerOn: boolean;
   isCameraOn: boolean;
+  isFrontCamera: boolean;
   remoteUid: number | null;
+  remoteCameraOff: boolean;
 };

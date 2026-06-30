@@ -1,5 +1,5 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { JobSeekerDetailScreen } from '@/features/job-seekers/components/JobSeekerDetailScreen';
 
-export default function JobSeekerDetailScreen() {
-  return <MapDetailScreen type="job_seekers" />;
+export default function JobSeekerDetailRoute() {
+  return <JobSeekerDetailScreen />;
 }

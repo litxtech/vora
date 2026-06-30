@@ -20,6 +20,7 @@ expo-env.d.ts
 
 # Metro
 .metro-health-check*
+.metro-cache/
 
 # debug
 npm-debug.*
@@ -33,6 +34,7 @@ yarn-error.*
 # local env files
 .env
 .env*.local
+google-services.json
 
 # typescript
 *.tsbuildinfo
@@ -40,3 +42,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# vendor build sources (AAR artifacts live in vendor/android-m2)
+/vendor/_src/

@@ -1,5 +1,5 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { LostFoundDetailScreen } from '@/features/lost-found/components/LostFoundDetailScreen';
 
-export default function LostFoundDetailScreen() {
-  return <MapDetailScreen type="lost_found" />;
+export default function LostFoundDetailRoute() {
+  return <LostFoundDetailScreen />;
 }

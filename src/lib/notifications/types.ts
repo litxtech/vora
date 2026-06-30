@@ -1,4 +1,8 @@
-import type { NotificationEventType } from '@/constants/notifications';
+import type {
+  NotificationCategoryId,
+  NotificationEventType,
+  NotificationPriorityId,
+} from '@/constants/notifications';
 
 export type PushTokenRecord = {
   platform: 'ios' | 'android' | 'web';
@@ -20,11 +24,15 @@ export type NotificationSoundSetting = {
 export type AppNotification = {
   id: string;
   eventType: NotificationEventType;
+  category: NotificationCategoryId;
+  priority: NotificationPriorityId;
   title: string;
   body: string;
   data: Record<string, unknown>;
   actorId: string | null;
   readAt: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
   createdAt: string;
 };
 
@@ -35,4 +43,29 @@ export type SendNotificationPayload = {
   body: string;
   actorId?: string;
   data?: Record<string, unknown>;
+  pushOnly?: boolean;
+};
+
+export type QuietHoursSettings = {
+  enabled: boolean;
+  start: string;
+  end: string;
+  timezone: string;
+};
+
+export type RegionalAlertSubscription = {
+  regionId: string;
+  districts: string[];
+  neighborhoods: string[];
+  notifyEmergency: boolean;
+  notifyIncidents: boolean;
+  notifyEvents: boolean;
+  notifyJobs: boolean;
+};
+
+export type EmergencyAlertPayload = {
+  title: string;
+  body: string;
+  eventType: NotificationEventType;
+  data: Record<string, unknown>;
 };

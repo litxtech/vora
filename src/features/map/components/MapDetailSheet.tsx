@@ -1,23 +1,41 @@
-import { Alert, Pressable, StyleSheet, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useEffect, useRef } from 'react';
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
+import { MediaCarousel } from '@/features/feed/components/MediaCarousel';
+import { HotelMapSheetContent } from '@/features/hotel-center/components/HotelMapSheetContent';
 import { Button } from '@/components/ui/Button';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
+import { MapBottomSheet } from '@/features/map/components/MapBottomSheet';
 import { LAYER_BY_ID } from '@/features/map/constants';
 import { useContentFollow } from '@/features/map/hooks/useContentFollow';
+import { prefetchMapMarkerDetail } from '@/features/map/services/mapNavigation';
 import type { ContentFollowType, MapCoordinate, MapMarker } from '@/features/map/types';
 import { distanceKm, formatDistance, formatMapDate } from '@/features/map/utils/geo';
-import { radius, spacing } from '@/constants/theme';
+import { radius, spacing, glassSurface } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
+
+const MAP_POST_MEDIA_MAX_HEIGHT = 140;
+const ACTION_FOOTER_HEIGHT = 56;
+const HEADER_BLOCK_HEIGHT = 72;
 
 type MapDetailSheetProps = {
   marker: MapMarker | null;
+  visible: boolean;
+  bottomInset: number;
   userCoords?: MapCoordinate | null;
   onClose: () => void;
   onFocus: (marker: MapMarker) => void;
   onOpenDetail: (marker: MapMarker) => void;
+  onOpenPostCard?: (marker: MapMarker) => void;
+  onPostMediaPress?: (marker: MapMarker, index: number) => void;
 };
 
 function MetaChip({
@@ -30,7 +48,7 @@ function MetaChip({
   color: string;
 }) {
   return (
-    <View style={[styles.metaChip, { borderColor: `${color}55`, backgroundColor: `${color}14` }]}>
+    <View style={[styles.metaChip, { borderColor: `${color}44`, backgroundColor: `${color}12` }]}>
       <Ionicons name={icon} size={12} color={color} />
       <Text variant="caption" style={{ color }}>
         {label}
@@ -45,199 +63,299 @@ function followTypeForMarker(marker: MapMarker): ContentFollowType | null {
   return null;
 }
 
+function ActionIcon({
+  icon,
+  label,
+  onPress,
+  active,
+  activeColor,
+  borderColor,
+  backgroundColor,
+  iconColor,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+  active?: boolean;
+  activeColor?: string;
+  borderColor: string;
+  backgroundColor: string;
+  iconColor: string;
+}) {
+  return (
+    <Pressable
+      style={[
+        styles.iconAction,
+        {
+          borderColor: active ? (activeColor ?? borderColor) : borderColor,
+          backgroundColor: active ? `${activeColor ?? borderColor}14` : backgroundColor,
+        },
+      ]}
+      onPress={onPress}
+      accessibilityLabel={label}
+    >
+      <Ionicons name={icon} size={18} color={active ? (activeColor ?? iconColor) : iconColor} />
+    </Pressable>
+  );
+}
+
 export function MapDetailSheet({
   marker,
+  visible,
+  bottomInset,
   userCoords,
   onClose,
   onFocus,
   onOpenDetail,
+  onOpenPostCard,
+  onPostMediaPress,
 }: MapDetailSheetProps) {
-  const { colors, isDark } = useTheme();
+  const { height: screenHeight } = useWindowDimensions();
+  const { colors, mode } = useTheme();
+  const glass = glassSurface[mode];
   const { requireAuth } = useRequireAuth();
-  const insets = useSafeAreaInsets();
+  const lastMarkerRef = useRef<MapMarker | null>(null);
 
-  if (!marker) return null;
+  useEffect(() => {
+    if (marker) lastMarkerRef.current = marker;
+  }, [marker]);
 
-  const followType = followTypeForMarker(marker);
+  useEffect(() => {
+    if (marker) prefetchMapMarkerDetail(marker);
+  }, [marker?.layer, marker?.sourceId]);
+
+  const activeMarker = marker ?? lastMarkerRef.current;
+
+  const followType = activeMarker ? followTypeForMarker(activeMarker) : null;
   const { following, toggle: toggleFollow } = useContentFollow(
     followType ?? 'event',
-    followType ? marker.sourceId : null,
+    followType && activeMarker ? activeMarker.sourceId : null,
   );
 
-  const layer = LAYER_BY_ID[marker.layer];
-  const isPremium = marker.layer === 'businesses' && marker.meta?.verified === true;
+  if (!activeMarker) return null;
+
+  const layer = LAYER_BY_ID[activeMarker.layer];
+  const isPremium = activeMarker.layer === 'businesses' && activeMarker.meta?.verified === true;
   const distanceLabel =
-    userCoords != null
-      ? formatDistance(distanceKm(userCoords, marker))
-      : undefined;
-  const dateLabel = formatMapDate(marker.createdAt);
+    userCoords != null ? formatDistance(distanceKm(userCoords, activeMarker)) : undefined;
+  const dateLabel = formatMapDate(activeMarker.createdAt);
+  const isPost = activeMarker.layer === 'posts';
+  const isHotel = activeMarker.layer === 'hotels';
+  const mediaUrls = activeMarker.mediaUrls ?? [];
+  const maxSheetHeight = Math.round(screenHeight * 0.72 - bottomInset);
+  const scrollMaxHeight = Math.max(
+    120,
+    maxSheetHeight - HEADER_BLOCK_HEIGHT - ACTION_FOOTER_HEIGHT - spacing.lg,
+  );
+
+  const handleOpenPostCard = () => {
+    if (isPost && onOpenPostCard) {
+      onOpenPostCard(activeMarker);
+      return;
+    }
+    onOpenDetail(activeMarker);
+  };
 
   const handleFollow = async () => {
-    if (!followType || !requireAuth('Takip')) return;
+    if (!followType || !(await requireAuth('Takip'))) return;
     const result = await toggleFollow();
     if (result?.error) Alert.alert('Hata', result.error);
     else if (result?.following) Alert.alert('Takip', 'Yeni gelişmeler bildirim olarak gelecek.');
   };
 
-  return (
-    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-      <BlurView intensity={isDark ? 36 : 52} tint={isDark ? 'dark' : 'light'} style={styles.sheet}>
-        <View style={[styles.content, { borderColor: colors.border }]}>
-          <View style={styles.handleRow}>
-            <View style={[styles.handle, { backgroundColor: colors.border }]} />
-            <Pressable onPress={onClose} hitSlop={12} style={styles.close}>
-              <Ionicons name="close" size={20} color={colors.textMuted} />
-            </Pressable>
-          </View>
-
-          <View style={styles.header}>
-            <View style={[styles.iconWrap, { backgroundColor: `${layer.color}22` }]}>
-              <Ionicons name={layer.icon as keyof typeof Ionicons.glyphMap} size={22} color={layer.color} />
-            </View>
-            <View style={styles.titles}>
-              <View style={styles.badges}>
-                <View style={[styles.badge, { backgroundColor: `${layer.color}18`, borderColor: layer.color }]}>
-                  <Text variant="caption" style={{ color: layer.color }}>
-                    {layer.label}
-                  </Text>
-                </View>
-                {isPremium ? (
-                  <View style={[styles.badge, styles.premiumBadge]}>
-                    <Ionicons name="star" size={10} color="#FFB300" />
-                    <Text variant="caption" style={{ color: '#FFB300' }}>
-                      Sponsorlu
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-              <Text variant="h3" numberOfLines={2}>
-                {marker.title}
-              </Text>
-              {marker.subtitle ? (
-                <Text secondary variant="caption">
-                  {marker.subtitle}
-                </Text>
-              ) : null}
-            </View>
-          </View>
-
-          {(distanceLabel || dateLabel) && (
-            <View style={styles.metaRow}>
-              {distanceLabel ? <MetaChip icon="navigate-outline" label={distanceLabel} color={colors.accent} /> : null}
-              {dateLabel ? <MetaChip icon="time-outline" label={dateLabel} color={colors.primary} /> : null}
-              {marker.meta?.severity ? (
-                <MetaChip icon="alert-circle-outline" label={String(marker.meta.severity)} color={colors.danger} />
-              ) : null}
-            </View>
-          )}
-
-          {marker.description ? (
-            <Text secondary style={styles.description} numberOfLines={3}>
-              {marker.description}
-            </Text>
+  const preview = isHotel ? (
+    <HotelMapSheetContent
+      hotelId={activeMarker.sourceId}
+      fallbackTitle={activeMarker.title}
+      fallbackDescription={activeMarker.description}
+      onMediaPress={() => onOpenDetail(activeMarker)}
+    />
+  ) : (
+    <>
+      {(distanceLabel || dateLabel || activeMarker.meta?.severity) ? (
+        <View style={styles.metaRow}>
+          {distanceLabel ? <MetaChip icon="navigate-outline" label={distanceLabel} color={colors.accent} /> : null}
+          {dateLabel ? <MetaChip icon="time-outline" label={dateLabel} color={colors.primary} /> : null}
+          {activeMarker.meta?.severity ? (
+            <MetaChip icon="alert-circle-outline" label={String(activeMarker.meta.severity)} color={colors.danger} />
           ) : null}
-
-          <View style={styles.actions}>
-            <Button title="Görüntüle" onPress={() => onOpenDetail(marker)} />
-            <View style={styles.secondaryActions}>
-              <Pressable style={[styles.iconAction, { borderColor: colors.border }]} onPress={() => onFocus(marker)}>
-                <Ionicons name="pin-outline" size={18} color={colors.textSecondary} />
-                <Text variant="caption" secondary>
-                  Konuma Git
-                </Text>
-              </Pressable>
-              <Pressable style={[styles.iconAction, { borderColor: colors.border }]} onPress={() => onOpenDetail(marker)}>
-                <Ionicons name="chatbubble-outline" size={18} color={colors.textSecondary} />
-                <Text variant="caption" secondary>
-                  Yorum Yap
-                </Text>
-              </Pressable>
-              {followType ? (
-                <Pressable
-                  style={[
-                    styles.iconAction,
-                    { borderColor: following ? colors.accent : colors.border, backgroundColor: following ? `${colors.accent}12` : 'rgba(255,255,255,0.03)' },
-                  ]}
-                  onPress={handleFollow}
-                >
-                  <Ionicons
-                    name={following ? 'bookmark' : 'bookmark-outline'}
-                    size={18}
-                    color={following ? colors.accent : colors.textSecondary}
-                  />
-                  <Text variant="caption" secondary={!following} style={following ? { color: colors.accent } : undefined}>
-                    {following ? 'Takipte' : 'Takip Et'}
-                  </Text>
-                </Pressable>
-              ) : marker.layer === 'jobs' ? (
-                <Pressable style={[styles.iconAction, { borderColor: colors.border }]} onPress={() => onOpenDetail(marker)}>
-                  <Ionicons name="document-text-outline" size={18} color={colors.textSecondary} />
-                  <Text variant="caption" secondary>
-                    Başvur
-                  </Text>
-                </Pressable>
-              ) : null}
-            </View>
-          </View>
         </View>
-      </BlurView>
+      ) : null}
+
+      {isPost && mediaUrls.length > 0 ? (
+        <MediaCarousel
+          urls={mediaUrls}
+          variant="inline"
+          maxHeight={MAP_POST_MEDIA_MAX_HEIGHT}
+          onMediaPress={(index) => onPostMediaPress?.(activeMarker, index)}
+        />
+      ) : null}
+
+      {activeMarker.description ? (
+        <Text
+          variant="body"
+          secondary={!isPost}
+          style={styles.description}
+          numberOfLines={isPost ? 4 : 3}
+        >
+          {activeMarker.description}
+        </Text>
+      ) : null}
+    </>
+  );
+
+  const actionFooter = (
+    <View style={styles.actionFooter}>
+      <View style={styles.actions}>
+        <Button
+          title={isPost ? 'Gönderiyi aç' : isHotel ? 'Tüm detayları gör' : 'Detayı gör'}
+          onPress={handleOpenPostCard}
+          fullWidth={false}
+          style={styles.primaryAction}
+        />
+        <ActionIcon
+          icon="locate-outline"
+          label="Konuma git"
+          onPress={() => onFocus(activeMarker)}
+          borderColor={colors.border}
+          backgroundColor={glass.chip}
+          iconColor={colors.textSecondary}
+        />
+        <ActionIcon
+          icon="chatbubble-outline"
+          label={isPost ? 'Yorumlar' : 'Yorum yap'}
+          onPress={isPost ? handleOpenPostCard : () => onOpenDetail(activeMarker)}
+          borderColor={colors.border}
+          backgroundColor={glass.chip}
+          iconColor={colors.textSecondary}
+        />
+        {followType ? (
+          <ActionIcon
+            icon={following ? 'bookmark' : 'bookmark-outline'}
+            label={following ? 'Takipte' : 'Takip et'}
+            onPress={handleFollow}
+            active={following}
+            activeColor={colors.accent}
+            borderColor={colors.border}
+            backgroundColor={glass.chip}
+            iconColor={colors.textSecondary}
+          />
+        ) : !isPost ? (
+          <ActionIcon
+            icon="arrow-forward-outline"
+            label="Detay"
+            onPress={() => onOpenDetail(activeMarker)}
+            borderColor={colors.border}
+            backgroundColor={glass.chip}
+            iconColor={colors.textSecondary}
+          />
+        ) : null}
+      </View>
     </View>
+  );
+
+  const header = (
+    <View style={styles.header}>
+      <View style={[styles.iconWrap, { backgroundColor: `${layer.color}20` }]}>
+        <Ionicons name={layer.icon as keyof typeof Ionicons.glyphMap} size={22} color={layer.color} />
+      </View>
+      <View style={styles.titles}>
+        <View style={styles.badges}>
+          <View style={[styles.badge, { backgroundColor: `${layer.color}16`, borderColor: `${layer.color}55` }]}>
+            <Text variant="caption" style={{ color: layer.color, fontWeight: '600' }}>
+              {layer.label}
+            </Text>
+          </View>
+          {isPremium ? (
+            <View style={[styles.badge, styles.premiumBadge]}>
+              <Ionicons name="star" size={10} color="#FFB300" />
+              <Text variant="caption" style={{ color: '#FFB300' }}>
+                Sponsorlu
+              </Text>
+            </View>
+          ) : null}
+        </View>
+        <Text variant="label" numberOfLines={2} style={styles.title}>
+          {activeMarker.title}
+        </Text>
+        {activeMarker.subtitle ? (
+          <Text secondary variant="caption" numberOfLines={1}>
+            {activeMarker.subtitle}
+          </Text>
+        ) : null}
+      </View>
+      <Pressable onPress={onClose} hitSlop={12} style={styles.close} accessibilityLabel="Kapat">
+        <Ionicons name="close" size={22} color={colors.textMuted} />
+      </Pressable>
+    </View>
+  );
+
+  return (
+    <MapBottomSheet
+      visible={visible}
+      onClose={onClose}
+      bottomInset={bottomInset}
+      maxHeight={maxSheetHeight}
+    >
+      <View style={[styles.sheetInner, { maxHeight: maxSheetHeight }]}>
+        <View style={styles.content}>{header}</View>
+        <ScrollView
+          style={{ maxHeight: scrollMaxHeight }}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          bounces={false}
+          nestedScrollEnabled
+        >
+          <View style={styles.content}>{preview}</View>
+        </ScrollView>
+        <View style={styles.content}>{actionFooter}</View>
+      </View>
+    </MapBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    position: 'absolute',
-    left: spacing.md,
-    right: spacing.md,
-    bottom: 0,
+  sheetInner: {
+    flexShrink: 1,
   },
-  sheet: {
-    borderRadius: radius.xl,
-    overflow: 'hidden',
+  scrollContent: {
+    flexGrow: 1,
+    paddingBottom: spacing.xs,
   },
   content: {
-    padding: spacing.lg,
-    paddingTop: spacing.sm,
-    borderWidth: 1,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-    gap: spacing.md,
-  },
-  handleRow: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: spacing.xs,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: radius.full,
-  },
-  close: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
   },
   header: {
     flexDirection: 'row',
-    gap: spacing.md,
+    gap: spacing.sm,
     alignItems: 'flex-start',
   },
   iconWrap: {
-    width: 48,
-    height: 48,
+    width: 44,
+    height: 44,
     borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
   },
   titles: {
     flex: 1,
-    gap: spacing.xs,
+    gap: 2,
+    paddingRight: spacing.lg,
+  },
+  title: {
+    fontSize: 16,
+  },
+  close: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
   },
   badges: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: spacing.xs,
+    marginBottom: 2,
   },
   badge: {
     alignSelf: 'flex-start',
@@ -268,23 +386,29 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   description: {
-    lineHeight: 22,
+    lineHeight: 20,
+  },
+  actionFooter: {
+    paddingBottom: spacing.md,
+    paddingTop: spacing.xs,
   },
   actions: {
-    gap: spacing.sm,
-  },
-  secondaryActions: {
     flexDirection: 'row',
-    gap: spacing.sm,
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
+  primaryAction: {
+    flex: 1,
+    minHeight: 42,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   iconAction: {
-    flex: 1,
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 4,
     borderWidth: 1,
     borderRadius: radius.md,
-    paddingVertical: spacing.sm,
-    backgroundColor: 'rgba(255,255,255,0.03)',
   },
 });

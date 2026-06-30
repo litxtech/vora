@@ -34,3 +34,34 @@ export type IncidentThread = {
   verificationCount: number;
   isDemo?: boolean;
 };
+
+export type IncidentGraphItem = {
+  id: string;
+  title: string;
+  description: string;
+  severity: string;
+  status: string;
+  regionId: string;
+  latitude: number | null;
+  longitude: number | null;
+  createdAt: string;
+  verificationCount: number;
+  updateCount: number;
+  latestUpdateAt: string | null;
+  isDemo?: boolean;
+};
+
+export type IncidentGraphTimelineEntry = {
+  id: string;
+  incidentId: string;
+  incidentTitle: string;
+  updateType: IncidentUpdate['updateType'];
+  content: string;
+  createdAt: string;
+};
+
+export type IncidentGraphData = {
+  incidents: IncidentGraphItem[];
+  timeline: IncidentGraphTimelineEntry[];
+  activeCount: number;
+};

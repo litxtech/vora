@@ -1,5 +1,6 @@
 import type { ContentFollowType } from '@/features/map/types';
 import { supabase } from '@/lib/supabase/client';
+import { supabaseErrorMessage } from '@/lib/errors';
 
 export async function isContentFollowed(
   type: ContentFollowType,
@@ -44,7 +45,7 @@ export async function toggleContentFollow(
         .delete()
         .eq('user_id', userId)
         .eq('event_id', contentId);
-      return { error: error?.message ?? null, following: false };
+      return { error: supabaseErrorMessage(error), following: false };
     }
 
     const { error } = await supabase
@@ -52,7 +53,7 @@ export async function toggleContentFollow(
       .delete()
       .eq('user_id', userId)
       .eq('incident_id', contentId);
-    return { error: error?.message ?? null, following: false };
+    return { error: supabaseErrorMessage(error), following: false };
   }
 
   if (type === 'event') {
@@ -61,7 +62,7 @@ export async function toggleContentFollow(
       event_id: contentId,
       notify_on_update: true,
     });
-    return { error: error?.message ?? null, following: true };
+    return { error: supabaseErrorMessage(error), following: true };
   }
 
   const { error } = await supabase.from('incident_follows').insert({
@@ -69,5 +70,5 @@ export async function toggleContentFollow(
     incident_id: contentId,
     notify_on_update: true,
   });
-  return { error: error?.message ?? null, following: true };
+  return { error: supabaseErrorMessage(error), following: true };
 }

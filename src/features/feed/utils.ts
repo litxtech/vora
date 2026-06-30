@@ -24,3 +24,11 @@ export function extractHashtags(text: string): string[] {
   const matches = text.match(/#[\p{L}\p{N}_]+/gu);
   return matches ? [...new Set(matches.map((t) => t.slice(1).toLowerCase()))] : [];
 }
+
+export function normalizeHashtagTag(raw: string): string {
+  try {
+    return decodeURIComponent(raw).toLowerCase().replace(/^#/, '').trim();
+  } catch {
+    return raw.toLowerCase().replace(/^#/, '').trim();
+  }
+}

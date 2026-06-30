@@ -1,21 +1,30 @@
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
-import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
+import { useMemo, useState } from 'react';
+import { InstantPressable } from '@/components/ui/InstantPressable';
+import { LocationOptionSheet } from '@/components/location/LocationSheetPicker';
+import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
 import { useNotifications } from '@/providers/NotificationProvider';
 import { Text } from '@/components/ui/Text';
-import { Input } from '@/components/ui/Input';
+import { FeedAppearanceBanner } from '@/features/app-appearance/components/FeedAppearanceBanner';
+import { TrustVacationPromoSlot } from '@/features/trust-promo';
+import { AnnouncementStrip } from '@/features/announcements/components/AnnouncementStrip';
+import { FeedIconButton } from '@/features/feed/components/shared/FeedIconButton';
+import { FeedHeaderAvatarButton } from '@/features/feed/components/FeedSideDrawer';
+import { MapHeaderButton } from '@/features/map/components/MapHeaderButton';
+import { IncidentsHeaderButton } from '@/features/incidents/components/IncidentsHeaderButton';
 import { useFeedStore } from '@/features/feed/store/feedStore';
+import { FEED_ALL_DISTRICTS_LABEL, FEED_ALL_REGIONS_LABEL, getFeedDistrictOptions } from '@/features/feed/constants';
 import { REGIONS } from '@/constants/regions';
-import { DISTRICTS } from '@/constants/districts';
 import type { RegionId } from '@/constants/regions';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
+import { FEED_FEATURE } from '@/features/feed/featureFlags';
 
 export function FeedHeader() {
   const { colors } = useTheme();
-  const { requireAuth } = useRequireAuth();
   const { unreadCount } = useNotifications();
   const regionId = useFeedStore((s) => s.regionId);
   const district = useFeedStore((s) => s.district);
@@ -27,254 +36,210 @@ export function FeedHeader() {
   const [showRegionPicker, setShowRegionPicker] = useState(false);
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const regionName = regionId
+    ? (REGIONS.find((r) => r.id === regionId)?.name ?? 'Bölge')
+    : FEED_ALL_REGIONS_LABEL;
+  const districts = getFeedDistrictOptions(regionId);
+  const showRegionFilter = useFeatureVisible(FEED_FEATURE.regionFilter);
+  const showDistrictFilter = useFeatureVisible(FEED_FEATURE.districtFilter);
 
-  const regionName = REGIONS.find((r) => r.id === regionId)?.name ?? 'Bölge';
-  const districts = DISTRICTS[regionId as RegionId] ?? [];
+  const regionOptions = useMemo(
+    () =>
+      REGIONS.map((region) => ({
+        id: region.id,
+        label: region.name,
+        icon: 'location-outline' as const,
+      })),
+    [],
+  );
+
+  const districtOptions = useMemo(
+    () =>
+      districts.map((name) => ({
+        id: name,
+        label: name,
+        icon: 'navigate-outline' as const,
+      })),
+    [districts],
+  );
 
   return (
     <View style={styles.wrap}>
-      <View style={styles.topRow}>
-        <Text variant="h2">Canlı Akış</Text>
-        <View style={styles.iconRow}>
-          <Pressable
-            onPress={() => {
-              if (requireAuth('Paylaşım')) router.push('/compose' as never);
-            }}
-            style={[styles.composeBtn, { backgroundColor: colors.primary }]}
-          >
-            <Ionicons name="add" size={20} color="#fff" />
-          </Pressable>
-          <Pressable onPress={() => setShowSearch((v) => !v)} style={styles.iconBtn}>
-            <Ionicons name="search-outline" size={22} color={colors.text} />
-          </Pressable>
-          <Pressable style={styles.iconBtn} onPress={() => router.push('/notifications' as never)}>
-            <Ionicons name="notifications-outline" size={22} color={colors.text} />
-            {unreadCount > 0 ? (
-              <View style={[styles.badge, { backgroundColor: colors.danger }]}>
-                <Text variant="caption" style={styles.badgeText}>
-                  {unreadCount > 99 ? '99+' : unreadCount}
-                </Text>
-              </View>
-            ) : null}
-          </Pressable>
+      <FeedAppearanceBanner />
+      <TrustVacationPromoSlot placement="feed" compact />
+      <View style={styles.topBar}>
+        <FeedHeaderAvatarButton />
+        <View style={styles.titleBlock}>
+          <Text variant="h3" style={styles.title}>
+            Akış
+          </Text>
+          <Text secondary variant="caption" numberOfLines={1}>
+            {regionName}
+            {district ? ` · ${district}` : ''}
+          </Text>
+        </View>
+
+        <View style={styles.topActions}>
+          <FeatureGate featureId="feed-header-leaderboard">
+            <FeedIconButton
+              icon="trophy-outline"
+              compact
+              onPress={() => router.push('/leaderboard' as never)}
+            />
+          </FeatureGate>
+          <FeatureGate featureId="feed-header-incidents">
+            <IncidentsHeaderButton regionId={regionId} />
+          </FeatureGate>
+          <FeatureGate featureId="feed-header-map">
+            <MapHeaderButton />
+          </FeatureGate>
+          <FeatureGate featureId="feed-header-search">
+            <FeedIconButton
+              icon={showSearch ? 'close-outline' : 'search-outline'}
+              compact
+              onPress={() => setShowSearch((v) => !v)}
+            />
+          </FeatureGate>
+          <FeatureGate featureId="notifications">
+            <FeedIconButton
+              icon="notifications-outline"
+              badge={unreadCount}
+              compact
+              onPress={() => router.push('/notifications' as never)}
+            />
+          </FeatureGate>
         </View>
       </View>
 
       {showSearch ? (
-        <Input
-          placeholder="Akışta ara..."
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-          autoFocus
-        />
+        <FeatureGate featureId="feed-header-search">
+        <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
+          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder="Akışta ara..."
+            placeholderTextColor={colors.textMuted}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchQuery ? (
+            <InstantPressable onPress={() => setSearchQuery('')} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
+            </InstantPressable>
+          ) : null}
+        </View>
+        </FeatureGate>
       ) : null}
 
-      <View style={styles.selectorRow}>
-        <Pressable
-          style={[styles.selector, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => setShowRegionPicker(true)}
-        >
-          <Ionicons name="location-outline" size={16} color={colors.primary} />
-          <Text variant="caption">{regionName}</Text>
-          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-        </Pressable>
+      <View style={styles.metaRow}>
+        {showRegionFilter ? (
+          <InstantPressable
+            style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}
+            onPress={() => setShowRegionPicker(true)}
+          >
+            <Ionicons name="location-outline" size={13} color={colors.primary} />
+            <Text variant="caption" style={{ fontWeight: '600' }} numberOfLines={1}>
+              {regionName}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
+          </InstantPressable>
+        ) : null}
 
-        <Pressable
-          style={[styles.selector, { borderColor: colors.border, backgroundColor: colors.surface }]}
-          onPress={() => setShowDistrictPicker(true)}
-        >
-          <Text variant="caption">{district ?? 'Tüm ilçeler'}</Text>
-          <Ionicons name="chevron-down" size={14} color={colors.textMuted} />
-        </Pressable>
+        {showDistrictFilter ? (
+          <InstantPressable
+            style={[styles.chip, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}
+            onPress={() => setShowDistrictPicker(true)}
+          >
+            <Ionicons name="navigate-outline" size={13} color={colors.accent} />
+            <Text variant="caption" style={{ fontWeight: '600' }} numberOfLines={1}>
+              {district ?? FEED_ALL_DISTRICTS_LABEL}
+            </Text>
+            <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
+          </InstantPressable>
+        ) : null}
       </View>
 
-      <RegionPicker
+      <AnnouncementStrip />
+
+      <LocationOptionSheet<RegionId>
         visible={showRegionPicker}
         onClose={() => setShowRegionPicker(false)}
-        selected={regionId}
-        onSelect={(id) => {
-          setRegionId(id);
-          setShowRegionPicker(false);
-        }}
+        title="İl seç"
+        value={regionId}
+        options={regionOptions}
+        onSelect={setRegionId}
+        allOption={{ label: FEED_ALL_REGIONS_LABEL, icon: 'earth-outline' }}
+        searchPlaceholder="İl ara…"
       />
 
-      <DistrictPicker
+      <LocationOptionSheet
         visible={showDistrictPicker}
         onClose={() => setShowDistrictPicker(false)}
-        districts={districts}
-        selected={district}
-        onSelect={(value) => {
-          setDistrict(value);
-          setShowDistrictPicker(false);
-        }}
+        title="İlçe seç"
+        subtitle={regionId ? regionName : FEED_ALL_REGIONS_LABEL}
+        value={district}
+        options={districtOptions}
+        onSelect={setDistrict}
+        allOption={{ label: FEED_ALL_DISTRICTS_LABEL, icon: 'navigate-outline' }}
+        searchPlaceholder="İlçe ara…"
       />
     </View>
   );
 }
 
-function RegionPicker({
-  visible,
-  onClose,
-  selected,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  selected: string;
-  onSelect: (id: RegionId) => void;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <PickerModal visible={visible} onClose={onClose} title="Şehir seç">
-      {REGIONS.map((region) => (
-        <Pressable
-          key={region.id}
-          style={[styles.option, selected === region.id && { backgroundColor: 'rgba(30,136,229,0.12)' }]}
-          onPress={() => onSelect(region.id)}
-        >
-          <Text>{region.name}</Text>
-          {selected === region.id ? (
-            <Ionicons name="checkmark" size={18} color={colors.primary} />
-          ) : null}
-        </Pressable>
-      ))}
-    </PickerModal>
-  );
-}
-
-function DistrictPicker({
-  visible,
-  onClose,
-  districts,
-  selected,
-  onSelect,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  districts: string[];
-  selected: string | null;
-  onSelect: (value: string | null) => void;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <PickerModal visible={visible} onClose={onClose} title="İlçe seç">
-      <Pressable
-        style={[styles.option, !selected && { backgroundColor: 'rgba(30,136,229,0.12)' }]}
-        onPress={() => onSelect(null)}
-      >
-        <Text>Tüm ilçeler</Text>
-        {!selected ? <Ionicons name="checkmark" size={18} color={colors.primary} /> : null}
-      </Pressable>
-      {districts.map((name) => (
-        <Pressable
-          key={name}
-          style={[styles.option, selected === name && { backgroundColor: 'rgba(30,136,229,0.12)' }]}
-          onPress={() => onSelect(name)}
-        >
-          <Text>{name}</Text>
-          {selected === name ? (
-            <Ionicons name="checkmark" size={18} color={colors.primary} />
-          ) : null}
-        </Pressable>
-      ))}
-    </PickerModal>
-  );
-}
-
-function PickerModal({
-  visible,
-  onClose,
-  title,
-  children,
-}: {
-  visible: boolean;
-  onClose: () => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  const { colors } = useTheme();
-
-  return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable style={styles.overlay} onPress={onClose}>
-        <Pressable
-          style={[styles.sheet, { backgroundColor: colors.surface }]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.sheetHeader}>
-            <Text variant="h3">{title}</Text>
-            <Pressable onPress={onClose}>
-              <Ionicons name="close" size={22} color={colors.textSecondary} />
-            </Pressable>
-          </View>
-          <ScrollView style={styles.sheetList}>{children}</ScrollView>
-        </Pressable>
-      </Pressable>
-    </Modal>
-  );
-}
-
 const styles = StyleSheet.create({
-  wrap: { gap: spacing.sm, paddingBottom: spacing.sm },
-  topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  iconRow: { flexDirection: 'row', gap: spacing.sm },
-  iconBtn: { padding: spacing.xs },
-  composeBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+  wrap: {
+    gap: spacing.sm,
+    paddingBottom: spacing.xs,
   },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+  topBar: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 3,
+    justifyContent: 'space-between',
+    gap: spacing.sm,
   },
-  badgeText: { color: '#fff', fontSize: 9, fontWeight: '700' },
-  selectorRow: { flexDirection: 'row', gap: spacing.sm },
-  selector: {
+  titleBlock: {
     flex: 1,
+    minWidth: 0,
+    gap: 2,
+    alignItems: 'center',
+  },
+  title: {
+    letterSpacing: -0.3,
+  },
+  topActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
+  },
+  searchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
     borderWidth: 1,
     borderRadius: radius.full,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  overlay: {
+  searchInput: {
     flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingVertical: spacing.xs,
   },
-  sheet: {
-    maxHeight: '60%',
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.lg,
-  },
-  sheetHeader: {
+  metaRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.md,
+    flexWrap: 'wrap',
+    gap: spacing.xs,
   },
-  sheetList: { maxHeight: 360 },
-  option: {
+  chip: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: spacing.md,
+    gap: 4,
+    borderWidth: 1,
+    borderRadius: radius.full,
     paddingHorizontal: spacing.sm,
-    borderRadius: radius.md,
+    paddingVertical: 5,
   },
 });

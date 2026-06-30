@@ -1,4 +1,5 @@
-import { SafeAreaView, StyleSheet, View, type ViewProps } from 'react-native';
+import { StyleSheet, View, type ViewProps } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@/providers/ThemeProvider';
 import { spacing } from '@/constants/theme';
 

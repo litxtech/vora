@@ -33,9 +33,18 @@ const initialState = {
     friend_requests: true,
     messages: true,
     mentions: true,
+    feed: true,
+    channels: true,
+    businesses: true,
     nearby_events: true,
     emergency: true,
     jobs: false,
+    marketplace: true,
+    rides: false,
+    vora_needs: true,
+    vora_hizmetler: true,
+    hotels: true,
+    system: true,
   } as Partial<Record<NotificationPrefId, boolean>>,
 };
 

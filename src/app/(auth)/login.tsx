@@ -2,49 +2,82 @@ import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { AuthHeader } from '@/components/auth/AuthHeader';
-import { Button } from '@/components/ui/Button';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { GradientBackground } from '@/components/ui/GradientBackground';
-import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
+import { SavedLoginAccountsSection } from '@/features/auth/components/SavedLoginAccountsSection';
 import {
   clearLoginAttempts,
   getLoginLockoutMessage,
   recordFailedLogin,
 } from '@/features/auth/services/loginAttempts';
-import { validateEmail } from '@/features/auth/services/validation';
+import { navigateAfterSuccessfulLogin } from '@/features/auth/services/postLoginNavigation';
+import { clearSkipAutoGuest } from '@/features/auth/services/sessionPolicy';
+import { signInWithIdentifier } from '@/features/auth/services/usernameLogin';
+import { normalizeLoginIdentifierInput } from '@/features/auth/services/validation';
+import type { SavedLoginAccount } from '@/features/auth/types/savedLoginAccounts';
 import { supabase } from '@/lib/supabase/client';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 
 export default function LoginScreen() {
   const { colors } = useTheme();
-  const { rememberedEmail, saveRememberedEmail } = useAuth();
-  const [email, setEmail] = useState('');
+  const { savedLoginAccounts, rememberLoginAccountAfterSuccess, forgetLoginAccount } = useAuth();
+  const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
-  const [rememberMe, setRememberMe] = useState(true);
+  const [manualEntry, setManualEntry] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (rememberedEmail) {
-      setEmail(rememberedEmail);
-      setRememberMe(true);
+    if (savedLoginAccounts.length === 0) {
+      setManualEntry(true);
+      return;
     }
-  }, [rememberedEmail]);
+    setManualEntry(false);
+    setLoginId((current) => current || savedLoginAccounts[0]!.loginId);
+  }, [savedLoginAccounts]);
+
+  const handleLoginIdChange = (value: string) => {
+    setLoginId(normalizeLoginIdentifierInput(value));
+  };
+
+  const handleSelectAccount = (account: SavedLoginAccount) => {
+    setManualEntry(false);
+    setLoginId(account.loginId);
+    setPassword('');
+    setError(null);
+  };
+
+  const handleUseManualEntry = () => {
+    setManualEntry(true);
+    setLoginId('');
+    setPassword('');
+    setError(null);
+  };
+
+  const handleShowSavedAccounts = () => {
+    setManualEntry(false);
+    setLoginId('');
+    setPassword('');
+    setError(null);
+  };
+
+  const handleForgetAccount = async (accountLoginId: string) => {
+    await forgetLoginAccount(accountLoginId);
+    setPassword('');
+    setError(null);
+    const remaining = savedLoginAccounts.filter((item) => item.loginId !== accountLoginId);
+    if (remaining.length === 0) {
+      setManualEntry(true);
+      setLoginId('');
+      return;
+    }
+    setManualEntry(false);
+    setLoginId(remaining[0]!.loginId);
+  };
 
   const handleLogin = async () => {
-    const emailError = validateEmail(email);
-    if (emailError) {
-      setError(emailError);
-      return;
-    }
-    if (!password) {
-      setError('Şifre gereklidir.');
-      return;
-    }
-
     const lockout = await getLoginLockoutMessage();
     if (lockout) {
       setError(lockout);
@@ -54,42 +87,31 @@ export default function LoginScreen() {
     setLoading(true);
     setError(null);
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim(),
-      password,
-    });
+    const { error: authError } = await signInWithIdentifier(loginId, password);
 
     setLoading(false);
 
     if (authError) {
-      const lockoutMessage = await recordFailedLogin();
-      setError(lockoutMessage ?? 'E-posta veya şifre hatalı.');
+      if (authError.includes('hatalı')) {
+        const lockoutMessage = await recordFailedLogin();
+        setError(lockoutMessage ?? authError);
+      } else {
+        setError(authError);
+      }
       return;
     }
 
     await clearLoginAttempts();
-    await saveRememberedEmail(rememberMe ? email.trim() : null);
+    await clearSkipAutoGuest();
 
     const { data: userData } = await supabase.auth.getUser();
-    const { data: freshProfile } = userData.user
-      ? await supabase
-          .from('profiles')
-          .select('onboarding_completed, account_status')
-          .eq('id', userData.user.id)
-          .maybeSingle()
-      : { data: null };
-
-    if (freshProfile?.account_status === 'frozen') {
-      await supabase.auth.signOut();
-      setError('Hesabınız dondurulmuş. Destek ekibiyle iletişime geçin.');
+    if (!userData.user) {
+      setError('Oturum oluşturulamadı.');
       return;
     }
 
-    if (freshProfile?.onboarding_completed === false) {
-      router.replace('/(onboarding)/profile-setup');
-    } else {
-      router.replace('/(tabs)');
-    }
+    await rememberLoginAccountAfterSuccess(loginId, userData.user.id);
+    await navigateAfterSuccessfulLogin(userData.user.id);
   };
 
   return (
@@ -98,40 +120,33 @@ export default function LoginScreen() {
         <AuthHeader title="Giriş Yap" subtitle="Hesabınıza giriş yapın" />
 
         <View style={styles.form}>
-          <Input
-            label="E-posta"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="ornek@email.com"
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-          />
-          <Input
-            label="Şifre"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="••••••••"
-            secureTextEntry
-            autoComplete="password"
+          <SavedLoginAccountsSection
+            savedAccounts={savedLoginAccounts}
+            loginId={loginId}
+            password={password}
+            manualEntry={manualEntry}
+            loading={loading}
+            error={error}
+            onLoginIdChange={handleLoginIdChange}
+            onPasswordChange={setPassword}
+            onSelectAccount={handleSelectAccount}
+            onUseManualEntry={handleUseManualEntry}
+            onShowSavedAccounts={handleShowSavedAccounts}
+            onForgetAccount={handleForgetAccount}
+            onSubmit={handleLogin}
           />
 
-          <View style={styles.row}>
-            <Checkbox
-              checked={rememberMe}
-              onToggle={() => setRememberMe((v) => !v)}
-              label="Beni Hatırla"
-            />
-            <Pressable onPress={() => router.push('/(auth)/forgot-password')}>
-              <Text variant="caption" style={{ color: colors.primary }}>
-                Şifremi Unuttum
-              </Text>
-            </Pressable>
-          </View>
+          <Pressable onPress={() => router.push('/(auth)/login-code')} style={styles.link}>
+            <Text variant="caption" style={{ color: colors.primary }}>
+              Kod ile giriş yap
+            </Text>
+          </Pressable>
 
-          {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-
-          <Button title="Giriş Yap" loading={loading} onPress={handleLogin} />
+          <Pressable onPress={() => router.push('/(auth)/forgot-password')} style={styles.link}>
+            <Text variant="caption" style={{ color: colors.primary }}>
+              Şifremi Unuttum
+            </Text>
+          </Pressable>
 
           <Pressable onPress={() => router.push('/(auth)/register')} style={styles.link}>
             <Text secondary>Hesabın yok mu? Kayıt ol</Text>
@@ -151,13 +166,7 @@ const styles = StyleSheet.create({
   form: {
     gap: spacing.md,
   },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
   link: {
     alignItems: 'center',
-    marginTop: spacing.sm,
   },
 });

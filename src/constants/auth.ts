@@ -1,9 +1,17 @@
-export const USERNAME_MIN_LENGTH = 3;
+import { PUSH_PREF_OPTIONS, type PushPrefId } from '@/constants/notifications';
+
+export const USERNAME_MIN_LENGTH = 4;
 export const USERNAME_MAX_LENGTH = 30;
+/** Harf, rakam, alt çizgi, nokta ve tire; diğer özel karakterler yasak. */
+export const USERNAME_FORMAT_REGEX = /^[a-z0-9_.-]+$/;
+export const USERNAME_FORMAT_HINT = 'harf, rakam, alt çizgi, nokta ve tire';
 export const PASSWORD_MIN_LENGTH = 8;
 export const MIN_AGE = 18;
 export const MAX_LOGIN_ATTEMPTS = 5;
 export const LOGIN_LOCKOUT_MINUTES = 15;
+
+/** Oturum yalnızca bu nedenlerle sonlanır: manual | ban | deletion | frozen */
+export const SESSION_END_REASONS = ['manual', 'ban', 'deletion', 'frozen'] as const;
 
 export const BANNED_WORDS = [
   'admin',
@@ -31,23 +39,7 @@ export const INTEREST_OPTIONS = [
 
 export type InterestId = (typeof INTEREST_OPTIONS)[number]['id'];
 
-export const NOTIFICATION_OPTIONS = [
-  { id: 'likes', label: 'Beğeniler', description: 'Gönderi ve reel beğenileri, alıntılar' },
-  { id: 'comments', label: 'Yorumlar', description: 'Paylaşımlarınıza gelen yorumlar' },
-  { id: 'follows', label: 'Takip', description: 'Yeni takipçi bildirimleri' },
-  { id: 'friend_requests', label: 'Arkadaşlık', description: 'Arkadaşlık istekleri ve kabul' },
-  { id: 'messages', label: 'Mesajlar', description: 'Yeni mesaj ve arama bildirimleri' },
-  { id: 'mentions', label: 'Bahsetmeler', description: 'Sizi etiketleyen paylaşımlar' },
-  { id: 'nearby_events', label: 'Yakınındaki olaylar', description: 'Bölgenizdeki önemli gelişmeler' },
-  { id: 'emergency', label: 'Acil durum bildirimleri', description: 'Kritik ve acil uyarılar' },
-  { id: 'jobs', label: 'İş ilanları', description: 'Size uygun yeni iş fırsatları' },
-] as const;
+/** Kayıt ve profil tercihleri — ayarlar ekranıyla aynı anahtar seti. */
+export const NOTIFICATION_OPTIONS = PUSH_PREF_OPTIONS;
 
-export type NotificationPrefId = (typeof NOTIFICATION_OPTIONS)[number]['id'];
-
-export const LOBBY_STATS_FALLBACK = {
-  activeUsers: 12842,
-  livePosts: 421,
-  jobListings: 38,
-  events: 14,
-} as const;
+export type NotificationPrefId = PushPrefId;

@@ -10,13 +10,7 @@ type IncomingCallActionsProps = {
 export function IncomingCallActions({ onDecline, onAccept, video = false }: IncomingCallActionsProps) {
   return (
     <View style={styles.row}>
-      <CallControlButton
-        icon="close"
-        label="Reddet"
-        onPress={onDecline}
-        danger
-        size="lg"
-      />
+      <CallControlButton icon="close" label="Reddet" onPress={onDecline} danger size="lg" />
       <CallControlButton
         icon={video ? 'videocam' : 'call'}
         label="Cevapla"
@@ -33,6 +27,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     width: '100%',
-    paddingHorizontal: 36,
+    paddingHorizontal: 32,
   },
 });

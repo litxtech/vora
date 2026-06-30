@@ -1,5 +1,5 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { PostDetailScreen } from '@/features/feed/components/PostDetailScreen';
 
-export default function PostDetailScreen() {
-  return <MapDetailScreen type="posts" />;
+export default function PostDetailPage() {
+  return <PostDetailScreen />;
 }

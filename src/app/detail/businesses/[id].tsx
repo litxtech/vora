@@ -1,5 +1,5 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { BusinessDetailScreen } from '@/features/businesses/components/BusinessDetailScreen';
 
-export default function BusinessDetailScreen() {
-  return <MapDetailScreen type="businesses" />;
+export default function BusinessDetailRoute() {
+  return <BusinessDetailScreen />;
 }

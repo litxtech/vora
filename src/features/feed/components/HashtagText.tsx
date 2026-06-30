@@ -1,6 +1,7 @@
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
+import { hashtagPath } from '@/features/hashtag/navigation';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type HashtagTextProps = {
@@ -20,7 +21,7 @@ export function HashtagText({ content }: HashtagTextProps) {
             <Text
               key={i}
               style={[styles.tag, { color: colors.primary }]}
-              onPress={() => router.push(`/hashtag/${tag}` as never)}
+              onPress={() => router.push(hashtagPath(tag))}
             >
               {part}
             </Text>

@@ -1,5 +1,6 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
+import { useLocalSearchParams } from 'expo-router';
+import { JobDetailScreen } from '@/features/personnel-center/components/JobDetailScreen';
 
-export default function JobDetailScreen() {
-  return <MapDetailScreen type="jobs" />;
+export default function JobDetailRoute() {
+  return <JobDetailScreen />;
 }
