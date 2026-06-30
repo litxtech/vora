@@ -12,6 +12,7 @@ import { FeedJobCard } from '@/features/feed/components/FeedJobCard';
 import { FeedLostItemCard } from '@/features/feed/components/FeedLostItemCard';
 import { FeedEmptyState } from '@/features/feed/components/shared/FeedEmptyState';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
+import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
 import { getFeedListPerfProps, getFeedEstimatedItemSize, isAndroid } from '@/lib/device/androidPerfProfile';
@@ -185,6 +186,22 @@ export function FeedList({
 
   useEffect(() => {
     useFeedVideoPlaybackStore.getState().setScrolling(false);
+  }, []);
+
+  useEffect(() => {
+    const applyListInteraction = (locked: boolean) => {
+      listRef.current?.setNativeProps?.({
+        scrollEnabled: !locked,
+        pointerEvents: locked ? 'none' : 'auto',
+      });
+    };
+
+    useFeedDrawerStore.getState().setListInteractionLockHandler(applyListInteraction);
+    applyListInteraction(useFeedDrawerStore.getState().open);
+
+    return () => {
+      useFeedDrawerStore.getState().setListInteractionLockHandler(null);
+    };
   }, []);
 
   const renderItem = useCallback(
