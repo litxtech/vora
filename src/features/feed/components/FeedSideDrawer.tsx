@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
@@ -113,21 +113,12 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   const feedRegionId = useFeedStore((s) => s.regionId);
   const progress = useSharedValue(0);
   const drawerWidthSv = useSharedValue(drawerWidth);
-  const [scrimActive, setScrimActive] = useState(false);
+  const screenWidthSv = useSharedValue(width);
 
   useEffect(() => {
     drawerWidthSv.value = drawerWidth;
-  }, [drawerWidth, drawerWidthSv]);
-
-  useEffect(() => {
-    if (open) {
-      setScrimActive(true);
-      return;
-    }
-
-    const timer = setTimeout(() => setScrimActive(false), FEED_DRAWER_CLOSE_MS + 40);
-    return () => clearTimeout(timer);
-  }, [open]);
+    screenWidthSv.value = width;
+  }, [drawerWidth, drawerWidthSv, screenWidthSv, width]);
 
   useEffect(() => {
     cancelAnimation(progress);
@@ -164,17 +155,22 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
 
   const scrimMaxOpacity = isDark ? 0.48 : 0.38;
 
-  const scrimStyle = useAnimatedStyle(
-    () => ({
-      opacity: interpolate(progress.value, [0, 1], [0, scrimMaxOpacity]),
-    }),
+  const feedDismissStyle = useAnimatedStyle(
+    () => {
+      const offset = progress.value * drawerWidthSv.value;
+      return {
+        left: offset,
+        width: screenWidthSv.value - offset,
+        opacity: interpolate(progress.value, [0, 1], [0, scrimMaxOpacity]),
+      };
+    },
     [scrimMaxOpacity],
   );
 
   const handleClose = useCallback(() => {
-    if (!open) return;
+    if (!useFeedDrawerStore.getState().open) return;
     closeDrawer();
-  }, [closeDrawer, open]);
+  }, [closeDrawer]);
 
   return (
     <View style={[shellStyles.root, { backgroundColor: colors.background }]} collapsable={false}>
@@ -197,22 +193,26 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
 
       <Animated.View
         style={[shellStyles.feed, { backgroundColor: colors.background }, feedStyle]}
+        pointerEvents={open ? 'none' : 'auto'}
         collapsable={false}
       >
-        <View style={shellStyles.feedInner} pointerEvents={open ? 'none' : 'auto'}>
+        <View style={shellStyles.feedInner}>
           <MemoFeedChildren>{children}</MemoFeedChildren>
         </View>
-        {scrimActive ? (
-          <Animated.View pointerEvents="box-none" style={[shellStyles.scrimWrap, scrimStyle]}>
-            <Pressable
-              style={shellStyles.scrimPress}
-              onPress={handleClose}
-              accessibilityRole="button"
-              accessibilityLabel="Menüyü kapat"
-              android_ripple={{ color: 'transparent' }}
-            />
-          </Animated.View>
-        ) : null}
+      </Animated.View>
+
+      <Animated.View
+        pointerEvents={open ? 'auto' : 'none'}
+        style={[shellStyles.feedDismiss, feedDismissStyle]}
+        collapsable={false}
+      >
+        <Pressable
+          style={shellStyles.feedDismissPress}
+          onPress={handleClose}
+          accessibilityRole="button"
+          accessibilityLabel="Menüyü kapat"
+          android_ripple={{ color: 'transparent' }}
+        />
       </Animated.View>
     </View>
   );
@@ -263,12 +263,18 @@ const shellStyles = StyleSheet.create({
   feedInner: {
     flex: 1,
   },
-  scrimWrap: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 4,
+  feedDismiss: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    zIndex: 10,
     backgroundColor: '#000',
+    ...Platform.select({
+      android: { elevation: 12 },
+      default: {},
+    }),
   },
-  scrimPress: {
-    flex: 1,
+  feedDismissPress: {
+    ...StyleSheet.absoluteFillObject,
   },
 });
