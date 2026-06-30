@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useScrollToTop } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import type { FlashListRef } from '@shopify/flash-list';
@@ -202,17 +202,20 @@ export function FeedList({
 
   const keyExtractor = useCallback((item: FeedItem) => item.id, []);
 
-  const listHeader = (
-    <View>
-      {header}
-      {error ? (
-        <View style={[styles.errorBox, { backgroundColor: `${colors.danger}18`, borderColor: `${colors.danger}44` }]}>
-          <Text variant="caption" style={{ color: colors.danger }}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-    </View>
+  const listHeader = useMemo(
+    () => (
+      <View>
+        {header}
+        {error ? (
+          <View style={[styles.errorBox, { backgroundColor: `${colors.danger}18`, borderColor: `${colors.danger}44` }]}>
+            <Text variant="caption" style={{ color: colors.danger }}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    ),
+    [colors.danger, error, header],
   );
 
   const listEmpty = showInitialEmpty ? (
