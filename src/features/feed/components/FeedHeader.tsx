@@ -13,7 +13,6 @@ import { AnnouncementStrip } from '@/features/announcements/components/Announcem
 import { FeedIconButton } from '@/features/feed/components/shared/FeedIconButton';
 import { FeedHeaderAvatarButton } from '@/features/feed/components/FeedHeaderAvatarButton';
 import { MapHeaderButton } from '@/features/map/components/MapHeaderButton';
-import { IncidentsHeaderButton } from '@/features/incidents/components/IncidentsHeaderButton';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { FEED_ALL_DISTRICTS_LABEL, FEED_ALL_REGIONS_LABEL, getFeedDistrictOptions } from '@/features/feed/constants';
 import { REGIONS } from '@/constants/regions';
@@ -36,9 +35,6 @@ export function FeedHeader() {
   const [showRegionPicker, setShowRegionPicker] = useState(false);
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
-  const regionName = regionId
-    ? (REGIONS.find((r) => r.id === regionId)?.name ?? 'Bölge')
-    : FEED_ALL_REGIONS_LABEL;
   const districts = getFeedDistrictOptions(regionId);
   const showRegionFilter = useFeatureVisible(FEED_FEATURE.regionFilter);
   const showDistrictFilter = useFeatureVisible(FEED_FEATURE.districtFilter);
@@ -69,27 +65,7 @@ export function FeedHeader() {
       <TrustVacationPromoSlot placement="feed" compact />
       <View style={styles.topBar}>
         <FeedHeaderAvatarButton />
-        <View style={styles.titleBlock}>
-          <Text variant="h3" style={styles.title}>
-            Akış
-          </Text>
-          <Text secondary variant="caption" numberOfLines={1}>
-            {regionName}
-            {district ? ` · ${district}` : ''}
-          </Text>
-        </View>
-
         <View style={styles.topActions}>
-          <FeatureGate featureId="feed-header-leaderboard">
-            <FeedIconButton
-              icon="trophy-outline"
-              compact
-              onPress={() => router.push('/leaderboard' as never)}
-            />
-          </FeatureGate>
-          <FeatureGate featureId="feed-header-incidents">
-            <IncidentsHeaderButton regionId={regionId} />
-          </FeatureGate>
           <FeatureGate featureId="feed-header-map">
             <MapHeaderButton />
           </FeatureGate>
@@ -142,7 +118,9 @@ export function FeedHeader() {
           >
             <Ionicons name="location-outline" size={13} color={colors.primary} />
             <Text variant="caption" style={{ fontWeight: '600' }} numberOfLines={1}>
-              {regionName}
+              {regionId
+                ? (REGIONS.find((r) => r.id === regionId)?.name ?? 'Bölge')
+                : FEED_ALL_REGIONS_LABEL}
             </Text>
             <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
           </InstantPressable>
@@ -179,7 +157,7 @@ export function FeedHeader() {
         visible={showDistrictPicker}
         onClose={() => setShowDistrictPicker(false)}
         title="İlçe seç"
-        subtitle={regionId ? regionName : FEED_ALL_REGIONS_LABEL}
+        subtitle={regionId ? (REGIONS.find((r) => r.id === regionId)?.name ?? 'Bölge') : FEED_ALL_REGIONS_LABEL}
         value={district}
         options={districtOptions}
         onSelect={setDistrict}
@@ -200,15 +178,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.sm,
-  },
-  titleBlock: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    alignItems: 'center',
-  },
-  title: {
-    letterSpacing: -0.3,
   },
   topActions: {
     flexDirection: 'row',

@@ -1,25 +1,31 @@
-import { useEffect, useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { useEffect, type ReactNode } from 'react';
+import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
+  Easing,
   interpolate,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
-import { CentersMenuContent } from '@/features/centers/components/CentersMenuContent';
+import { InstantPressable } from '@/components/ui/InstantPressable';
+import { CentersDrawerMenu } from '@/features/centers/components/CentersDrawerMenu';
 import { ProfileTabIcon } from '@/features/profile/components/ProfileTabIcon';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
+import { useGuestMode } from '@/features/auth/hooks/useGuestMode';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
+import { useFeedStore } from '@/features/feed/store/feedStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const FEED_DRAWER_WIDTH_RATIO = 0.58;
-const FEED_DRAWER_SPRING = { damping: 24, stiffness: 290, mass: 0.85 } as const;
+const FEED_DRAWER_WIDTH_RATIO = 0.7;
+const FEED_DRAWER_OPEN_MS = 220;
+const FEED_DRAWER_CLOSE_MS = 200;
+const FEED_DRAWER_EASING = Easing.bezier(0.32, 0.72, 0, 1);
 const DRAWER_AVATAR_SIZE = 48;
 
 type FeedSideDrawerProfileHeaderProps = {
@@ -28,24 +34,38 @@ type FeedSideDrawerProfileHeaderProps = {
 
 function FeedSideDrawerProfileHeader({ onNavigate }: FeedSideDrawerProfileHeaderProps) {
   const { colors } = useTheme();
-  const { profile } = useAuth();
+  const { profile, user } = useAuth();
   const { requireAuth } = useRequireAuth();
+  const { isGuest, guestProfileComplete } = useGuestMode();
   const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
 
   const displayName = profile?.full_name?.trim() || profile?.username || 'Profil';
   const username = profile?.username ? `@${profile.username}` : 'Hesabına git';
 
-  const handlePress = async () => {
-    const allowed = await requireAuth('Profil');
-    if (!allowed) return;
+  const goProfile = () => {
+    router.push('/(tabs)/profile');
     closeDrawer();
     onNavigate?.();
-    router.push('/(tabs)/profile');
+  };
+
+  const handlePress = () => {
+    if (!user) {
+      void requireAuth('Profil');
+      return;
+    }
+    if (isGuest && !guestProfileComplete) {
+      void (async () => {
+        const allowed = await requireAuth('Profil');
+        if (allowed) goProfile();
+      })();
+      return;
+    }
+    goProfile();
   };
 
   return (
-    <Pressable
-      onPress={() => void handlePress()}
+    <InstantPressable
+      onPress={handlePress}
       style={({ pressed }) => [
         profileStyles.row,
         { backgroundColor: pressed ? `${colors.primary}10` : 'transparent' },
@@ -71,7 +91,7 @@ function FeedSideDrawerProfileHeader({ onNavigate }: FeedSideDrawerProfileHeader
       <View style={[profileStyles.chevron, { backgroundColor: `${colors.textMuted}12` }]}>
         <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
       </View>
-    </Pressable>
+    </InstantPressable>
   );
 }
 
@@ -85,65 +105,84 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   const drawerWidth = width * FEED_DRAWER_WIDTH_RATIO;
   const open = useFeedDrawerStore((s) => s.open);
   const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
+  const feedRegionId = useFeedStore((s) => s.regionId);
   const progress = useSharedValue(0);
-  const [drawerMounted, setDrawerMounted] = useState(open);
+  const drawerWidthSv = useSharedValue(drawerWidth);
 
   useEffect(() => {
-    if (open) setDrawerMounted(true);
-    progress.value = withSpring(open ? 1 : 0, FEED_DRAWER_SPRING);
+    drawerWidthSv.value = drawerWidth;
+  }, [drawerWidth, drawerWidthSv]);
+
+  useEffect(() => {
+    progress.value = withTiming(open ? 1 : 0, {
+      duration: open ? FEED_DRAWER_OPEN_MS : FEED_DRAWER_CLOSE_MS,
+      easing: FEED_DRAWER_EASING,
+    });
+
     if (open && Platform.OS !== 'android') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     }
   }, [open, progress]);
 
   const feedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progress.value * drawerWidth }],
-    borderTopLeftRadius: interpolate(progress.value, [0, 1], [0, 18]),
-    borderBottomLeftRadius: interpolate(progress.value, [0, 1], [0, 18]),
+    transform: [{ translateX: progress.value * drawerWidthSv.value }],
   }));
 
   const drawerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: interpolate(progress.value, [0, 1], [-drawerWidth, 0]) }],
+    transform: [
+      {
+        translateX: interpolate(progress.value, [0, 1], [-drawerWidthSv.value, 0]),
+      },
+    ],
+  }));
+
+  const scrimStyle = useAnimatedStyle(() => ({
+    left: progress.value * drawerWidthSv.value,
+    opacity: interpolate(progress.value, [0, 1], [0, 0.42]),
   }));
 
   const handleClose = () => {
     closeDrawer();
-    if (Platform.OS !== 'android') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft);
-    }
   };
 
   return (
-    <View style={[shellStyles.root, { backgroundColor: colors.background }]}>
-      <Animated.View style={[shellStyles.feed, feedStyle]} collapsable={false}>
-        {children}
+    <View style={[shellStyles.root, { backgroundColor: colors.background }]} collapsable={false}>
+      <Animated.View
+        style={[
+          shellStyles.drawer,
+          { width: drawerWidth, backgroundColor: colors.background },
+          drawerStyle,
+        ]}
+        pointerEvents={open ? 'auto' : 'none'}
+      >
+        <CentersDrawerMenu
+          headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
+          onCenterNavigate={closeDrawer}
+          feedRegionId={feedRegionId}
+        />
       </Animated.View>
 
-      {drawerMounted ? (
-        <Animated.View
-          pointerEvents={open ? 'auto' : 'none'}
-          style={[
-            shellStyles.drawer,
-            { width: drawerWidth, backgroundColor: colors.background },
-            drawerStyle,
-          ]}
-        >
-          <CentersMenuContent
-            variant="drawer"
-            onCenterNavigate={closeDrawer}
-            headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
-          />
-        </Animated.View>
-      ) : null}
+      <Animated.View
+        style={[shellStyles.feed, { backgroundColor: colors.background }, feedStyle]}
+        collapsable={false}
+        renderToHardwareTextureAndroid
+      >
+        <View style={shellStyles.feedInner} pointerEvents={open ? 'none' : 'auto'}>
+          {children}
+        </View>
+      </Animated.View>
 
-      {open ? (
-        <Pressable
-          style={[shellStyles.scrim, { left: drawerWidth }]}
+      <Animated.View
+        pointerEvents={open ? 'auto' : 'none'}
+        style={[shellStyles.feedDismiss, scrimStyle]}
+      >
+        <InstantPressable
+          style={shellStyles.feedDismissPress}
           onPress={handleClose}
           accessibilityRole="button"
           accessibilityLabel="Menüyü kapat"
         />
-      ) : null}
+      </Animated.View>
     </View>
   );
 }
@@ -173,10 +212,6 @@ const profileStyles = StyleSheet.create({
 const shellStyles = StyleSheet.create({
   root: {
     flex: 1,
-  },
-  feed: {
-    flex: 1,
-    zIndex: 1,
     overflow: 'hidden',
   },
   drawer: {
@@ -184,16 +219,25 @@ const shellStyles = StyleSheet.create({
     top: 0,
     left: 0,
     bottom: 0,
-    zIndex: 2,
-    elevation: 8,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.14,
-    shadowRadius: 12,
+    zIndex: 1,
   },
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 3,
-    backgroundColor: 'rgba(0,0,0,0.38)',
+  feed: {
+    flex: 1,
+    zIndex: 2,
+    overflow: 'hidden',
+  },
+  feedInner: {
+    flex: 1,
+  },
+  feedDismiss: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 10,
+    backgroundColor: '#000',
+  },
+  feedDismissPress: {
+    flex: 1,
   },
 });

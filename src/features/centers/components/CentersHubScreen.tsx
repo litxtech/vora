@@ -12,7 +12,7 @@ export function CentersHubScreen({ embeddedInTab = false }: { embeddedInTab?: bo
           <ScreenBackButton />
         </View>
       ) : null}
-      <CentersMenuContent variant="page" />
+      <CentersMenuContent />
     </GradientBackground>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -62,15 +62,11 @@ function CentersSupportButton({ onPress }: { onPress?: () => void }) {
 }
 
 type CentersMenuContentProps = {
-  variant?: 'page' | 'drawer';
   onCenterNavigate?: () => void;
-  headerPrefix?: ReactNode;
 };
 
 export function CentersMenuContent({
-  variant = 'page',
   onCenterNavigate,
-  headerPrefix,
 }: CentersMenuContentProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
@@ -85,9 +81,6 @@ export function CentersMenuContent({
   const showCentersHub = useFeatureVisible('centers-hub');
   const [search, setSearch] = useState('');
   const [activeFilter, setActiveFilter] = useState<CenterFilterId>('all');
-
-  const isDrawer = variant === 'drawer';
-  const cardVariant = isDrawer ? 'list' : 'grid';
   const query = normalizeSearch(search);
 
   const featuredCenters = featuredCenterIds
@@ -134,8 +127,8 @@ export function CentersMenuContent({
   const showEmptySearch = query.length > 0 && totalCount === 0;
   const showSupportButton = isCenterVisible('support-center') && showHubSupport;
 
-  const topPadding = isDrawer ? insets.top + spacing.sm : insets.top + spacing.md;
-  const bottomPadding = isDrawer ? spacing.xl : insets.bottom + spacing.xxl;
+  const topPadding = insets.top + spacing.md;
+  const bottomPadding = insets.bottom + spacing.xxl;
 
   return (
     <FlatList
@@ -149,22 +142,14 @@ export function CentersMenuContent({
       ]}
       ListHeaderComponent={
         <View style={styles.headerBlock}>
-          {headerPrefix}
-
-          {!isDrawer ? (
-            <View style={styles.pageTitleBlock}>
-              <Text variant="h3" style={styles.pageTitle}>
-                {hub.title}
-              </Text>
-              <Text secondary variant="caption">
-                {hub.subtitle}
-              </Text>
-            </View>
-          ) : (
-            <Text variant="label" style={[styles.drawerTitle, { color: colors.textMuted }]}>
-              Merkezler
+          <View style={styles.pageTitleBlock}>
+            <Text variant="h3" style={styles.pageTitle}>
+              {hub.title}
             </Text>
-          )}
+            <Text secondary variant="caption">
+              {hub.subtitle}
+            </Text>
+          </View>
 
           {showCentersHub && showSpotlight ? (
             <CentersSpotlightRow centers={featuredCenters} onCenterNavigate={onCenterNavigate} />
@@ -223,12 +208,12 @@ export function CentersMenuContent({
       renderItem={({ item: group }) => (
         <View style={styles.section}>
           <CentersGroupHeader label={group.label} />
-          <View style={isDrawer ? styles.list : styles.grid}>
+          <View style={styles.grid}>
             {group.items.map((center) => (
               <CenterCard
                 key={center.id}
                 center={center}
-                variant={cardVariant}
+                variant="grid"
                 onNavigate={onCenterNavigate}
               />
             ))}
@@ -253,13 +238,6 @@ const styles = StyleSheet.create({
   headerBlock: { gap: spacing.md, marginBottom: spacing.sm },
   pageTitleBlock: { gap: 4 },
   pageTitle: { letterSpacing: -0.3 },
-  drawerTitle: {
-    fontWeight: '700',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
-    fontSize: 11,
-    marginBottom: -spacing.xs,
-  },
   supportRow: {
     alignItems: 'flex-start',
   },
@@ -326,9 +304,6 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-  list: {
     gap: spacing.sm,
   },
 });
