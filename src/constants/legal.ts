@@ -1,3 +1,5 @@
+import { env } from '@/config/env';
+
 export type PolicyState = {
   terms: boolean;
   privacy: boolean;
@@ -57,7 +59,7 @@ export const LEGAL_DOCUMENTS = {
   terms: {
     title: 'Kullanım Şartları (EULA)',
     slug: 'terms',
-    publicUrl: process.env.EXPO_PUBLIC_TERMS_OF_USE_URL,
+    publicUrl: env.legal.termsOfUseUrl,
     summary:
       'Vora platformunu ve Premium abonelik hizmetlerini kullanırken geçerli kurallar, haklar ve sorumluluklar.',
     sections: [
@@ -138,7 +140,7 @@ export const LEGAL_DOCUMENTS = {
   privacy: {
     title: 'Gizlilik Politikası',
     slug: 'privacy',
-    publicUrl: process.env.EXPO_PUBLIC_PRIVACY_POLICY_URL,
+    publicUrl: env.legal.privacyPolicyUrl,
     summary: 'Kişisel verilerinizin nasıl toplandığı, işlendiği, saklandığı ve korunduğu hakkında bilgi.',
     sections: [
       {
@@ -194,7 +196,7 @@ export const LEGAL_DOCUMENTS = {
   child_protection: {
     title: 'Çocuk Koruma Politikası',
     slug: 'child_protection',
-    publicUrl: process.env.EXPO_PUBLIC_CHILD_PROTECTION_POLICY_URL,
+    publicUrl: env.legal.childProtectionPolicyUrl,
     summary: '18 yaş altı kullanıcıların korunmasına ve çocuk güvenliğine yönelik politikalarımız.',
     sections: [
       {

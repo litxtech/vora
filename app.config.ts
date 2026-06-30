@@ -2,10 +2,18 @@ import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
 import type { ExpoConfig } from 'expo/config';
+import {
+  APP_BUNDLE_ID,
+  APP_DOMAIN,
+  APP_NAME,
+  APP_SCHEME,
+  APP_SLUG,
+  APPLE_TEAM_ID,
+} from './src/constants/app.js';
 
 const vendorAndroidMaven = path.join(__dirname, 'vendor', 'android-m2');
 const googleServicesFile = path.join(__dirname, 'google-services.json');
-const androidPackage = 'com.karadeniz.dijitalagi';
+const androidPackage = APP_BUNDLE_ID;
 
 function ensureGoogleServicesJson(): void {
   if (fs.existsSync(googleServicesFile)) return;
@@ -51,22 +59,22 @@ const notificationMode =
   process.env.EAS_BUILD_PROFILE === 'development' ? 'development' : 'production';
 
 const config: ExpoConfig = {
-  name: 'Vora',
-  slug: 'voralive',
+  name: APP_NAME,
+  slug: APP_SLUG,
   owner: 'voralive',
   version: '2.4.0',
   orientation: 'default',
   icon: './assets/icon-ios.png',
-  scheme: 'vora',
+  scheme: APP_SCHEME,
   backgroundColor: '#F1F5F9',
   userInterfaceStyle: 'automatic',
   ios: {
     icon: './assets/icon-ios.png',
     supportsTablet: false,
-    bundleIdentifier: 'com.karadeniz.dijitalagi',
-    appleTeamId: '9W6CR7KXM7',
+    bundleIdentifier: APP_BUNDLE_ID,
+    appleTeamId: APPLE_TEAM_ID,
     buildNumber: '16',
-    associatedDomains: ['applinks:vora.app'],
+    associatedDomains: [`applinks:${APP_DOMAIN}`],
     entitlements: {
       'aps-environment': apnsEnvironment,
       'com.apple.developer.applesignin': ['Default'],
@@ -90,7 +98,7 @@ const config: ExpoConfig = {
   android: {
     ...(fs.existsSync(googleServicesFile) ? { googleServicesFile: './google-services.json' } : {}),
     icon: './assets/icon-android.png',
-    package: 'com.karadeniz.dijitalagi',
+    package: APP_BUNDLE_ID,
     versionCode: 13,
     backgroundColor: '#F1F5F9',
     softwareKeyboardLayoutMode: 'resize',
@@ -126,18 +134,18 @@ const config: ExpoConfig = {
         action: 'VIEW',
         autoVerify: true,
         data: [
-          { scheme: 'https', host: 'vora.app', pathPrefix: '/p' },
-          { scheme: 'https', host: 'vora.app', pathPrefix: '/r' },
-          { scheme: 'https', host: 'vora.app', pathPrefix: '/v' },
-          { scheme: 'https', host: 'vora.app', pathPrefix: '/u' },
-          { scheme: 'https', host: 'vora.app', pathPrefix: '/m' },
-          { scheme: 'https', host: 'vora.app', pathPrefix: '/s' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/p' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/r' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/v' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/u' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/m' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/s' },
         ],
         category: ['BROWSABLE', 'DEFAULT'],
       },
       {
         action: 'VIEW',
-        data: [{ scheme: 'vora' }],
+        data: [{ scheme: APP_SCHEME }],
         category: ['BROWSABLE', 'DEFAULT'],
       },
     ],
@@ -289,7 +297,7 @@ const config: ExpoConfig = {
     EXPO_PUBLIC_IOS_APP_STORE_URL: process.env.EXPO_PUBLIC_IOS_APP_STORE_URL,
     EXPO_PUBLIC_ANDROID_PLAY_STORE_URL:
       process.env.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL ??
-      'https://play.google.com/store/apps/details?id=com.karadeniz.dijitalagi',
+      `https://play.google.com/store/apps/details?id=${APP_BUNDLE_ID}`,
     EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   },
 };

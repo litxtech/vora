@@ -19,7 +19,7 @@ export async function fetchAgoraToken(
   callType: CallType,
   sessionId: string,
 ) {
-  if (!env.agoraAppId) {
+  if (!env.agora.appId) {
     throw new Error('EXPO_PUBLIC_AGORA_APP_ID tanımlanmalı.');
   }
 
@@ -34,5 +34,5 @@ export async function fetchAgoraToken(
 }
 
 export function getAgoraAppId(): string {
-  return env.agoraAppId;
+  return env.agora.appId;
 }

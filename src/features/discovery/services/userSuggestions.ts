@@ -26,11 +26,11 @@ export async function fetchDiscoverUserSuggestions(
   options?: { excludeUserId?: string; limit?: number },
 ): Promise<DiscoveryUserResult[]> {
   const limit = options?.limit ?? DISCOVERY_USER_SUGGESTIONS_LIMIT;
-  const karadenizWide = scope === 'karadeniz';
+  const isKaradenizWideScope = scope === 'karadeniz';
 
   const { data, error } = await supabase.rpc('fetch_discover_popular_users', {
     p_region_id: regionId,
-    p_karadeniz_wide: karadenizWide,
+    p_karadeniz_wide: isKaradenizWideScope,
     p_exclude_user_id: options?.excludeUserId ?? null,
     p_limit: limit,
   });
@@ -47,7 +47,7 @@ export async function fetchDiscoverUserSuggestions(
     .order('is_verified', { ascending: false })
     .limit(limit);
 
-  if (!karadenizWide) {
+  if (!isKaradenizWideScope) {
     query = query.eq('region_id', regionId);
   }
 

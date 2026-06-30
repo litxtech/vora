@@ -21,9 +21,16 @@ const FEATURED_PROFILE_COLUMNS =
 
 export async function fetchFeaturedProfiles(
   regionId: string,
-  options?: { excludeUserId?: string; limit?: number; karadenizWide?: boolean },
+  options?: {
+    excludeUserId?: string;
+    limit?: number;
+    isKaradenizWideScope?: boolean;
+    /** @deprecated isKaradenizWideScope kullanın */
+    karadenizWide?: boolean;
+  },
 ): Promise<FeaturedProfileCard[]> {
   const limit = options?.limit ?? 12;
+  const isKaradenizWideScope = options?.isKaradenizWideScope ?? options?.karadenizWide ?? false;
   const now = new Date().toISOString();
 
   let query = supabase
@@ -35,7 +42,7 @@ export async function fetchFeaturedProfiles(
     .order('profile_boosted_until', { ascending: false })
     .limit(limit);
 
-  if (!options?.karadenizWide) {
+  if (!isKaradenizWideScope) {
     query = query.eq('region_id', regionId);
   }
 

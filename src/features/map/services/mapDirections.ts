@@ -70,7 +70,7 @@ function estimateFallback(nodes: MapCoordinate[]): MapRouteGeometry {
 export async function fetchMapRouteGeometry(nodes: MapCoordinate[]): Promise<MapRouteGeometry> {
   if (nodes.length < 2) return estimateFallback(nodes);
 
-  const token = env.mapboxToken;
+  const token = env.mapbox.accessToken;
   if (!token) return estimateFallback(nodes);
 
   const coordPath = nodes.map((n) => `${n.longitude},${n.latitude}`).join(';');

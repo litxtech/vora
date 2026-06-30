@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { router } from 'expo-router';
 import Animated, {
@@ -15,39 +15,12 @@ import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
-import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
 const FEED_DRAWER_WIDTH_RATIO = 0.58;
 const FEED_DRAWER_SPRING = { damping: 24, stiffness: 290, mass: 0.85 } as const;
-const HEADER_AVATAR_SIZE = 34;
 const DRAWER_AVATAR_SIZE = 48;
-
-export function FeedHeaderAvatarButton() {
-  const { colors } = useTheme();
-  const { profile } = useAuth();
-  const openDrawer = useFeedDrawerStore((s) => s.openDrawer);
-
-  return (
-    <Pressable
-      onPress={openDrawer}
-      hitSlop={6}
-      accessibilityRole="button"
-      accessibilityLabel="Menüyü aç"
-      style={({ pressed }) => [avatarStyles.btn, pressed && avatarStyles.pressed]}
-      {...getAndroidInstantPressableProps()}
-    >
-      <ProfileTabIcon
-        avatarUrl={profile?.avatar_url ?? null}
-        username={profile?.username ?? ''}
-        color={colors.primary}
-        size={HEADER_AVATAR_SIZE}
-        focused={false}
-      />
-    </Pressable>
-  );
-}
 
 type FeedSideDrawerProfileHeaderProps = {
   onNavigate?: () => void;
@@ -113,8 +86,10 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   const open = useFeedDrawerStore((s) => s.open);
   const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
   const progress = useSharedValue(0);
+  const [drawerMounted, setDrawerMounted] = useState(open);
 
   useEffect(() => {
+    if (open) setDrawerMounted(true);
     progress.value = withSpring(open ? 1 : 0, FEED_DRAWER_SPRING);
     if (open && Platform.OS !== 'android') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -129,12 +104,6 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
 
   const drawerStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: interpolate(progress.value, [0, 1], [-drawerWidth, 0]) }],
-    opacity: interpolate(progress.value, [0, 0.15, 1], [0, 1, 1]),
-  }));
-
-  const scrimStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 1], [0, 0.38]),
-    left: drawerWidth,
   }));
 
   const handleClose = () => {
@@ -145,39 +114,39 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   };
 
   return (
-    <View style={shellStyles.root}>
-      <Animated.View
-        style={[
-          shellStyles.drawer,
-          { width: drawerWidth, backgroundColor: colors.background },
-          drawerStyle,
-        ]}
-      >
-        <CentersMenuContent
-          variant="drawer"
-          onCenterNavigate={closeDrawer}
-          headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
-        />
+    <View style={[shellStyles.root, { backgroundColor: colors.background }]}>
+      <Animated.View style={[shellStyles.feed, feedStyle]} collapsable={false}>
+        {children}
       </Animated.View>
 
-      <Animated.View style={[shellStyles.feedLayer, feedStyle]}>{children}</Animated.View>
+      {drawerMounted ? (
+        <Animated.View
+          pointerEvents={open ? 'auto' : 'none'}
+          style={[
+            shellStyles.drawer,
+            { width: drawerWidth, backgroundColor: colors.background },
+            drawerStyle,
+          ]}
+        >
+          <CentersMenuContent
+            variant="drawer"
+            onCenterNavigate={closeDrawer}
+            headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
+          />
+        </Animated.View>
+      ) : null}
 
-      <Animated.View pointerEvents={open ? 'auto' : 'none'} style={[shellStyles.scrim, scrimStyle]}>
+      {open ? (
         <Pressable
-          style={shellStyles.scrimPress}
+          style={[shellStyles.scrim, { left: drawerWidth }]}
           onPress={handleClose}
           accessibilityRole="button"
           accessibilityLabel="Menüyü kapat"
         />
-      </Animated.View>
+      ) : null}
     </View>
   );
 }
-
-const avatarStyles = StyleSheet.create({
-  btn: { flexShrink: 0 },
-  pressed: { opacity: 0.82, transform: [{ scale: 0.94 }] },
-});
 
 const profileStyles = StyleSheet.create({
   row: {
@@ -202,18 +171,29 @@ const profileStyles = StyleSheet.create({
 });
 
 const shellStyles = StyleSheet.create({
-  root: { flex: 1, overflow: 'hidden' },
-  drawer: {
-    ...StyleSheet.absoluteFillObject,
-    right: undefined,
+  root: {
+    flex: 1,
+  },
+  feed: {
+    flex: 1,
     zIndex: 1,
+    overflow: 'hidden',
+  },
+  drawer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    bottom: 0,
+    zIndex: 2,
+    elevation: 8,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
   },
-  feedLayer: { flex: 1, zIndex: 2, overflow: 'hidden', backgroundColor: 'transparent' },
-  scrim: { ...StyleSheet.absoluteFillObject, zIndex: 3, backgroundColor: '#000' },
-  scrimPress: { flex: 1 },
+  scrim: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 3,
+    backgroundColor: 'rgba(0,0,0,0.38)',
+  },
 });

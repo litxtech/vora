@@ -6,7 +6,7 @@ let initialized = false;
 export function ensureMapboxInitialized(): boolean {
   if (initialized) return true;
 
-  const token = env.mapboxToken;
+  const token = env.mapbox.accessToken;
   if (!token) return false;
 
   Mapbox.setAccessToken(token);

@@ -13,6 +13,8 @@ export type AgendaHighlight = {
 
 type UseAgendaHighlightsOptions = {
   regionId: RegionId;
+  isKaradenizWideScope?: boolean;
+  /** @deprecated isKaradenizWideScope kullanın */
   karadenizWide?: boolean;
   limit?: number;
   enabled?: boolean;
@@ -62,11 +64,13 @@ function mergeHighlights(
 
 export function useAgendaHighlights({
   regionId,
-  karadenizWide = false,
+  isKaradenizWideScope: isKaradenizWideScopeProp,
+  karadenizWide,
   limit = 10,
   enabled = true,
   includePopular = false,
 }: UseAgendaHighlightsOptions) {
+  const isKaradenizWideScope = isKaradenizWideScopeProp ?? karadenizWide ?? false;
   const [items, setItems] = useState<AgendaHighlight[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -78,7 +82,7 @@ export function useAgendaHighlights({
 
     let cancelled = false;
     const query: AgendaQuery = {
-      scope: karadenizWide ? 'karadeniz' : 'region',
+      scope: isKaradenizWideScope ? 'karadeniz' : 'region',
       period: '24h',
       regionId,
     };
@@ -101,7 +105,7 @@ export function useAgendaHighlights({
     return () => {
       cancelled = true;
     };
-  }, [enabled, includePopular, karadenizWide, limit, regionId]);
+  }, [enabled, includePopular, isKaradenizWideScope, limit, regionId]);
 
   return { items, loading };
 }

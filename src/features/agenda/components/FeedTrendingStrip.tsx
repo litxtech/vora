@@ -11,14 +11,21 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 type FeedTrendingStripProps = {
   regionId: RegionId;
+  isKaradenizWideScope?: boolean;
+  /** @deprecated isKaradenizWideScope kullanın */
   karadenizWide?: boolean;
 };
 
-export function FeedTrendingStrip({ regionId, karadenizWide = false }: FeedTrendingStripProps) {
+export function FeedTrendingStrip({
+  regionId,
+  isKaradenizWideScope: isKaradenizWideScopeProp,
+  karadenizWide,
+}: FeedTrendingStripProps) {
+  const isKaradenizWideScope = isKaradenizWideScopeProp ?? karadenizWide ?? false;
   const { colors } = useTheme();
   const { items } = useAgendaHighlights({
     regionId,
-    karadenizWide,
+    isKaradenizWideScope,
     limit: COMPOSE_HASHTAG_SUGGESTION_LIMIT,
     includePopular: true,
   });

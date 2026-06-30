@@ -98,7 +98,7 @@ async function searchMapboxSearchBox(
   proximity?: MapCoordinate,
   sessionToken?: string,
 ): Promise<MapLocationSuggestion[]> {
-  const token = env.mapboxToken;
+  const token = env.mapbox.accessToken;
   if (!token) return [];
 
   const tokenSession = sessionToken ?? createSessionToken();
@@ -137,7 +137,7 @@ export async function retrieveMapboxPlace(
   mapboxId: string,
   sessionToken: string,
 ): Promise<MapCoordinate | null> {
-  const token = env.mapboxToken;
+  const token = env.mapbox.accessToken;
   if (!token) return null;
 
   const params = new URLSearchParams({

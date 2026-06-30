@@ -93,7 +93,9 @@ npm start
 
 ### Ortam değişkenleri
 
-`.env.example` dosyasındaki tüm anahtarları inceleyin. Minimum geliştirme için:
+`.env.example` dosyasındaki tüm anahtarları inceleyin. **Kod içinde** `import { env } from '@/config/env'` kullanın — tam eşleme tablosu için [docs/ENVIRONMENT.md](./docs/ENVIRONMENT.md).
+
+Minimum geliştirme için:
 
 | Değişken | Açıklama |
 |----------|----------|
@@ -172,7 +174,7 @@ Build profilleri `eas.json` içinde tanımlıdır.
 4. Harita detay fetcher'ları `map/services/detail/` altında özellik başına ayrı dosyadır.
 5. Expo SDK 56 dokümantasyonu referans alınır: [docs.expo.dev/v56](https://docs.expo.dev/versions/v56.0.0/).
 
-Detaylar için [`AGENTS.md`](./AGENTS.md) dosyasına bakın.
+Detaylar için [`AGENTS.md`](./AGENTS.md) ve değişiklik geçmişi için [`CHANGELOG.md`](./CHANGELOG.md) dosyalarına bakın.
 
 ---
 

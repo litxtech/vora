@@ -1,19 +1,9 @@
 import type { ComponentType, ReactNode } from 'react';
-import Constants from 'expo-constants';
+import { env } from '@/config/env';
+import { APP_SCHEME } from '@/constants/app';
 import { isStripeNativeAvailable } from '@/lib/payments/stripeNativeAvailability';
 
-function resolveStripePublishableKey(): string | null {
-  const extra = Constants.expoConfig?.extra as Record<string, unknown> | undefined;
-  const fromExtra = typeof extra?.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY === 'string'
-    ? extra.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim()
-    : '';
-  const fromEnv = typeof process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY === 'string'
-    ? process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY.trim()
-    : '';
-  return fromExtra || fromEnv || null;
-}
-
-const publishableKey = resolveStripePublishableKey();
+const publishableKey = env.stripe.publishableKey || null;
 
 type StripeProviderProps = {
   publishableKey: string;
@@ -50,7 +40,7 @@ export function AppStripeProvider({ children }: Props) {
   if (!publishableKey || !StripeProvider) return children;
 
   return (
-    <StripeProvider publishableKey={publishableKey} urlScheme="vora">
+    <StripeProvider publishableKey={publishableKey} urlScheme={APP_SCHEME}>
       {children}
     </StripeProvider>
   );

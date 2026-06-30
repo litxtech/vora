@@ -1,3 +1,4 @@
+import { APP_BUNDLE_ID } from '@/constants/app';
 import * as SecureStore from 'expo-secure-store';
 import { Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
@@ -67,7 +68,7 @@ export function iosPushPermissionHint(issue: IosPushPermissionIssue): string | n
 export function androidPushRegistrationHint(): string {
   return (
     'Android push token alınamadı (FCM). google-services.json + yeni native build gerekir:\n' +
-    '1) Firebase Console → Android app (com.karadeniz.dijitalagi) → google-services.json indir\n' +
+    `1) Firebase Console → Android app (${APP_BUNDLE_ID}) → google-services.json indir\n` +
     '2) Proje köküne koy VEYA .env\'e EXPO_PUBLIC_FIREBASE_* değerlerini yaz (npm run ensure:google-services)\n' +
     '3) Firebase\'e EAS SHA-1 ekle: eas credentials -p android\n' +
     '4) Yeniden build: eas build --profile development --platform android'

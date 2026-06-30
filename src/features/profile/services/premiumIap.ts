@@ -1,10 +1,11 @@
+import { IAP_PREMIUM_PRODUCT_SUFFIX, iapProductId } from '@/constants/app';
 import type { PremiumPlan } from '@/features/profile/services/premiumService';
 import { supabaseErrorMessage } from '@/lib/errors';
 
 /** App Store Connect / Google Play Console Product ID'leri ile senkron tutulmalı */
 export const PREMIUM_PRODUCT_IDS_BY_PLAN: Record<PremiumPlan, string> = {
-  monthly: 'com.karadeniz.dijitalagi.vora.premium.monthly',
-  yearly: 'com.karadeniz.dijitalagi.vora.premium.yearly',
+  monthly: iapProductId(IAP_PREMIUM_PRODUCT_SUFFIX.monthly),
+  yearly: iapProductId(IAP_PREMIUM_PRODUCT_SUFFIX.yearly),
 };
 
 /** @deprecated PREMIUM_PRODUCT_IDS_BY_PLAN kullanın */

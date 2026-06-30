@@ -1,12 +1,11 @@
+import { env } from '@/config/env';
+
 /**
  * Sahte içerik yalnızca geliştirmede veya EXPO_PUBLIC_ENABLE_DEMO_DATA=true iken.
  * Production build'de varsayılan: kapalı.
  */
 export function isDemoDataEnabled(): boolean {
-  const flag = process.env.EXPO_PUBLIC_ENABLE_DEMO_DATA;
-  if (flag === 'true') return true;
-  if (flag === 'false') return false;
-  return __DEV__;
+  return env.dev.isDemoDataEnabled;
 }
 
 export function demoArrayFallback<T>(demo: readonly T[]): T[] {

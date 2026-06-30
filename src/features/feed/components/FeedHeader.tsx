@@ -11,7 +11,7 @@ import { FeedAppearanceBanner } from '@/features/app-appearance/components/FeedA
 import { TrustVacationPromoSlot } from '@/features/trust-promo';
 import { AnnouncementStrip } from '@/features/announcements/components/AnnouncementStrip';
 import { FeedIconButton } from '@/features/feed/components/shared/FeedIconButton';
-import { FeedHeaderAvatarButton } from '@/features/feed/components/FeedSideDrawer';
+import { FeedHeaderAvatarButton } from '@/features/feed/components/FeedHeaderAvatarButton';
 import { MapHeaderButton } from '@/features/map/components/MapHeaderButton';
 import { IncidentsHeaderButton } from '@/features/incidents/components/IncidentsHeaderButton';
 import { useFeedStore } from '@/features/feed/store/feedStore';

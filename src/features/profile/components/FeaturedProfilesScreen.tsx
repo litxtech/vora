@@ -90,7 +90,7 @@ export function FeaturedProfilesScreen() {
     const rows = await fetchFeaturedProfiles(regionId, {
       excludeUserId: user?.id,
       limit: 30,
-      karadenizWide: true,
+      isKaradenizWideScope: true,
     });
     setProfiles(rows);
   }, [regionId, user?.id, featuredProfilesVisible]);

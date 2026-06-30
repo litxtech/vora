@@ -1,55 +1,35 @@
-import Constants from 'expo-constants';
-
-const extra = Constants.expoConfig?.extra ?? {};
-
-/** WhatsApp / sosyal önizleme ve paylaşım linklerinin marka alan adı. */
-export const VORA_SHARE_DOMAIN = 'vora.app';
-
-export const VORA_SHARE_BASE_URL_DEFAULT = `https://${VORA_SHARE_DOMAIN}`;
+import { APP_BUNDLE_ID, APP_DOMAIN, APP_SCHEME, APP_SHARE_BASE_URL } from '@/constants/app';
+import { env } from '@/config/env';
 
 const SHARE_PREVIEW_SUFFIX = '/functions/v1/share-preview';
 
-function readSupabaseUrl(): string {
-  return (
-    (typeof extra.EXPO_PUBLIC_SUPABASE_URL === 'string' && extra.EXPO_PUBLIC_SUPABASE_URL.trim()) ||
-    (typeof process.env.EXPO_PUBLIC_SUPABASE_URL === 'string' && process.env.EXPO_PUBLIC_SUPABASE_URL.trim()) ||
-    ''
-  );
-}
-
 /** Supabase share-preview edge function kökü — paylaşım linkleri buradan çalışır. */
 export function resolveSupabaseSharePreviewBase(): string | null {
-  const supabaseUrl = readSupabaseUrl();
+  const supabaseUrl = env.supabase.url;
   if (!supabaseUrl) return null;
   return `${supabaseUrl.replace(/\/$/, '')}${SHARE_PREVIEW_SUFFIX}`;
 }
 
 function resolveDefaultShareBaseUrl(): string {
-  return resolveSupabaseSharePreviewBase() ?? VORA_SHARE_BASE_URL_DEFAULT;
+  return resolveSupabaseSharePreviewBase() ?? APP_SHARE_BASE_URL;
 }
-
-const configuredShareBase =
-  (typeof extra.EXPO_PUBLIC_SHARE_BASE_URL === 'string' && extra.EXPO_PUBLIC_SHARE_BASE_URL.trim()) ||
-  (typeof process.env.EXPO_PUBLIC_SHARE_BASE_URL === 'string' && process.env.EXPO_PUBLIC_SHARE_BASE_URL.trim()) ||
-  '';
 
 /**
  * Web paylaşım linklerinin kök URL'si.
  * Varsayılan: Supabase share-preview (404 vermez, uygulamaya yönlendirir).
  * Prod'da vora.app yönlendirmesi hazırsa EXPO_PUBLIC_SHARE_BASE_URL=https://vora.app
  */
-export const VORA_SHARE_BASE_URL = configuredShareBase || resolveDefaultShareBaseUrl();
+export const VORA_SHARE_BASE_URL = env.share.baseUrl || resolveDefaultShareBaseUrl();
 
-export const VORA_APP_SCHEME = 'vora';
+export const VORA_SHARE_DOMAIN = APP_DOMAIN;
+export const VORA_APP_SCHEME = APP_SCHEME;
 
 export const IOS_APP_STORE_URL =
-  (typeof extra.EXPO_PUBLIC_IOS_APP_STORE_URL === 'string' && extra.EXPO_PUBLIC_IOS_APP_STORE_URL.trim()) ||
-  'https://apps.apple.com/tr/app/vora-x/id6777120091?l=tr';
+  env.stores.iosAppStoreUrl || 'https://apps.apple.com/tr/app/vora-x/id6777120091?l=tr';
 
 export const ANDROID_PLAY_STORE_URL =
-  (typeof extra.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL === 'string' &&
-    extra.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL.trim()) ||
-  'https://play.google.com/store/apps/details?id=com.karadeniz.dijitalagi';
+  env.stores.androidPlayStoreUrl ||
+  `https://play.google.com/store/apps/details?id=${APP_BUNDLE_ID}`;
 
 export type ShareContentKind = 'post' | 'reel' | 'profile' | 'verify' | 'marketplace' | 'shop';
 
@@ -67,7 +47,7 @@ export function buildBusinessShopAndroidIntentUrl(
   fallbackHttpsUrl?: string,
 ): string {
   const fallback = encodeURIComponent(fallbackHttpsUrl ?? buildBusinessShopShareUrl(businessId));
-  return `intent://s/${businessId}#Intent;scheme=vora;package=com.karadeniz.dijitalagi;S.browser_fallback_url=${fallback};end`;
+  return `intent://s/${businessId}#Intent;scheme=${APP_SCHEME};package=${APP_BUNDLE_ID};S.browser_fallback_url=${fallback};end`;
 }
 
 export function buildBusinessShopDeepLink(businessId: string): string {

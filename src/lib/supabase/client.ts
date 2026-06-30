@@ -4,8 +4,8 @@ import type { Database } from '@/types/database';
 import { supabaseAuthStorage } from './storage';
 
 export const supabase = createClient<Database>(
-  env.supabaseUrl || 'https://invalid.local',
-  env.supabaseAnonKey || 'invalid-anon-key',
+  env.supabase.url || 'https://invalid.local',
+  env.supabase.anonKey || 'invalid-anon-key',
   {
     auth: {
       storage: supabaseAuthStorage,

@@ -91,7 +91,7 @@ export function FeedScreenContent() {
       fetchFeaturedProfiles(regionId ?? 'trabzon', {
         excludeUserId: user?.id,
         limit: 8,
-        karadenizWide: !regionId,
+        isKaradenizWideScope: !regionId,
       }).then(setFeaturedProfiles);
     };
 
@@ -113,7 +113,7 @@ export function FeedScreenContent() {
   }, [router]);
 
   const agendaRegionId = (regionId ?? profile?.region_id ?? 'trabzon') as RegionId;
-  const agendaKaradenizWide = regionId === null;
+  const isAgendaKaradenizWideScope = regionId === null;
 
   const header = useMemo(
     () => (
@@ -123,7 +123,7 @@ export function FeedScreenContent() {
         </View>
         <FeedHeader />
         {category === 'all' && discoverVisible ? (
-          <FeedTrendingStrip regionId={agendaRegionId} karadenizWide={agendaKaradenizWide} />
+          <FeedTrendingStrip regionId={agendaRegionId} isKaradenizWideScope={isAgendaKaradenizWideScope} />
         ) : null}
         {category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
           <FeaturedProfilesCarousel profiles={featuredProfiles} onSeeAll={handleSeeAllFeatured} />
@@ -137,7 +137,7 @@ export function FeedScreenContent() {
       </View>
     ),
     [
-      agendaKaradenizWide,
+      isAgendaKaradenizWideScope,
       agendaRegionId,
       category,
       discoverVisible,
