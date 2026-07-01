@@ -40,3 +40,7 @@ export const MAIN_TAB_LABELS: Record<MainTabRoute, string> = {
 
 export const MAIN_TAB_SWIPE_SNAP_RATIO = 0.34;
 export const MAIN_TAB_SWIPE_COMPLETE_MS = 300;
+
+export const MAIN_TAB_SWIPE_ROUTES = new Set<MainTabRoute>(
+  MAIN_TAB_SWIPE_ORDER.map((tab) => tab.route),
+);

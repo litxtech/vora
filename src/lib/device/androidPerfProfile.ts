@@ -1,5 +1,6 @@
 import { Platform, type FlatListProps } from 'react-native';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
+import { MAIN_TAB_SWIPE_ROUTES, type MainTabRoute } from '@/features/navigation/constants';
 
 export function isAndroid(): boolean {
   return Platform.OS === 'android';
@@ -166,10 +167,18 @@ function shouldEagerMountAndroidTab(tabName: string): boolean {
   return ANDROID_EAGER_TAB_NAMES.has(tabName);
 }
 
+function shouldEagerMountTabForSwipe(tabName: string): boolean {
+  if (!MAIN_TAB_SWIPE_ROUTES.has(tabName as MainTabRoute)) {
+    return shouldEagerMountAndroidTab(tabName);
+  }
+  if (!isAndroid()) return true;
+  return tabName === 'index' || tabName === 'discover' || ANDROID_EAGER_TAB_NAMES.has(tabName);
+}
+
 export function getAndroidTabLazyOption(
   tabName: string,
 ): { lazy: boolean; lazyPlaceholder?: () => null } {
-  if (shouldEagerMountAndroidTab(tabName)) {
+  if (shouldEagerMountTabForSwipe(tabName)) {
     return { lazy: false };
   }
   return {
@@ -178,8 +187,9 @@ export function getAndroidTabLazyOption(
   };
 }
 
-/** Pasif sekmeleri bellekten ayır — iOS'ta harita/video arka planda ısınmayı azaltır. */
+/** Pasif sekmeleri bellekten ayır — kaydırmalı geçişte komşu sekme içeriği görünür kalmalı. */
 export function shouldDetachInactiveTabScreens(): boolean {
+  if (shouldUseMainTabSwipeGesture()) return false;
   return Platform.OS === 'ios';
 }
 
