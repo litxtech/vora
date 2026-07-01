@@ -9,6 +9,7 @@ import { Text } from '@/components/ui/Text';
 import { publishStory } from '@/features/stories/services/publishStory';
 import type { UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
 import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
+import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { spacing } from '@/constants/theme';
@@ -54,6 +55,8 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
       Alert.alert('Hikaye paylaşılamadı', result.error);
       return;
     }
+
+    useStoryPublishStore.getState().clearDraft();
 
     const refreshed = await fetchStoryRings({ viewerId: user.id });
     setRings(refreshed.rings);

@@ -2,7 +2,6 @@ import { STORY_MAX_VIDEO_SEC, STORY_TTL_HOURS } from '@/features/stories/constan
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import { uploadStoryMedia, type UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
-import { isLocalVideoUri } from '@/lib/media/isVideoUrl';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
@@ -61,7 +60,11 @@ async function getOrCreateActiveStory(
 }
 
 export async function publishStory(input: PublishStoryInput): Promise<PublishStoryResult> {
-  const isVideo = input.mediaType === 'video' || isLocalVideoUri(input.localUri);
+  const isVideo = input.mediaType === 'video';
+
+  if (!input.localUri?.trim()) {
+    return { storyId: null, itemId: null, mediaUrl: null, error: 'Medya dosyası bulunamadı.' };
+  }
 
   if (isVideo && (input.durationSec ?? 0) > STORY_MAX_VIDEO_SEC) {
     return {
@@ -70,6 +73,18 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       mediaUrl: null,
       error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir.`,
     };
+  }
+
+  if (isVideo && (input.durationSec == null || input.durationSec <= 0)) {
+    const probed = await probeVideoDuration(input.localUri);
+    if (probed > STORY_MAX_VIDEO_SEC) {
+      return {
+        storyId: null,
+        itemId: null,
+        mediaUrl: null,
+        error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir.`,
+      };
+    }
   }
 
   const { storyId, error: storyError } = await getOrCreateActiveStory(

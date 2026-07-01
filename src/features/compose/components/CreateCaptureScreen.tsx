@@ -27,6 +27,7 @@ import {
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
 import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
+import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -246,14 +247,14 @@ export function CreateCaptureScreen() {
     durationSec?: number,
   ) => {
     if (shareMode === 'story') {
-      router.replace({
-        pathname: '/stories/publish',
-        params: {
-          mediaUri: items[0]?.uri ?? '',
-          mediaType,
-          durationSec: durationSec != null ? String(durationSec) : undefined,
-        },
-      } as Href);
+      const uri = items[0]?.uri ?? '';
+      if (!uri) return;
+      useStoryPublishStore.getState().setDraft({
+        mediaUri: uri,
+        mediaType,
+        durationSec,
+      });
+      router.replace('/stories/publish' as Href);
       return;
     }
 
