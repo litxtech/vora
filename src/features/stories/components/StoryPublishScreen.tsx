@@ -16,9 +16,12 @@ import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
 import { Text } from '@/components/ui/Text';
 import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
 import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFramedImage';
+import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
+import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/stories/services/routeStoryVideo';
 import { publishStory } from '@/features/stories/services/publishStory';
 import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
 import type { UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
+import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
@@ -41,6 +44,7 @@ type StoryPublishScreenProps = {
 };
 
 export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPublishScreenProps) {
+  const normalizedDurationSec = normalizeIncomingDurationSec(durationSec);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
@@ -58,6 +62,31 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
   useEffect(() => {
     setPublishUri(mediaUri);
   }, [mediaUri]);
+
+  useEffect(() => {
+    if (mediaType !== 'video') return;
+
+    let cancelled = false;
+
+    void (async () => {
+      const probed = await probeVideoDuration(mediaUri);
+      if (cancelled) return;
+      if (probed > STORY_MAX_VIDEO_SEC) {
+        try {
+          await routeStoryVideo(mediaUri, probed);
+        } catch (err) {
+          Alert.alert(
+            'Video hazırlanamadı',
+            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+          );
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaType, mediaUri]);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +133,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
         useStoryPublishStore.getState().setDraft({
           mediaUri: stable,
           mediaType: 'video',
-          durationSec,
+          durationSec: normalizedDurationSec,
         });
       })
       .catch((err) => {
@@ -121,7 +150,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
     return () => {
       cancelled = true;
     };
-  }, [durationSec, mediaType, mediaUri]);
+  }, [mediaType, mediaUri, normalizedDurationSec]);
 
   const handleFramingChange = useCallback((next: StoryFraming) => {
     setFraming(next);
@@ -163,7 +192,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
       authorId: user.id,
       localUri: uploadUri,
       mediaType,
-      durationSec,
+      durationSec: normalizedDurationSec,
       regionId: regionId ?? null,
       stickerCategory: null,
       framing: uploadFraming,
@@ -187,7 +216,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
 
     router.replace('/(tabs)');
   }, [
-    durationSec,
+    normalizedDurationSec,
     framing,
     mediaPreparing,
     mediaSize,
@@ -238,11 +267,11 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
             </Text>
           </View>
         )}
-        {mediaType === 'video' && durationSec ? (
+        {mediaType === 'video' && normalizedDurationSec ? (
           <View style={styles.durationBadge}>
             <Ionicons name="videocam" size={12} color="#fff" />
             <Text variant="caption" style={styles.durationText}>
-              {Math.round(durationSec)} sn
+              {Math.round(normalizedDurationSec)} sn
             </Text>
           </View>
         ) : null}

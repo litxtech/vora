@@ -27,7 +27,7 @@ import {
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
 import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
-import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
+import { routeStoryVideo } from '@/features/stories/services/routeStoryVideo';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -252,25 +252,24 @@ export function CreateCaptureScreen() {
         const uri = items[0]?.uri ?? '';
         if (!uri) return;
 
-        let stableUri = uri;
         if (mediaType === 'video') {
           setBusy(true);
           try {
-            stableUri = await stabilizeStoryVideoUri(uri);
+            await routeStoryVideo(uri, durationSec);
           } catch (err) {
             Alert.alert(
               'Video hazırlanamadı',
               err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
             );
-            return;
           } finally {
             setBusy(false);
           }
+          return;
         }
 
         useStoryPublishStore.getState().setDraft({
-          mediaUri: stableUri,
-          mediaType,
+          mediaUri: uri,
+          mediaType: 'image',
           durationSec,
         });
         router.replace('/stories/publish' as Href);
@@ -389,10 +388,6 @@ export function CreateCaptureScreen() {
           return;
         }
         const elapsedSec = (recordStartedAt.current ? Date.now() - recordStartedAt.current : 0) / 1000;
-        if (shareMode === 'story' && elapsedSec > STORY_MAX_VIDEO_SEC) {
-          Alert.alert('Hikaye limiti', `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir.`);
-          return;
-        }
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setCameraLive(false);
         setCameraReady(false);
@@ -501,10 +496,17 @@ export function CreateCaptureScreen() {
       if (!uri) return;
 
       if (shareMode === 'story') {
-        router.replace({
-          pathname: '/vora-studio',
-          params: { sourceUri: uri, mode: 'story' },
-        } as Href);
+        setBusy(true);
+        try {
+          await routeStoryVideo(uri, duration);
+        } catch (err) {
+          Alert.alert(
+            'Video hazırlanamadı',
+            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+          );
+        } finally {
+          setBusy(false);
+        }
         return;
       }
 

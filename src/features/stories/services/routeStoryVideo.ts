@@ -4,11 +4,18 @@ import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeSto
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 
+/** ImagePicker ms, kamera/probe sn döndürür. */
+export function normalizeIncomingDurationSec(raw?: number): number | undefined {
+  if (raw == null || raw <= 0) return undefined;
+  if (raw > 90) return raw / 1000;
+  return raw;
+}
+
 /** Hikâye videosunu süreye göre kırpma ekranına veya doğrudan paylaşıma yönlendirir. */
 export async function routeStoryVideo(uri: string, durationSec?: number): Promise<void> {
   const stableUri = await stabilizeStoryVideoUri(uri);
 
-  let duration = durationSec;
+  let duration = normalizeIncomingDurationSec(durationSec);
   if (duration == null || duration <= 0) {
     duration = await probeVideoDuration(stableUri);
   }

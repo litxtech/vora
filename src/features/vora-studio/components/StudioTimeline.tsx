@@ -10,7 +10,6 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { captureThumbnail } from '@/features/vora-studio/services/videoThumbnails';
-import { LIVE_SUPPORT_CLIP_MAX_SEC, STORY_CLIP_MAX_SEC } from '@/features/vora-studio/constants';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
 import { formatStudioTime } from '@/features/vora-studio/utils/time';
 import { radius, spacing } from '@/constants/theme';

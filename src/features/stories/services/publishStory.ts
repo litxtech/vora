@@ -74,7 +74,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       storyId: null,
       itemId: null,
       mediaUrl: null,
-      error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir.`,
+      error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir. Uzun videolarda paylaşmadan önce 30 saniyelik bölüm seçin.`,
     };
   }
 
@@ -85,7 +85,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
         storyId: null,
         itemId: null,
         mediaUrl: null,
-        error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir.`,
+        error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir. Uzun videolarda paylaşmadan önce 30 saniyelik bölüm seçin.`,
       };
     }
   }

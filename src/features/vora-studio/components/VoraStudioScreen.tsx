@@ -195,7 +195,7 @@ export function VoraStudioScreen() {
           </Text>
           <Text secondary variant="caption">
             {isClipMode
-              ? `En fazla ${clipMaxSec} sn · istediğin bölümü seç`
+              ? `En fazla ${clipMaxSec} sn · seçili bölümü kaydır`
               : `@${username}`}
           </Text>
         </View>
