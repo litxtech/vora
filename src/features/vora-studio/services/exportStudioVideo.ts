@@ -7,6 +7,7 @@ import type { StudioExportResult } from '@/features/vora-studio/types';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
 import { VIDEO_PROGRESS } from '@/services/video/progressMessages';
 import { compressVideoForUpload } from '@/lib/video/compress';
+import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { supabase } from '@/lib/supabase/client';
 
 const PROBE_DURATION_TIMEOUT_MS = 4000;
@@ -26,6 +27,33 @@ export async function probeVideoDuration(uri: string): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+export async function exportStudioClip(
+  username: string,
+  onProgress?: (message: string) => void,
+): Promise<StudioExportResult> {
+  const state = useStudioEditorStore.getState();
+  if (!state.sourceUri) {
+    throw new Error('Video kaynağı bulunamadı.');
+  }
+
+  onProgress?.(VIDEO_PROGRESS.manifestPreparing);
+  const manifest = buildEditManifest(state, username);
+  if (!manifest) throw new Error('Manifest oluşturulamadı.');
+
+  onProgress?.(VIDEO_PROGRESS.preparing);
+  const preparedUri = await prepareLocalVideoUri(state.sourceUri);
+
+  onProgress?.(VIDEO_PROGRESS.thumbnail);
+  const thumbnailUri = await captureThumbnail(preparedUri, state.trimStartSec);
+
+  return {
+    outputUri: preparedUri,
+    manifest,
+    jobId: null,
+    thumbnailUri,
+  };
 }
 
 export async function exportStudioVideo(

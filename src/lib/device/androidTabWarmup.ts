@@ -1,9 +1,12 @@
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { isAndroid } from '@/lib/device/androidPerfProfile';
+import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 
 let warmed = false;
 
-const MESSAGE_WARMUP_MS = 2_500;
+function getMessageWarmupMs(): number {
+  return isAndroidTablet() ? 300 : 900;
+}
 
 /** Mesaj sekmesi modülü — akış etkileşilebilir olduktan sonra yüklenir. Profil AuthProvider'da ısınır. */
 export function warmupAndroidTabModules(): { cancel: () => void } {
@@ -20,7 +23,7 @@ export function warmupAndroidTabModules(): { cancel: () => void } {
 
     messageTimer = setTimeout(() => {
       if (!cancelled) void import('@/features/messaging/components/ConversationInbox');
-    }, MESSAGE_WARMUP_MS);
+    }, getMessageWarmupMs());
   });
 
   return {

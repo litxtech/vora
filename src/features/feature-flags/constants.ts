@@ -96,6 +96,13 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
   { id: 'channels', label: 'Kanallar', group: 'social', kind: 'root', routes: ['/channels'] },
   { id: 'ads', label: 'Reklam Paneli', group: 'social', kind: 'root', routes: ['/ads', '/ads/studio'] },
   {
+    id: 'stories',
+    label: 'Hikayeler',
+    group: 'social',
+    kind: 'root',
+    routes: ['/stories', '/stories/publish'],
+  },
+  {
     id: 'featured-profiles',
     label: 'Öne Çıkan Profiller',
     group: 'social',

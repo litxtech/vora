@@ -1,5 +1,6 @@
 import { Platform, type FlatListProps } from 'react-native';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
+import { MAIN_TAB_SWIPE_ROUTES, type MainTabRoute } from '@/features/navigation/constants';
 
 export function isAndroid(): boolean {
   return Platform.OS === 'android';
@@ -30,14 +31,14 @@ export function shouldUseScreenFreeze(): boolean {
   return !isAndroid();
 }
 
-/** Sekme odaklanınca ağır işleri ertele — ana liste önce çizilsin. */
+/** Sekme odaklanınca ağır işleri ertele — tablet hariç (anında yükle). */
 export function shouldDeferHeavyFocusWork(): boolean {
-  return isAndroid();
+  return isAndroid() && !isAndroidTablet();
 }
 
-/** Akış üstü carousel — ana feed listesi önce etkileşilebilir olsun. */
+/** Akış üstü carousel — tablet hariç ertelenir. */
 export function shouldDeferFeedHeaderContent(): boolean {
-  return isAndroid();
+  return isAndroid() && !isAndroidTablet();
 }
 
 /** Reels sekmesinde hafif tab bar — tüm Android. */
@@ -67,18 +68,18 @@ type ListPerfProps = Partial<
 >;
 
 const ANDROID_FLAT_LIST_PERF: ListPerfProps = {
-  initialNumToRender: 3,
-  maxToRenderPerBatch: 2,
-  windowSize: 4,
-  updateCellsBatchingPeriod: 100,
+  initialNumToRender: 4,
+  maxToRenderPerBatch: 3,
+  windowSize: 5,
+  updateCellsBatchingPeriod: 50,
   removeClippedSubviews: true,
 };
 
 const ANDROID_TABLET_FLAT_LIST_PERF: ListPerfProps = {
-  initialNumToRender: 3,
-  maxToRenderPerBatch: 2,
-  windowSize: 3,
-  updateCellsBatchingPeriod: 50,
+  initialNumToRender: 5,
+  maxToRenderPerBatch: 4,
+  windowSize: 6,
+  updateCellsBatchingPeriod: 32,
   removeClippedSubviews: true,
 };
 
@@ -158,18 +159,38 @@ export function shouldShowBootSplashVisual(): boolean {
   return !isAndroid();
 }
 
-/** Android: akış + profil eager — profil sık kullanılır, ilk tıklamada ağır mount gecikmesi olmasın. */
-const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'profile']);
+/** Android telefon: akış + profil eager. */
+const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'profile', 'discover', 'messages']);
+
+/** Android tablet: ana sekmelerin hepsi eager — sekme geçişi soğuk mount olmasın. */
+const ANDROID_TABLET_EAGER_TAB_NAMES = new Set([
+  'index',
+  'discover',
+  'profile',
+  'messages',
+  'reels',
+  'create',
+]);
 
 function shouldEagerMountAndroidTab(tabName: string): boolean {
   if (!isAndroid()) return tabName === 'index';
+  if (isAndroidTablet()) return ANDROID_TABLET_EAGER_TAB_NAMES.has(tabName);
   return ANDROID_EAGER_TAB_NAMES.has(tabName);
+}
+
+function shouldEagerMountTabForSwipe(tabName: string): boolean {
+  if (!MAIN_TAB_SWIPE_ROUTES.has(tabName as MainTabRoute)) {
+    return shouldEagerMountAndroidTab(tabName);
+  }
+  if (!isAndroid()) return true;
+  if (isAndroidTablet()) return true;
+  return tabName === 'index' || tabName === 'discover' || ANDROID_EAGER_TAB_NAMES.has(tabName);
 }
 
 export function getAndroidTabLazyOption(
   tabName: string,
 ): { lazy: boolean; lazyPlaceholder?: () => null } {
-  if (shouldEagerMountAndroidTab(tabName)) {
+  if (shouldEagerMountTabForSwipe(tabName)) {
     return { lazy: false };
   }
   return {
@@ -178,8 +199,10 @@ export function getAndroidTabLazyOption(
   };
 }
 
-/** Pasif sekmeleri bellekten ayır — iOS'ta harita/video arka planda ısınmayı azaltır. */
+/** Pasif sekmeleri bellekten ayır — tablet/Android swipe yok, bellek baskısını azalt. */
 export function shouldDetachInactiveTabScreens(): boolean {
+  if (shouldUseMainTabSwipeGesture()) return false;
+  if (isAndroidTablet()) return true;
   return Platform.OS === 'ios';
 }
 
@@ -317,10 +340,10 @@ export function getNotificationBootFlushMs(defaultMs: number): number {
   return defaultMs;
 }
 
-/** Sohbet artımlı senkron — realtime yedek; iOS'ta agresif poll ısıtıyordu. */
+/** Sohbet artımlı senkron — realtime yedek; sık poll JS thread'i meşgul eder. */
 export function getChatPollIntervalMs(): number {
   if (!isAndroid()) return 18_000;
-  return isAndroidTablet() ? 2_500 : 2_000;
+  return isAndroidTablet() ? 12_000 : 8_000;
 }
 
 /** Okundu işareti periyodik güncelleme. */

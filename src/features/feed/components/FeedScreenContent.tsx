@@ -9,8 +9,9 @@ import { FeaturedProfilesCarousel } from '@/features/profile/components/Featured
 import { fetchFeaturedProfiles } from '@/features/profile/services/featuredProfiles';
 import type { FeaturedProfileCard } from '@/features/profile/services/featuredProfiles';
 import { FeedHeader } from '@/features/feed/components/FeedHeader';
-import { FeedTrendingStrip } from '@/features/agenda/components/FeedTrendingStrip';
 import { PostUploadBanner } from '@/features/compose/components/PostUploadBanner';
+import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
+import { StoryRingBar } from '@/features/stories/components/StoryRingBar';
 import { FeedList } from '@/features/feed/components/FeedList';
 import { NewPostsBanner } from '@/features/feed/components/NewPostsBanner';
 import { useFeed } from '@/features/feed/hooks/useFeed';
@@ -28,8 +29,6 @@ import { warmupAndroidTabModules } from '@/lib/device/androidTabWarmup';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
-import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
-import type { RegionId } from '@/constants/regions';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
 import { FeedSideDrawerShell } from '@/features/feed/components/FeedSideDrawer';
@@ -42,10 +41,10 @@ export function FeedScreenContent() {
   const insets = useSafeAreaInsets();
   const tabBarBottomInset = useStableTabBarInset();
   const listBottomInset = getFloatingTabBarReserve(tabBarBottomInset) + spacing.md;
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { isVisible } = useFeatureFlags();
-  const discoverVisible = useFeatureVisible('discover');
   const featuredProfilesVisible = isVisible('featured-profiles');
+  const storiesVisible = isVisible('stories');
   const resetNewPosts = useFeedStore((s) => s.resetNewPosts);
   const category = useFeedStore((s) => s.category);
   const regionId = useFeedStore((s) => s.regionId);
@@ -112,9 +111,6 @@ export function FeedScreenContent() {
     router.push('/featured-profiles' as never);
   }, [router]);
 
-  const agendaRegionId = (regionId ?? profile?.region_id ?? 'trabzon') as RegionId;
-  const isAgendaKaradenizWideScope = regionId === null;
-
   const header = useMemo(
     () => (
       <View style={styles.headerWrap}>
@@ -122,8 +118,10 @@ export function FeedScreenContent() {
           <NewPostsBanner onRefresh={handleBannerRefresh} />
         </View>
         <FeedHeader />
-        {category === 'all' && discoverVisible ? (
-          <FeedTrendingStrip regionId={agendaRegionId} isKaradenizWideScope={isAgendaKaradenizWideScope} />
+        {category === 'all' && storiesVisible ? (
+          <FeatureGate featureId="stories">
+            <StoryRingBar regionId={regionId} />
+          </FeatureGate>
         ) : null}
         {category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
           <FeaturedProfilesCarousel profiles={featuredProfiles} onSeeAll={handleSeeAllFeatured} />
@@ -137,12 +135,11 @@ export function FeedScreenContent() {
       </View>
     ),
     [
-      isAgendaKaradenizWideScope,
-      agendaRegionId,
       category,
-      discoverVisible,
       featuredProfiles,
       featuredProfilesVisible,
+      storiesVisible,
+      regionId,
       handleBannerRefresh,
       handleSeeAllFeatured,
       headerEvents,

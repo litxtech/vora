@@ -4,6 +4,7 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { useStudioMusicPlayer } from '@/features/music/hooks/useStudioMusicPlayer';
 import { StudioPreviewOverlays, StudioTimeBadge } from '@/features/vora-studio/components/StudioPreviewOverlays';
+import { StoryClipPreviewBar } from '@/features/vora-studio/components/StoryClipPreviewBar';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
 
 type StudioVideoPreviewProps = {
@@ -28,6 +29,9 @@ export function StudioVideoPreview({ username }: StudioVideoPreviewProps) {
   const musicVolume = useStudioEditorStore((s) => s.musicVolume);
   const setPlayhead = useStudioEditorStore((s) => s.setPlayhead);
   const setPlaying = useStudioEditorStore((s) => s.setPlaying);
+  const exportMode = useStudioEditorStore((s) => s.exportMode);
+  const isClipMode = exportMode === 'story' || exportMode === 'live-support';
+  const durationSec = useStudioEditorStore((s) => s.durationSec);
 
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const textEditing = activeTool === 'text';
@@ -145,6 +149,15 @@ export function StudioVideoPreview({ username }: StudioVideoPreviewProps) {
         />
       ) : null}
       <StudioTimeBadge startSec={trimStartSec} endSec={trimEndSec} />
+
+      {isClipMode ? (
+        <StoryClipPreviewBar
+          playheadSec={playheadSec}
+          trimStartSec={trimStartSec}
+          trimEndSec={trimEndSec}
+          durationSec={durationSec}
+        />
+      ) : null}
 
       {selectedMusicAudioUrl ? (
         <Pressable

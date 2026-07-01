@@ -1,42 +1,16 @@
-import { isAndroid, shouldRunUiWorkImmediately } from '@/lib/device/androidPerfProfile';
+import { shouldRunUiWorkImmediately } from '@/lib/device/androidPerfProfile';
 
 /**
  * Ağır arka plan işleri (carousel fetch, inbox yenileme).
- * Tablet dahil ertelenir — ana UI önce çizilsin.
+ * Tablet: anında; Android telefon: çift rAF (setTimeout gecikmesi yok).
  */
 export function deferBackgroundWork(task: () => void): { cancel: () => void } {
-  if (!isAndroid()) {
-    return deferUntilUiIdle(task);
+  if (shouldRunUiWorkImmediately()) {
+    task();
+    return { cancel: () => {} };
   }
 
-  let cancelled = false;
-  let outerFrame = 0;
-  let innerFrame = 0;
-  const delayMs = !isAndroid() ? 0 : shouldRunUiWorkImmediately() ? 200 : 280;
-  let timer: ReturnType<typeof setTimeout> | null = null;
-
-  const run = () => {
-    outerFrame = requestAnimationFrame(() => {
-      innerFrame = requestAnimationFrame(() => {
-        if (!cancelled) task();
-      });
-    });
-  };
-
-  if (delayMs > 0) {
-    timer = setTimeout(run, delayMs);
-  } else {
-    run();
-  }
-
-  return {
-    cancel: () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      cancelAnimationFrame(outerFrame);
-      cancelAnimationFrame(innerFrame);
-    },
-  };
+  return deferUntilUiIdle(task);
 }
 
 /**

@@ -15,7 +15,7 @@ import type { CameraView as CameraViewType } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Haptics from 'expo-haptics';
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
@@ -26,6 +26,9 @@ import {
   finalizeCapturedPhoto,
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
+import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
+import { routeStoryVideo } from '@/features/stories/services/routeStoryVideo';
+import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -49,9 +52,15 @@ function isRenderableGalleryUri(uri: string): boolean {
   return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
+type CaptureShareMode = 'story' | 'post' | 'reels';
+
 export function CreateCaptureScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const initialMode: CaptureShareMode =
+    params.mode === 'story' ? 'story' : params.mode === 'reels' ? 'reels' : 'post';
+  const [shareMode, setShareMode] = useState<CaptureShareMode>(initialMode);
   const { requireAuth } = useRequireAuth();
   const cameraRef = useRef<CameraViewType>(null);
 
@@ -233,20 +242,66 @@ export function CreateCaptureScreen() {
     return result.granted;
   }, [micPermission?.granted, requestMicPermission]);
 
-  const goToMediaEditor = (
-    items: { uri: string; width?: number; height?: number }[],
-    mediaType: 'image' | 'video',
-  ) => {
-    router.replace({
-      pathname: '/media-editor',
-      params: {
-        mediaUris: items.map((item) => item.uri).join(','),
-        mediaType,
-        mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
-        mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
-      },
-    } as Href);
-  };
+  const goToMediaEditor = useCallback(
+    async (
+      items: { uri: string; width?: number; height?: number }[],
+      mediaType: 'image' | 'video',
+      durationSec?: number,
+    ) => {
+      if (shareMode === 'story') {
+        const uri = items[0]?.uri ?? '';
+        if (!uri) return;
+
+        if (mediaType === 'video') {
+          setBusy(true);
+          try {
+            await routeStoryVideo(uri, durationSec);
+          } catch (err) {
+            Alert.alert(
+              'Video hazırlanamadı',
+              err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+            );
+          } finally {
+            setBusy(false);
+          }
+          return;
+        }
+
+        useStoryPublishStore.getState().setDraft({
+          mediaUri: uri,
+          mediaType: 'image',
+          durationSec,
+        });
+        router.replace('/stories/publish' as Href);
+        return;
+      }
+
+      if (shareMode === 'reels') {
+        router.replace({
+          pathname: '/media-editor',
+          params: {
+            mediaUris: items.map((item) => item.uri).join(','),
+            mediaType,
+            mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
+            mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
+            publishAs: 'reel',
+          },
+        } as Href);
+        return;
+      }
+
+      router.replace({
+        pathname: '/media-editor',
+        params: {
+          mediaUris: items.map((item) => item.uri).join(','),
+          mediaType,
+          mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
+          mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
+        },
+      } as Href);
+    },
+    [shareMode],
+  );
 
   const handlePhoto = async () => {
     if (busy || recording || !cameraReady || cameraMode !== 'picture') return;
@@ -261,7 +316,7 @@ export function CreateCaptureScreen() {
       if (photo?.uri) {
         const finalized = await finalizeCapturedPhoto(photo.uri, photo);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        goToMediaEditor(
+        void goToMediaEditor(
           [{ uri: finalized.uri, width: finalized.width, height: finalized.height }],
           'image',
         );
@@ -298,7 +353,9 @@ export function CreateCaptureScreen() {
 
       for (let attempt = 0; attempt < RECORD_ASYNC_MAX_ATTEMPTS; attempt += 1) {
         try {
-          const recordPromise = camera.recordAsync({ maxDuration: MAX_VIDEO_DURATION_SEC });
+          const recordPromise = camera.recordAsync({
+            maxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
+          });
           if (shouldStopImmediately) {
             setTimeout(() => {
               try {
@@ -330,11 +387,12 @@ export function CreateCaptureScreen() {
           }
           return;
         }
+        const elapsedSec = (recordStartedAt.current ? Date.now() - recordStartedAt.current : 0) / 1000;
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setCameraLive(false);
         setCameraReady(false);
         await handoffCameraToVideoPlayback();
-        goToMediaEditor([{ uri: video.uri }], 'video');
+        await goToMediaEditor([{ uri: video.uri }], 'video', elapsedSec);
       }
     } catch (err) {
       if (!shouldStopImmediately) {
@@ -343,7 +401,7 @@ export function CreateCaptureScreen() {
     } finally {
       resetRecordingState();
     }
-  }, [resetRecordingState]);
+  }, [goToMediaEditor, resetRecordingState, shareMode]);
 
   useEffect(() => {
     if (!cameraReady || !pendingRecordRef.current || cameraMode !== 'video') return;
@@ -410,7 +468,7 @@ export function CreateCaptureScreen() {
     }
   }, [resetRecordingState]);
 
-  const pickFromGallery = async (mediaType: 'images' | 'videos') => {
+  const pickFromGallery = useCallback(async (mediaType: 'images' | 'videos') => {
     if (busy || recording) return;
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -421,9 +479,12 @@ export function CreateCaptureScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: mediaType === 'videos' ? ['videos'] : ['images'],
-      allowsMultipleSelection: mediaType === 'images',
-      selectionLimit: mediaType === 'images' ? 4 : 1,
-      videoMaxDuration: MAX_VIDEO_DURATION_SEC,
+      allowsMultipleSelection: shareMode === 'story' ? false : mediaType === 'images',
+      selectionLimit: shareMode === 'story' ? 1 : mediaType === 'images' ? 4 : 1,
+      allowsEditing: shareMode === 'story' && mediaType === 'images',
+      ...(shareMode === 'story' && mediaType === 'videos'
+        ? {}
+        : { videoMaxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC }),
       quality: 0.9,
     });
 
@@ -431,12 +492,38 @@ export function CreateCaptureScreen() {
 
     if (mediaType === 'videos') {
       const uri = result.assets[0]?.uri;
-      if (uri) goToMediaEditor([{ uri }], 'video');
+      const duration = result.assets[0]?.duration ?? undefined;
+      if (!uri) return;
+
+      if (shareMode === 'story') {
+        setBusy(true);
+        try {
+          await routeStoryVideo(uri, duration);
+        } catch (err) {
+          Alert.alert(
+            'Video hazırlanamadı',
+            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+          );
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+
+      void goToMediaEditor([{ uri }], 'video', duration);
       return;
     }
 
-    goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
-  };
+    void goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
+  }, [goToMediaEditor, shareMode]);
+
+  const pickStoryFromGallery = useCallback(() => {
+    Alert.alert('Galeriden seç', 'Hikayene ne eklemek istiyorsun?', [
+      { text: 'Fotoğraf', onPress: () => void pickFromGallery('images') },
+      { text: 'Video', onPress: () => void pickFromGallery('videos') },
+      { text: 'İptal', style: 'cancel' },
+    ]);
+  }, [pickFromGallery]);
 
   const cycleFlash = () => {
     setFlash((prev) => (prev === 'off' ? 'auto' : prev === 'auto' ? 'on' : 'off'));
@@ -536,11 +623,33 @@ export function CreateCaptureScreen() {
         </View>
       </View>
 
+      <View style={[styles.modeBar, { top: insets.top + spacing.sm + 44 }]}>
+        {(['story', 'post', 'reels'] as const).map((mode) => {
+          const active = shareMode === mode;
+          const label = mode === 'story' ? 'Hikaye' : mode === 'post' ? 'Gönderi' : 'Reels';
+          return (
+            <Pressable
+              key={mode}
+              style={[styles.modeChip, active && styles.modeChipActive]}
+              onPress={() => setShareMode(mode)}
+            >
+              <Text style={[styles.modeChipText, active && styles.modeChipTextActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.lg }]}>
         <Pressable
           style={styles.galleryBtn}
-          onPress={() => void pickFromGallery('images')}
-          onLongPress={() => void pickFromGallery('videos')}
+          onPress={() => {
+            if (shareMode === 'story') {
+              pickStoryFromGallery();
+              return;
+            }
+            void pickFromGallery('images');
+          }}
+          onLongPress={shareMode === 'story' ? undefined : () => void pickFromGallery('videos')}
           delayLongPress={280}
         >
           {galleryThumb ? (
@@ -771,6 +880,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  modeBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 11,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  modeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  modeChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  modeChipText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modeChipTextActive: {
+    color: '#000',
   },
   busyOverlay: {
     ...StyleSheet.absoluteFillObject,
