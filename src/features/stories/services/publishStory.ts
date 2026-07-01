@@ -1,6 +1,7 @@
 import { STORY_MAX_VIDEO_SEC, STORY_TTL_HOURS } from '@/features/stories/constants';
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import { uploadPostMedia } from '@/features/compose/services/postMediaUpload';
+import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 
@@ -79,6 +80,9 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     return { storyId, itemId: null, mediaUrl: null, error: upload.error ?? 'Medya yüklenemedi' };
   }
 
+  const mediaType =
+    input.mediaType === 'video' && isVideoUrl(upload.url) ? 'video' : 'image';
+
   const expiresAt = new Date(Date.now() + STORY_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
   const { data: orderRow } = await supabase
@@ -97,10 +101,10 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       story_id: storyId,
       author_id: input.authorId,
       sort_order: nextOrder,
-      media_type: input.mediaType,
+      media_type: mediaType,
       media_url: upload.url,
-      thumb_url: input.mediaType === 'image' ? upload.url : upload.url,
-      duration_sec: input.mediaType === 'video' ? input.durationSec ?? null : null,
+      thumb_url: upload.url,
+      duration_sec: mediaType === 'video' ? input.durationSec ?? null : null,
       sticker_category: input.stickerCategory ?? null,
       status: 'published',
       expires_at: expiresAt,
@@ -119,7 +123,14 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
 
   await supabase
     .from('stories')
-    .update({ expires_at: expiresAt, region_id: input.regionId ?? null })
+    .update({
+      expires_at: expiresAt,
+      region_id: input.regionId ?? null,
+      item_count: nextOrder + 1,
+      latest_thumb_url: upload.url,
+      latest_item_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
     .eq('id', storyId);
 
   return {

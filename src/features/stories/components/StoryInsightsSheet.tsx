@@ -1,106 +1,298 @@
-import { Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  FlatList,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  View,
+  type ListRenderItem,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import type { ComponentProps } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { StoryInsights } from '@/features/stories/types';
+import { OptimizedImage } from '@/components/media/OptimizedImage';
+import type { StoryInsights, StoryItemInsight } from '@/features/stories/types';
 import { Text } from '@/components/ui/Text';
+import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { spacing } from '@/constants/theme';
-import { useTheme } from '@/providers/ThemeProvider';
 
 type StoryInsightsSheetProps = {
   visible: boolean;
   insights: StoryInsights | null;
+  loading?: boolean;
+  initialItemIndex?: number;
   onClose: () => void;
 };
 
-export function StoryInsightsSheet({ visible, insights, onClose }: StoryInsightsSheetProps) {
-  const { colors } = useTheme();
+type IoniconName = ComponentProps<typeof Ionicons>['name'];
+
+const IG = {
+  sheet: '#1C1C1E',
+  sheetBorder: 'rgba(255,255,255,0.08)',
+  text: '#FFFFFF',
+  muted: 'rgba(255,255,255,0.55)',
+  divider: 'rgba(255,255,255,0.1)',
+  thumbBorder: '#FFFFFF',
+  thumbInactive: 'rgba(255,255,255,0.35)',
+  thumbSize: { w: 56, h: 78 },
+} as const;
+
+function formatCount(value: number): string {
+  return new Intl.NumberFormat('tr-TR').format(Math.round(value));
+}
+
+function formatDuration(sec: number): string {
+  if (sec < 1) return '<1 sn';
+  if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)} sn`;
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m} dk ${s} sn`;
+}
+
+export function StoryInsightsSheet({
+  visible,
+  insights,
+  loading = false,
+  initialItemIndex = 0,
+  onClose,
+}: StoryInsightsSheetProps) {
   const insets = useSafeAreaInsets();
+  const thumbListRef = useRef<FlatList<StoryItemInsight>>(null);
+  const [selectedIndex, setSelectedIndex] = useState(initialItemIndex);
+
+  useEffect(() => {
+    if (!visible) return;
+    const safeIndex = Math.max(0, Math.min(initialItemIndex, (insights?.items.length ?? 1) - 1));
+    setSelectedIndex(safeIndex);
+    requestAnimationFrame(() => {
+      thumbListRef.current?.scrollToIndex({ index: safeIndex, animated: false, viewPosition: 0.5 });
+    });
+  }, [visible, initialItemIndex, insights?.items.length]);
+
+  const items = insights?.items ?? [];
+  const selected = items[selectedIndex] ?? items[0] ?? null;
+
+  const renderThumb: ListRenderItem<StoryItemInsight> = ({ item, index }) => {
+    const active = index === selectedIndex;
+    return (
+      <Pressable
+        onPress={() => setSelectedIndex(index)}
+        style={[styles.thumbWrap, active && styles.thumbWrapActive]}
+        accessibilityRole="button"
+        accessibilityLabel={`Slayt ${index + 1}`}
+      >
+        <View style={[styles.thumbFrame, active ? styles.thumbFrameActive : styles.thumbFrameIdle]}>
+          <OptimizedImage
+            uri={item.thumbUrl}
+            tier="thumb"
+            style={styles.thumb}
+            contentFit="cover"
+            recyclingKey={item.itemId}
+          />
+          {item.mediaType === 'video' ? (
+            <View style={styles.videoBadge}>
+              <Ionicons name="play" size={10} color="#fff" />
+            </View>
+          ) : null}
+        </View>
+      </Pressable>
+    );
+  };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable
-          style={[
-            styles.sheet,
-            { backgroundColor: colors.surface, paddingBottom: Math.max(insets.bottom, spacing.md) },
-          ]}
-          onPress={(e) => e.stopPropagation()}
-        >
-          <View style={styles.handle} />
-          <Text variant="title" style={{ marginBottom: spacing.sm }}>
-            Hikaye İstatistikleri
-          </Text>
+    <Modal
+      visible={visible}
+      animationType={resolveModalAnimationType('slide')}
+      transparent
+      onRequestClose={onClose}
+    >
+      <View style={styles.backdrop}>
+        <Pressable style={StyleSheet.absoluteFill} onPress={onClose} accessibilityLabel="Kapat" />
 
-          {insights ? (
+        <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+          <View style={styles.handle} />
+
+          <View style={styles.header}>
+            <View style={styles.headerSide} />
+            <Text variant="label" style={styles.headerTitle}>
+              İstatistikler
+            </Text>
+            <Pressable onPress={onClose} hitSlop={12} style={styles.headerSide}>
+              <Ionicons name="close" size={26} color={IG.text} />
+            </Pressable>
+          </View>
+
+          {loading ? (
+            <View style={styles.loadingBox}>
+              <ActivityIndicator color={IG.text} />
+            </View>
+          ) : insights && selected ? (
             <>
               <View style={styles.summaryRow}>
-                <Stat label="Görüntülenme" value={String(insights.totalViews)} />
-                <Stat label="Benzersiz izleyici" value={String(insights.uniqueViewers)} />
+                <SummaryStat
+                  icon="people-outline"
+                  value={formatCount(insights.uniqueViewers)}
+                  label="Ulaşılan hesaplar"
+                />
+                <View style={styles.summaryDivider} />
+                <SummaryStat
+                  icon="eye-outline"
+                  value={formatCount(insights.totalViews)}
+                  label="Görüntülenme"
+                />
               </View>
 
-              <ScrollView style={styles.list} showsVerticalScrollIndicator={false}>
-                {insights.items.map((item) => (
-                  <View key={item.itemId} style={[styles.itemCard, { borderColor: colors.border }]}>
-                    <View style={styles.itemHead}>
-                      <Image source={{ uri: item.thumbUrl ?? undefined }} style={styles.thumb} contentFit="cover" />
-                      <View style={{ flex: 1 }}>
-                        <Text variant="label">
-                          Slayt {item.sortOrder + 1} · {item.mediaType === 'video' ? 'Video' : 'Foto'}
-                        </Text>
-                        <Text variant="caption" style={{ color: colors.textMuted }}>
-                          {item.itemViews} görüntülenme
-                        </Text>
-                      </View>
-                    </View>
+              {items.length > 1 ? (
+                <FlatList
+                  ref={thumbListRef}
+                  horizontal
+                  data={items}
+                  keyExtractor={(item) => item.itemId}
+                  renderItem={renderThumb}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.thumbList}
+                  onScrollToIndexFailed={(info) => {
+                    thumbListRef.current?.scrollToOffset({
+                      offset: info.averageItemLength * info.index,
+                      animated: false,
+                    });
+                  }}
+                />
+              ) : null}
 
-                    <View style={styles.metricsGrid}>
-                      <MiniStat label="Ort. süre" value={`${item.avgWatchedSeconds.toFixed(1)} sn`} />
-                      <MiniStat label="Tamamlama" value={`${Math.round(item.avgCompletion * 100)}%`} />
-                      <MiniStat label="İleri tap" value={String(item.tapForwardCount)} />
-                      <MiniStat label="Geri tap" value={String(item.tapBackCount)} />
-                      <MiniStat label="İleri kaydır" value={String(item.swipeForwardCount)} />
-                      <MiniStat label="Geri kaydır" value={String(item.swipeBackCount)} />
-                      <MiniStat label="Otomatik geçiş" value={String(item.autoForwardCount)} />
-                      <MiniStat label="Erken çıkış" value={String(item.exitedEarlyCount)} />
-                    </View>
+              <ScrollView style={styles.metricsScroll} showsVerticalScrollIndicator={false}>
+                <View style={styles.slideHeader}>
+                  <Text variant="caption" style={styles.slideLabel}>
+                    {items.length > 1 ? `Slayt ${selected.sortOrder + 1}` : 'Bu hikâye'}
+                  </Text>
+                  <Text variant="title" style={styles.slideViews}>
+                    {formatCount(selected.itemViews)}
+                  </Text>
+                  <Text variant="caption" style={styles.slideViewsLabel}>
+                    görüntülenme
+                  </Text>
+                </View>
+
+                {selected.mediaType === 'video' ? (
+                  <View style={styles.section}>
+                    <SectionTitle title="İzlenme" />
+                    <MetricRow
+                      icon="time-outline"
+                      label="Ortalama izlenme süresi"
+                      value={formatDuration(selected.avgWatchedSeconds)}
+                    />
+                    <MetricRow
+                      icon="pulse-outline"
+                      label="Tamamlama oranı"
+                      value={`${Math.round(selected.avgCompletion * 100)}%`}
+                    />
                   </View>
-                ))}
+                ) : null}
+
+                <View style={styles.section}>
+                  <SectionTitle title="Navigasyon" />
+                  <MetricRow
+                    icon="chevron-forward"
+                    label="İleri dokunuşları"
+                    value={formatCount(selected.tapForwardCount)}
+                  />
+                  <MetricRow
+                    icon="chevron-back"
+                    label="Geri dokunuşları"
+                    value={formatCount(selected.tapBackCount)}
+                  />
+                  <MetricRow
+                    icon="arrow-forward-outline"
+                    label="Sonraki hikâye"
+                    value={formatCount(selected.swipeForwardCount)}
+                  />
+                  <MetricRow
+                    icon="arrow-back-outline"
+                    label="Önceki hikâye"
+                    value={formatCount(selected.swipeBackCount)}
+                  />
+                  <MetricRow
+                    icon="play-skip-forward-outline"
+                    label="Otomatik geçiş"
+                    value={formatCount(selected.autoForwardCount)}
+                  />
+                  <MetricRow
+                    icon="close-circle-outline"
+                    label="Erken çıkış"
+                    value={formatCount(selected.exitedEarlyCount)}
+                    isLast
+                  />
+                </View>
               </ScrollView>
             </>
           ) : (
-            <Text variant="body" style={{ color: colors.textMuted }}>
-              İstatistik yüklenemedi.
-            </Text>
+            <View style={styles.loadingBox}>
+              <Ionicons name="analytics-outline" size={36} color={IG.muted} />
+              <Text variant="body" style={styles.emptyText}>
+                İstatistik bulunamadı
+              </Text>
+            </View>
           )}
-
-          <Pressable style={[styles.closeBtn, { backgroundColor: colors.primary }]} onPress={onClose}>
-            <Text variant="label" style={{ color: '#fff' }}>
-              Kapat
-            </Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
+        </View>
+      </View>
     </Modal>
   );
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function SummaryStat({
+  icon,
+  value,
+  label,
+}: {
+  icon: IoniconName;
+  value: string;
+  label: string;
+}) {
   return (
-    <View style={styles.stat}>
-      <Text variant="title">{value}</Text>
-      <Text variant="caption">{label}</Text>
+    <View style={styles.summaryStat}>
+      <Ionicons name={icon} size={22} color={IG.text} />
+      <Text variant="title" style={styles.summaryValue}>
+        {value}
+      </Text>
+      <Text variant="caption" style={styles.summaryLabel}>
+        {label}
+      </Text>
     </View>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function SectionTitle({ title }: { title: string }) {
   return (
-    <View style={styles.miniStat}>
-      <Text variant="caption" style={{ fontWeight: '700' }}>
+    <Text variant="caption" style={styles.sectionTitle}>
+      {title}
+    </Text>
+  );
+}
+
+function MetricRow({
+  icon,
+  label,
+  value,
+  isLast = false,
+}: {
+  icon: IoniconName;
+  label: string;
+  value: string;
+  isLast?: boolean;
+}) {
+  return (
+    <View style={[styles.metricRow, !isLast && styles.metricRowBorder]}>
+      <View style={styles.metricLeft}>
+        <Ionicons name={icon} size={20} color={IG.text} />
+        <Text variant="body" style={styles.metricLabel}>
+          {label}
+        </Text>
+      </View>
+      <Text variant="label" style={styles.metricValue}>
         {value}
       </Text>
-      <Text variant="caption">{label}</Text>
     </View>
   );
 }
@@ -108,67 +300,191 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
     justifyContent: 'flex-end',
   },
   sheet: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    maxHeight: '82%',
+    backgroundColor: IG.sheet,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: IG.sheetBorder,
+    maxHeight: '88%',
+    minHeight: 360,
   },
   handle: {
     alignSelf: 'center',
-    width: 42,
+    width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: 'rgba(0,0,0,0.15)',
-    marginBottom: spacing.sm,
+    backgroundColor: 'rgba(255,255,255,0.28)',
+    marginTop: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  headerSide: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    textAlign: 'center',
+    color: IG.text,
+    fontWeight: '700',
+    fontSize: 16,
   },
   summaryRow: {
     flexDirection: 'row',
-    gap: spacing.md,
-    marginBottom: spacing.md,
-  },
-  stat: {
-    flex: 1,
-    gap: 2,
-  },
-  list: {
-    maxHeight: 420,
-  },
-  itemCard: {
-    borderWidth: 1,
-    borderRadius: 14,
-    padding: spacing.sm,
-    marginBottom: spacing.sm,
-    gap: spacing.sm,
-  },
-  itemHead: {
-    flexDirection: 'row',
-    gap: spacing.sm,
     alignItems: 'center',
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.06)',
   },
-  thumb: {
-    width: 48,
-    height: 64,
+  summaryStat: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 4,
+  },
+  summaryValue: {
+    color: IG.text,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  summaryLabel: {
+    color: IG.muted,
+    textAlign: 'center',
+    fontSize: 12,
+  },
+  summaryDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    backgroundColor: IG.divider,
+  },
+  thumbList: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  thumbWrap: {
+    padding: 2,
+  },
+  thumbWrapActive: {
+    transform: [{ scale: 1.02 }],
+  },
+  thumbFrame: {
+    width: IG.thumbSize.w,
+    height: IG.thumbSize.h,
     borderRadius: 8,
+    overflow: 'hidden',
     backgroundColor: '#111',
   },
-  metricsGrid: {
+  thumbFrameActive: {
+    borderWidth: 2,
+    borderColor: IG.thumbBorder,
+  },
+  thumbFrameIdle: {
+    borderWidth: 1,
+    borderColor: IG.thumbInactive,
+    opacity: 0.72,
+  },
+  thumb: {
+    width: '100%',
+    height: '100%',
+  },
+  videoBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  metricsScroll: {
+    flexGrow: 0,
+    maxHeight: 340,
+  },
+  slideHeader: {
+    alignItems: 'center',
+    paddingBottom: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: IG.divider,
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  slideLabel: {
+    color: IG.muted,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  slideViews: {
+    color: IG.text,
+    fontSize: 28,
+    fontWeight: '700',
+  },
+  slideViewsLabel: {
+    color: IG.muted,
+    marginTop: 2,
+  },
+  section: {
+    marginHorizontal: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    color: IG.muted,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    fontSize: 11,
+    marginBottom: spacing.xs,
+    marginTop: spacing.xs,
+  },
+  metricRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 13,
+  },
+  metricRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: IG.divider,
+  },
+  metricLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    flex: 1,
+    paddingRight: spacing.sm,
+  },
+  metricLabel: {
+    color: IG.text,
+    fontSize: 15,
+  },
+  metricValue: {
+    color: IG.text,
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  loadingBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xxl,
     gap: spacing.sm,
   },
-  miniStat: {
-    width: '47%',
-    gap: 2,
-  },
-  closeBtn: {
-    marginTop: spacing.md,
-    borderRadius: 999,
-    paddingVertical: spacing.sm,
-    alignItems: 'center',
+  emptyText: {
+    color: IG.muted,
   },
 });

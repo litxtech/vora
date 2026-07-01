@@ -77,6 +77,7 @@ export default function TabsLayout() {
   const screenOptions = useMemo(
     () => ({
       headerShown: false as const,
+      freezeOnBlur: false,
       tabBarStyle: baseTabBarStyle,
       ...(useSolidTabBar
         ? {}
@@ -125,11 +126,15 @@ export default function TabsLayout() {
       detachInactiveScreens={shouldDetachInactiveTabScreens()}
       safeAreaInsets={{ bottom: tabBarReserve, top: 0, left: 0, right: 0 }}
       screenOptions={screenOptions}
-      screenLayout={({ children, route, navigation }) => (
-        <TabSwipeShell routeName={route.name} navigation={navigation}>
-          {children}
-        </TabSwipeShell>
-      )}
+      screenLayout={({ children, route, navigation }) =>
+        isAndroid() && route.name !== 'index' ? (
+          children
+        ) : (
+          <TabSwipeShell routeName={route.name} navigation={navigation}>
+            {children}
+          </TabSwipeShell>
+        )
+      }
     >
       <Tabs.Screen
         name="index"
@@ -178,13 +183,6 @@ export default function TabsLayout() {
         options={{
           title: 'Paylaş',
           href: showComposeTab ? undefined : null,
-          tabBarLabel: () => null,
-          tabBarItemStyle: {
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 0,
-          },
           tabBarButton: (props) => <CreateTabButton {...props} />,
           ...getAndroidTabLazyOption('create'),
         }}

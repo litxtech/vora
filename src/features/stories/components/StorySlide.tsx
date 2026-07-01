@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
-import { Image } from 'expo-image';
+import { Dimensions, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { OptimizedImage } from '@/components/media/OptimizedImage';
 import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
+import { isStoryImageItem } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
 import { Text } from '@/components/ui/Text';
 import { isPlayableVideoUrl, toVideoSource } from '@/lib/media/videoSource';
 import { spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
+
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type StorySlideProps = {
   item: StoryItem;
@@ -17,13 +20,44 @@ type StorySlideProps = {
   onVideoEnd?: () => void;
 };
 
-export function StorySlide({ item, isActive, isPaused, onVideoPosition, onVideoEnd }: StorySlideProps) {
-  const [layout, setLayout] = useState({ width: 0, height: 0 });
+export function StorySlide(props: StorySlideProps) {
+  if (isStoryImageItem(props.item.mediaType, props.item.mediaUrl)) {
+    return <StoryImageSlide item={props.item} />;
+  }
+  return <StoryVideoSlide {...props} />;
+}
+
+function StoryImageSlide({ item }: { item: StoryItem }) {
+  const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
+
+  return (
+    <View style={styles.root}>
+      <OptimizedImage
+        uri={item.mediaUrl}
+        tier="full"
+        style={styles.media}
+        contentFit="cover"
+        recyclingKey={item.id}
+        transition={0}
+      />
+      {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
+    </View>
+  );
+}
+
+function StoryVideoSlide({
+  item,
+  isActive,
+  isPaused,
+  onVideoPosition,
+  onVideoEnd,
+}: StorySlideProps) {
+  const [layout, setLayout] = useState({ width: SCREEN_WIDTH, height: SCREEN_HEIGHT });
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
 
   const source = useMemo(
-    () => (item.mediaType === 'video' && isPlayableVideoUrl(item.mediaUrl) ? toVideoSource(item.mediaUrl) : null),
-    [item.mediaType, item.mediaUrl],
+    () => (isPlayableVideoUrl(item.mediaUrl) ? toVideoSource(item.mediaUrl) : null),
+    [item.mediaUrl],
   );
 
   const player = useVideoPlayer(source, (p) => {
@@ -32,8 +66,6 @@ export function StorySlide({ item, isActive, isPaused, onVideoPosition, onVideoE
   });
 
   useEffect(() => {
-    if (item.mediaType !== 'video' || !isActive) return;
-
     const tickSub = player.addListener('timeUpdate', ({ currentTime }) => {
       const duration = player.duration > 0 ? player.duration : item.durationSec ?? 0;
       onVideoPosition?.(currentTime, duration > 0 ? duration : item.durationSec);
@@ -70,7 +102,7 @@ export function StorySlide({ item, isActive, isPaused, onVideoPosition, onVideoE
       tickSub.remove();
       statusSub.remove();
     };
-  }, [isActive, isPaused, item.durationSec, item.mediaType, onVideoEnd, onVideoPosition, player]);
+  }, [isActive, isPaused, item.durationSec, onVideoEnd, onVideoPosition, player]);
 
   const onLayout = (e: LayoutChangeEvent) => {
     const { width, height } = e.nativeEvent.layout;
@@ -79,9 +111,7 @@ export function StorySlide({ item, isActive, isPaused, onVideoPosition, onVideoE
 
   return (
     <View style={styles.root} onLayout={onLayout}>
-      {item.mediaType === 'image' ? (
-        <Image source={{ uri: item.mediaUrl }} style={styles.media} contentFit="cover" transition={120} />
-      ) : layout.width > 0 ? (
+      {source && layout.width > 0 ? (
         <VideoView
           player={player}
           style={{ width: layout.width, height: layout.height }}
@@ -89,26 +119,34 @@ export function StorySlide({ item, isActive, isPaused, onVideoPosition, onVideoE
           nativeControls={false}
         />
       ) : null}
+      {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
+    </View>
+  );
+}
 
-      {sticker ? (
-        <View style={styles.sticker}>
-          <Ionicons name={sticker.icon} size={14} color="#fff" />
-          <Text variant="caption" style={styles.stickerText}>
-            {sticker.label}
-          </Text>
-        </View>
-      ) : null}
+function StoryStickerBadge({
+  sticker,
+}: {
+  sticker: (typeof STORY_STICKER_CATEGORIES)[number];
+}) {
+  return (
+    <View style={styles.sticker}>
+      <Ionicons name={sticker.icon} size={14} color="#fff" />
+      <Text variant="caption" style={styles.stickerText}>
+        {sticker.label}
+      </Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
   },
   media: {
-    ...StyleSheet.absoluteFillObject,
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
   },
   sticker: {
     position: 'absolute',

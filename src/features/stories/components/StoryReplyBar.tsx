@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -28,9 +29,12 @@ export function StoryReplyBar({
 
   if (isOwnStory) {
     return (
-      <View style={[styles.ownRow, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <Pressable style={styles.insightsBtn} onPress={onOpenInsights}>
-          <Ionicons name="bar-chart-outline" size={18} color="#fff" />
+      <View style={[styles.ownWrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <Pressable style={styles.insightsPill} onPress={onOpenInsights} hitSlop={8}>
+          <Ionicons name="chevron-up" size={18} color="#fff" />
+          <Text variant="caption" style={styles.insightsLabel}>
+            İstatistikler
+          </Text>
         </Pressable>
       </View>
     );
@@ -74,10 +78,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
-  ownRow: {
-    alignItems: 'flex-end',
-    paddingHorizontal: spacing.md,
+  ownWrap: {
+    alignItems: 'center',
     paddingTop: spacing.sm,
+  },
+  insightsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.16)',
+  },
+  insightsLabel: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
   },
   input: {
     flex: 1,
@@ -99,14 +116,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  insightsBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.18)',
     alignItems: 'center',
     justifyContent: 'center',
   },

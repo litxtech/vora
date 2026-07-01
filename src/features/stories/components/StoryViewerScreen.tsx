@@ -61,6 +61,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const [isPaused, setIsPaused] = useState(false);
   const [progress, setProgress] = useState(0);
   const [insightsVisible, setInsightsVisible] = useState(false);
+  const [insightsLoading, setInsightsLoading] = useState(false);
   const [insights, setInsights] = useState<StoryInsights | null>(null);
   const [sendingReply, setSendingReply] = useState(false);
   const [reacted, setReacted] = useState(false);
@@ -117,13 +118,13 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         Boolean,
       ) as string[];
       for (const id of prefetchIds) {
-        if (!bundles[id]) void loadBundle(id);
+        if (!useStoryViewerStore.getState().bundles[id]) void loadBundle(id);
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [activeUserId, bundles, currentUserIndex, loadBundle, ringUserIds, setCurrentUserIndex]);
+  }, [activeUserId, currentUserIndex, loadBundle, ringUserIds, setCurrentUserIndex]);
 
   useEffect(() => {
     setProgress(0);
@@ -318,9 +319,14 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   const openInsights = async () => {
     if (!bundle || !user?.id) return;
-    const data = await fetchStoryInsights(bundle.authorId, bundle.storyId);
-    setInsights(data);
     setInsightsVisible(true);
+    setInsightsLoading(true);
+    try {
+      const data = await fetchStoryInsights(bundle.authorId, bundle.storyId);
+      setInsights(data);
+    } finally {
+      setInsightsLoading(false);
+    }
   };
 
   if (loading && !bundle) {
@@ -338,7 +344,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
           {activeItem ? (
             <StorySlide
               item={activeItem}
-              isActive={!isPaused}
+              isActive={!loading && !isPaused}
               isPaused={isPaused}
               onVideoPosition={(sec, dur) => {
                 setVideoPositionSec(sec);
@@ -386,6 +392,8 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       <StoryInsightsSheet
         visible={insightsVisible}
         insights={insights}
+        loading={insightsLoading}
+        initialItemIndex={currentItemIndex}
         onClose={() => setInsightsVisible(false)}
       />
     </View>
