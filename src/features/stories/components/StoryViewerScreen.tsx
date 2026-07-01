@@ -47,9 +47,11 @@ import { resolveStoryMediaUrl } from '@/features/stories/services/storyMediaUrl'
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.18;
 const SWIPE_UP_THRESHOLD = 56;
+const SWIPE_DOWN_THRESHOLD = 72;
+const SWIPE_DOWN_VELOCITY = 850;
 
 type StoryViewerScreenProps = {
   userId: string;
@@ -104,6 +106,9 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const slideEnteredAtRef = useRef<number>(Date.now());
   const transitionX = useSharedValue(0);
   const deckOpacity = useSharedValue(1);
+  const dismissY = useSharedValue(0);
+  const insightsOpen = useSharedValue(0);
+  const isOwnStorySv = useSharedValue(0);
 
   const ringUserIds = session?.ringUserIds ?? [userId];
   const activeUserId = ringUserIds[currentUserIndex] ?? userId;
@@ -170,6 +175,18 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   }, [activeItem?.id, currentItemIndex, items]);
 
   useEffect(() => {
+    insightsOpen.value = insightsVisible ? 1 : 0;
+  }, [insightsOpen, insightsVisible]);
+
+  useEffect(() => {
+    isOwnStorySv.value = isOwnStory ? 1 : 0;
+  }, [isOwnStory, isOwnStorySv]);
+
+  useEffect(() => {
+    dismissY.value = 0;
+  }, [activeItem?.id, dismissY]);
+
+  useEffect(() => {
     setProgress(0);
     setVideoPositionSec(0);
     setVideoDurationSec(null);
@@ -200,8 +217,14 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     [activeItem, expectedDurationSec, isOwnStory, user?.id],
   );
 
+  const closeViewer = useCallback(() => {
+    void flushView('manual_close', true);
+    router.back();
+  }, [flushView]);
+
   const animateUserTransition = useCallback(
     (direction: 1 | -1, after: () => void) => {
+      dismissY.value = 0;
       transitionX.value = withTiming(direction * -SCREEN_WIDTH * 0.22, { duration: STORY_USER_TRANSITION_MS });
       deckOpacity.value = withTiming(0.88, { duration: STORY_USER_TRANSITION_MS }, () => {
         runOnJS(after)();
@@ -210,7 +233,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         deckOpacity.value = withTiming(1, { duration: STORY_USER_TRANSITION_MS });
       });
     },
-    [deckOpacity, transitionX],
+    [deckOpacity, dismissY, transitionX],
   );
 
   const goNextItem = useCallback(
@@ -333,10 +356,17 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     }
   }, [bundle, user?.id]);
 
-  const deckStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: transitionX.value }],
-    opacity: deckOpacity.value,
-  }));
+  const deckStyle = useAnimatedStyle(() => {
+    const dragProgress = Math.min(1, Math.max(0, dismissY.value) / 240);
+    return {
+      transform: [
+        { translateX: transitionX.value },
+        { translateY: dismissY.value },
+        { scale: 1 - dragProgress * 0.06 },
+      ],
+      opacity: deckOpacity.value * (1 - dragProgress * 0.45),
+    };
+  });
 
   const contentLiftStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -keyboardLift.value }],
@@ -373,8 +403,32 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const panGesture = Gesture.Pan()
     .activeOffsetX([-20, 20])
     .activeOffsetY([-24, 24])
+    .onUpdate((e) => {
+      if (insightsOpen.value) return;
+      if (e.translationY > 0 && Math.abs(e.translationY) > Math.abs(e.translationX) * 1.15) {
+        dismissY.value = e.translationY;
+      }
+    })
     .onEnd((e) => {
-      if (isOwnStory && e.translationY <= -SWIPE_UP_THRESHOLD && Math.abs(e.translationY) > Math.abs(e.translationX)) {
+      if (insightsOpen.value) return;
+
+      const isDownSwipe =
+        e.translationY >= SWIPE_DOWN_THRESHOLD ||
+        (e.translationY > 36 && e.velocityY > SWIPE_DOWN_VELOCITY);
+
+      if (isDownSwipe && Math.abs(e.translationY) > Math.abs(e.translationX)) {
+        dismissY.value = withTiming(SCREEN_HEIGHT * 0.55, { duration: 220 }, (finished) => {
+          if (finished) runOnJS(closeViewer)();
+        });
+        deckOpacity.value = withTiming(0, { duration: 220 });
+        return;
+      }
+
+      if (dismissY.value > 0) {
+        dismissY.value = withTiming(0, { duration: 180 });
+      }
+
+      if (isOwnStorySv.value === 1 && e.translationY <= -SWIPE_UP_THRESHOLD && Math.abs(e.translationY) > Math.abs(e.translationX)) {
         runOnJS(openInsights)();
         return;
       }
@@ -441,11 +495,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
           onPress: () => {
             void (async () => {
               setIsPaused(true);
-              const result = await deleteStoryItem({
-                authorId: user.id,
-                storyItemId: activeItem.id,
-                storyId: bundle.storyId,
-              });
+              const result = await deleteStoryItem(activeItem.id);
 
               if (result.error) {
                 Alert.alert('Silinemedi', result.error);
@@ -569,7 +619,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                       <Ionicons name="trash-outline" size={24} color="#fff" />
                     </Pressable>
                   ) : null}
-                  <Pressable onPress={() => router.back()} hitSlop={12}>
+                  <Pressable onPress={closeViewer} hitSlop={12}>
                     <Ionicons name="close" size={28} color="#fff" />
                   </Pressable>
                 </View>
@@ -634,11 +684,11 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   keyboardDismissBackdrop: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 3,
   },
   keyboardDismissOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     zIndex: 7,
   },
   card: {

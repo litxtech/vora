@@ -1,4 +1,5 @@
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
+import type { StoryFraming } from '@/features/stories/utils/storyFraming';
 
 export type StoryNavigation =
   | 'auto_forward'
@@ -32,6 +33,7 @@ export type StoryItem = {
   thumbUrl: string | null;
   durationSec: number | null;
   stickerCategory: StoryStickerCategoryId | null;
+  framing: StoryFraming | null;
   createdAt: string;
   hasReacted: boolean;
 };

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { useEffect, useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
+import { StoryFramedMediaView } from '@/features/stories/components/StoryFramedMediaView';
 import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
 import { isStoryImageItem, resolveStoryMediaUrl } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
@@ -29,6 +30,24 @@ function StoryImageSlide({ item }: { item: StoryItem }) {
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
   const uri = resolveStoryMediaUrl(item.mediaUrl);
 
+  if (item.framing) {
+    return (
+      <View style={styles.root}>
+        <StoryFramedMediaView framing={item.framing}>
+          <OptimizedImage
+            uri={uri}
+            tier="feed"
+            style={styles.mediaFill}
+            contentFit="cover"
+            recyclingKey={item.id}
+            transition={0}
+          />
+        </StoryFramedMediaView>
+        {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
+      </View>
+    );
+  }
+
   return (
     <View style={styles.root}>
       <OptimizedImage
@@ -51,7 +70,6 @@ function StoryVideoSlide({
   onVideoPosition,
   onVideoEnd,
 }: StorySlideProps) {
-  const [layout, setLayout] = useState({ width: 0, height: 0 });
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
 
   const source = useMemo(() => {
@@ -103,21 +121,23 @@ function StoryVideoSlide({
     };
   }, [isActive, isPaused, item.durationSec, onVideoEnd, onVideoPosition, player]);
 
-  const onLayout = (e: LayoutChangeEvent) => {
-    const { width, height } = e.nativeEvent.layout;
-    if (width > 0 && height > 0) setLayout({ width, height });
-  };
+  const videoNode =
+    source ? (
+      <VideoView
+        player={player}
+        style={styles.mediaFill}
+        contentFit="cover"
+        nativeControls={false}
+      />
+    ) : null;
 
   return (
-    <View style={styles.root} onLayout={onLayout}>
-      {source && layout.width > 0 ? (
-        <VideoView
-          player={player}
-          style={{ width: layout.width, height: layout.height }}
-          contentFit="cover"
-          nativeControls={false}
-        />
-      ) : null}
+    <View style={styles.root}>
+      {item.framing ? (
+        <StoryFramedMediaView framing={item.framing}>{videoNode}</StoryFramedMediaView>
+      ) : (
+        <View style={styles.media}>{videoNode}</View>
+      )}
       {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
     </View>
   );
@@ -144,6 +164,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#111',
   },
   media: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaFill: {
     width: '100%',
     height: '100%',
   },

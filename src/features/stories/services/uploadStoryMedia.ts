@@ -1,13 +1,11 @@
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
-import { cacheDirectory, copyAsync, getInfoAsync } from 'expo-file-system/legacy';
 import { uploadPostMedia } from '@/features/compose/services/postMediaUpload';
+import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
 import { normalizeLocalFileUri, readLocalFileBytes, getLocalFileSize } from '@/lib/files/readLocalFile';
-import { toUserFacingError } from '@/lib/errors';
+import { toUserFacingError, supabaseErrorMessage } from '@/lib/errors';
 import { compressVideoForUpload, shouldSkipVideoCompression } from '@/lib/video/compress';
-import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { supabase } from '@/lib/supabase/client';
-import { supabaseErrorMessage } from '@/lib/errors';
 
 const STORY_VIDEO_MAX_BYTES = 50 * 1024 * 1024;
 const DIRECT_UPLOAD_MAX_BYTES = 18 * 1024 * 1024;
@@ -37,23 +35,9 @@ function normalizeUploadError(message: string): string {
   return toUserFacingError(message, { fallback: 'Hikâye medyası yüklenemedi.' });
 }
 
-/** Kamera çıktısı uzantısız olabilir; yükleme için .mp4 yoluna kopyala. */
+/** Kamera / galeri URI'sini okunabilir kalıcı yola taşır. */
 async function ensureStoryVideoUri(localUri: string): Promise<string> {
-  const prepared = await prepareLocalVideoUri(localUri);
-  const normalized = normalizeLocalFileUri(prepared);
-
-  if (/\.(mp4|mov|m4v|webm)$/i.test(normalized)) {
-    const info = await getInfoAsync(normalized);
-    if (info.exists && (info.size ?? 0) > 0) return normalized;
-  }
-
-  const dest = `${cacheDirectory}story-video-${Date.now()}.mp4`;
-  await copyAsync({ from: normalized, to: dest });
-  const copied = await getInfoAsync(dest);
-  if (!copied.exists || (copied.size ?? 0) <= 0) {
-    throw new Error('Video dosyası okunamadı.');
-  }
-  return dest;
+  return stabilizeStoryVideoUri(localUri);
 }
 
 async function uploadVideoDirect(
@@ -115,17 +99,17 @@ async function uploadStoryVideoFile(
   }
 
   if (fileSize <= DIRECT_UPLOAD_MAX_BYTES) {
+    const streamed = await uploadVideoStream(userId, localUri, contentType);
+    if (!streamed.error && streamed.url) return streamed;
+
     const direct = await uploadVideoDirect(userId, localUri, contentType);
     if (!direct.error && direct.url) return direct;
-    if (__DEV__) console.warn('[stories] direct video upload failed, trying stream:', direct.error);
+
+    return streamed.error ? streamed : direct;
   }
 
   const streamed = await uploadVideoStream(userId, localUri, contentType);
   if (!streamed.error && streamed.url) return streamed;
-
-  if (fileSize <= DIRECT_UPLOAD_MAX_BYTES) {
-    return streamed;
-  }
 
   const direct = await uploadVideoDirect(userId, localUri, contentType);
   return direct.error ? streamed : direct;

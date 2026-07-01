@@ -7,6 +7,9 @@ export const STUDIO_MAX_DURATION_SEC = 90;
 /** Canlı destek video kırpma üst sınırı */
 export const LIVE_SUPPORT_CLIP_MAX_SEC = 30;
 
+/** Hikâye video kırpma üst sınırı (stories/constants ile uyumlu) */
+export const STORY_CLIP_MAX_SEC = 30;
+
 export const ORIGINAL_AUDIO_LEVELS = [
   { label: '100%', value: 1 },
   { label: '75%', value: 0.75 },

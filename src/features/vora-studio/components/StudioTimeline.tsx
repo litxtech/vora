@@ -10,6 +10,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { captureThumbnail } from '@/features/vora-studio/services/videoThumbnails';
+import { LIVE_SUPPORT_CLIP_MAX_SEC, STORY_CLIP_MAX_SEC } from '@/features/vora-studio/constants';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
 import { formatStudioTime } from '@/features/vora-studio/utils/time';
 import { radius, spacing } from '@/constants/theme';
@@ -40,6 +41,9 @@ export function StudioTimeline() {
   const setTrimStart = useStudioEditorStore((s) => s.setTrimStart);
   const setTrimEnd = useStudioEditorStore((s) => s.setTrimEnd);
   const setPlayhead = useStudioEditorStore((s) => s.setPlayhead);
+  const slideTrimWindow = useStudioEditorStore((s) => s.slideTrimWindow);
+  const exportMode = useStudioEditorStore((s) => s.exportMode);
+  const isClipMode = exportMode === 'story' || exportMode === 'live-support';
 
   const [filmstrip, setFilmstrip] = useState<string[]>([]);
   const draggingRef = useRef<DragTarget>(null);
@@ -125,6 +129,14 @@ export function StudioTimeline() {
       setPlayhead(sec);
     },
     [setPlayhead],
+  );
+
+  const commitSlideWindow = useCallback(
+    (startSec: number) => {
+      slideTrimWindow(startSec);
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    },
+    [slideTrimWindow],
   );
 
   const beginDrag = useCallback((target: DragTarget) => {
@@ -231,6 +243,33 @@ export function StudioTimeline() {
     runOnJS(commitPlayhead)(next);
     runOnJS(hapticTick)();
   });
+
+  const selectionPanGesture = Gesture.Pan()
+    .activeOffsetX([-4, 4])
+    .onStart(() => {
+      panOriginSV.value = trimStartSV.value;
+      runOnJS(beginDrag)('start');
+    })
+    .onUpdate((e) => {
+      const width = trackWidth.value;
+      const duration = durationSV.value;
+      if (width <= 0 || duration <= 0) return;
+      const deltaSec = (e.translationX / width) * duration;
+      const windowSec = trimEndSV.value - trimStartSV.value;
+      const nextStart = clampWorklet(
+        panOriginSV.value + deltaSec,
+        0,
+        Math.max(0, duration - windowSec),
+      );
+      const nextEnd = nextStart + windowSec;
+      trimStartSV.value = nextStart;
+      trimEndSV.value = nextEnd;
+      playheadSV.value = clampWorklet(playheadSV.value, nextStart, nextEnd);
+    })
+    .onEnd(() => {
+      runOnJS(commitSlideWindow)(trimStartSV.value);
+      runOnJS(endDrag)();
+    });
 
   const trackGesture = Gesture.Simultaneous(tapGesture, scrubGesture);
 
@@ -363,6 +402,12 @@ export function StudioTimeline() {
               style={[styles.selection, selectionStyle, { borderColor: accent }]}
             />
 
+            {isClipMode ? (
+              <GestureDetector gesture={selectionPanGesture}>
+                <Animated.View style={[styles.selectionTouch, selectionStyle]} />
+              </GestureDetector>
+            ) : null}
+
             <Animated.View
               pointerEvents="none"
               style={[styles.playheadLine, playheadLineStyle, { backgroundColor: '#fff' }]}
@@ -477,6 +522,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderRadius: radius.sm,
     backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  selectionTouch: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    zIndex: 3,
   },
   playheadLine: {
     position: 'absolute',

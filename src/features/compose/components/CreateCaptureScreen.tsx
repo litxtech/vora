@@ -27,6 +27,7 @@ import {
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
 import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
+import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -241,24 +242,55 @@ export function CreateCaptureScreen() {
     return result.granted;
   }, [micPermission?.granted, requestMicPermission]);
 
-  const goToMediaEditor = (
-    items: { uri: string; width?: number; height?: number }[],
-    mediaType: 'image' | 'video',
-    durationSec?: number,
-  ) => {
-    if (shareMode === 'story') {
-      const uri = items[0]?.uri ?? '';
-      if (!uri) return;
-      useStoryPublishStore.getState().setDraft({
-        mediaUri: uri,
-        mediaType,
-        durationSec,
-      });
-      router.replace('/stories/publish' as Href);
-      return;
-    }
+  const goToMediaEditor = useCallback(
+    async (
+      items: { uri: string; width?: number; height?: number }[],
+      mediaType: 'image' | 'video',
+      durationSec?: number,
+    ) => {
+      if (shareMode === 'story') {
+        const uri = items[0]?.uri ?? '';
+        if (!uri) return;
 
-    if (shareMode === 'reels') {
+        let stableUri = uri;
+        if (mediaType === 'video') {
+          setBusy(true);
+          try {
+            stableUri = await stabilizeStoryVideoUri(uri);
+          } catch (err) {
+            Alert.alert(
+              'Video hazırlanamadı',
+              err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+            );
+            return;
+          } finally {
+            setBusy(false);
+          }
+        }
+
+        useStoryPublishStore.getState().setDraft({
+          mediaUri: stableUri,
+          mediaType,
+          durationSec,
+        });
+        router.replace('/stories/publish' as Href);
+        return;
+      }
+
+      if (shareMode === 'reels') {
+        router.replace({
+          pathname: '/media-editor',
+          params: {
+            mediaUris: items.map((item) => item.uri).join(','),
+            mediaType,
+            mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
+            mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
+            publishAs: 'reel',
+          },
+        } as Href);
+        return;
+      }
+
       router.replace({
         pathname: '/media-editor',
         params: {
@@ -266,22 +298,11 @@ export function CreateCaptureScreen() {
           mediaType,
           mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
           mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
-          publishAs: 'reel',
         },
       } as Href);
-      return;
-    }
-
-    router.replace({
-      pathname: '/media-editor',
-      params: {
-        mediaUris: items.map((item) => item.uri).join(','),
-        mediaType,
-        mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
-        mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
-      },
-    } as Href);
-  };
+    },
+    [shareMode],
+  );
 
   const handlePhoto = async () => {
     if (busy || recording || !cameraReady || cameraMode !== 'picture') return;
@@ -296,7 +317,7 @@ export function CreateCaptureScreen() {
       if (photo?.uri) {
         const finalized = await finalizeCapturedPhoto(photo.uri, photo);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        goToMediaEditor(
+        void goToMediaEditor(
           [{ uri: finalized.uri, width: finalized.width, height: finalized.height }],
           'image',
         );
@@ -376,7 +397,7 @@ export function CreateCaptureScreen() {
         setCameraLive(false);
         setCameraReady(false);
         await handoffCameraToVideoPlayback();
-        goToMediaEditor([{ uri: video.uri }], 'video', elapsedSec);
+        await goToMediaEditor([{ uri: video.uri }], 'video', elapsedSec);
       }
     } catch (err) {
       if (!shouldStopImmediately) {
@@ -452,7 +473,7 @@ export function CreateCaptureScreen() {
     }
   }, [resetRecordingState]);
 
-  const pickFromGallery = async (mediaType: 'images' | 'videos') => {
+  const pickFromGallery = useCallback(async (mediaType: 'images' | 'videos') => {
     if (busy || recording) return;
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -463,9 +484,12 @@ export function CreateCaptureScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: mediaType === 'videos' ? ['videos'] : ['images'],
-      allowsMultipleSelection: mediaType === 'images',
-      selectionLimit: mediaType === 'images' ? 4 : 1,
-      videoMaxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
+      allowsMultipleSelection: shareMode === 'story' ? false : mediaType === 'images',
+      selectionLimit: shareMode === 'story' ? 1 : mediaType === 'images' ? 4 : 1,
+      allowsEditing: shareMode === 'story' && mediaType === 'images',
+      ...(shareMode === 'story' && mediaType === 'videos'
+        ? {}
+        : { videoMaxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC }),
       quality: 0.9,
     });
 
@@ -474,12 +498,30 @@ export function CreateCaptureScreen() {
     if (mediaType === 'videos') {
       const uri = result.assets[0]?.uri;
       const duration = result.assets[0]?.duration ?? undefined;
-      if (uri) goToMediaEditor([{ uri }], 'video', duration);
+      if (!uri) return;
+
+      if (shareMode === 'story') {
+        router.replace({
+          pathname: '/vora-studio',
+          params: { sourceUri: uri, mode: 'story' },
+        } as Href);
+        return;
+      }
+
+      void goToMediaEditor([{ uri }], 'video', duration);
       return;
     }
 
-    goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
-  };
+    void goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
+  }, [goToMediaEditor, shareMode]);
+
+  const pickStoryFromGallery = useCallback(() => {
+    Alert.alert('Galeriden seç', 'Hikayene ne eklemek istiyorsun?', [
+      { text: 'Fotoğraf', onPress: () => void pickFromGallery('images') },
+      { text: 'Video', onPress: () => void pickFromGallery('videos') },
+      { text: 'İptal', style: 'cancel' },
+    ]);
+  }, [pickFromGallery]);
 
   const cycleFlash = () => {
     setFlash((prev) => (prev === 'off' ? 'auto' : prev === 'auto' ? 'on' : 'off'));
@@ -598,8 +640,14 @@ export function CreateCaptureScreen() {
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.lg }]}>
         <Pressable
           style={styles.galleryBtn}
-          onPress={() => void pickFromGallery('images')}
-          onLongPress={() => void pickFromGallery('videos')}
+          onPress={() => {
+            if (shareMode === 'story') {
+              pickStoryFromGallery();
+              return;
+            }
+            void pickFromGallery('images');
+          }}
+          onLongPress={shareMode === 'story' ? undefined : () => void pickFromGallery('videos')}
           delayLongPress={280}
         >
           {galleryThumb ? (

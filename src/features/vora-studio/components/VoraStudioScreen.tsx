@@ -11,7 +11,7 @@ import { StudioToolbar } from '@/features/vora-studio/components/StudioToolbar';
 import { StudioTextEditor } from '@/features/vora-studio/components/StudioTextEditor';
 import { StudioToolSheet } from '@/features/vora-studio/components/StudioToolSheet';
 import { StudioVideoPreview } from '@/features/vora-studio/components/StudioVideoPreview';
-import { STUDIO_TOOLS } from '@/features/vora-studio/constants';
+import { STUDIO_TOOLS, LIVE_SUPPORT_CLIP_MAX_SEC, STORY_CLIP_MAX_SEC } from '@/features/vora-studio/constants';
 import { exportStudioVideo, probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { toUserFacingError } from '@/lib/errors';
 import { buildMusicSelectionFromEditor } from '@/features/music/services/buildMusicSelection';
@@ -19,8 +19,9 @@ import { useMusicSelectionStore } from '@/features/music/store/musicSelectionSto
 import { buildPublishedEditManifest } from '@/features/vora-studio/services/buildPublishedEditManifest';
 import { useStudioExportStore } from '@/features/vora-studio/store/studioExportStore';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
-import { LIVE_SUPPORT_CLIP_MAX_SEC } from '@/features/vora-studio/constants';
 import { useLiveSupportPendingVideoStore } from '@/features/live-support/store/pendingVideoStore';
+import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
+import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import type { StudioExportMode } from '@/features/vora-studio/types';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -50,6 +51,9 @@ export function VoraStudioScreen() {
   const sourceReady = useStudioEditorStore((s) => s.sourceUri);
   const exportMode = useStudioEditorStore((s) => s.exportMode);
   const isLiveSupport = exportMode === 'live-support';
+  const isStory = exportMode === 'story';
+  const isClipMode = isLiveSupport || isStory;
+  const clipMaxSec = isStory ? STORY_CLIP_MAX_SEC : LIVE_SUPPORT_CLIP_MAX_SEC;
 
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
@@ -94,11 +98,11 @@ export function VoraStudioScreen() {
       return;
     }
 
-    if (isLiveSupport) {
+    if (isClipMode) {
       const state = useStudioEditorStore.getState();
       const clipDuration = state.trimEndSec - state.trimStartSec;
-      if (clipDuration > LIVE_SUPPORT_CLIP_MAX_SEC + 0.35) {
-        Alert.alert('Video çok uzun', `En fazla ${LIVE_SUPPORT_CLIP_MAX_SEC} saniye seçebilirsiniz.`);
+      if (clipDuration > clipMaxSec + 0.35) {
+        Alert.alert('Video çok uzun', `En fazla ${clipMaxSec} saniye seçebilirsiniz.`);
         return;
       }
 
@@ -106,6 +110,19 @@ export function VoraStudioScreen() {
       setStatus('');
       try {
         const result = await exportStudioVideo(user.id, username, setStatus);
+
+        if (isStory) {
+          const stableUri = await stabilizeStoryVideoUri(result.outputUri);
+          useStoryPublishStore.getState().setDraft({
+            mediaUri: stableUri,
+            mediaType: 'video',
+            durationSec: clipDuration,
+          });
+          reset();
+          router.replace('/stories/publish' as never);
+          return;
+        }
+
         useLiveSupportPendingVideoStore.getState().setPending({
           uri: result.outputUri,
           durationSec: clipDuration,
@@ -173,9 +190,13 @@ export function VoraStudioScreen() {
       <View style={styles.header}>
         <ScreenBackButton />
         <View style={styles.headerCenter}>
-          <Text variant="label">{isLiveSupport ? 'Videoyu kırp' : 'VORA Studio'}</Text>
+          <Text variant="label">
+            {isStory ? 'Hikaye videosu' : isLiveSupport ? 'Videoyu kırp' : 'VORA Studio'}
+          </Text>
           <Text secondary variant="caption">
-            {isLiveSupport ? `En fazla ${LIVE_SUPPORT_CLIP_MAX_SEC} sn` : `@${username}`}
+            {isClipMode
+              ? `En fazla ${clipMaxSec} sn · istediğin bölümü seç`
+              : `@${username}`}
           </Text>
         </View>
         <Pressable onPress={togglePlay} hitSlop={12} style={styles.playBtn}>
@@ -200,7 +221,7 @@ export function VoraStudioScreen() {
       ) : null}
 
       <StudioTimeline />
-      {!isLiveSupport ? <StudioToolbar /> : null}
+      {!isClipMode ? <StudioToolbar /> : null}
 
       {status ? (
         <Text secondary variant="caption">
@@ -209,13 +230,21 @@ export function VoraStudioScreen() {
       ) : null}
 
       <Button
-        title={exporting ? 'İşleniyor...' : isLiveSupport ? 'Videoyu kullan' : 'Tamamla'}
+        title={
+          exporting
+            ? 'İşleniyor...'
+            : isStory
+              ? 'Hikayede kullan'
+              : isLiveSupport
+                ? 'Videoyu kullan'
+                : 'Tamamla'
+        }
         onPress={handleExport}
         loading={exporting}
         disabled={exporting}
       />
 
-      {!isLiveSupport ? (
+      {!isClipMode ? (
         <>
           <StudioTextEditor username={username} visible={activeTool === 'text' && toolSheetOpen} />
           <StudioToolSheet />

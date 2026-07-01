@@ -1,5 +1,6 @@
 import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
+import { parseStoryFraming } from '@/features/stories/utils/storyFraming';
 import type { StoryBundle, StoryItem } from '@/features/stories/types';
 import { supabase } from '@/lib/supabase/client';
 
@@ -18,6 +19,7 @@ type ItemRow = {
   thumb_url: string | null;
   duration_sec: number | null;
   sticker_category: string | null;
+  stickers_json: unknown;
   created_at: string;
 };
 
@@ -50,7 +52,7 @@ export async function fetchStoryBundleFallback(
   const { data: itemRows, error: itemsError } = await supabase
     .from('story_items')
     .select(
-      'id, story_id, author_id, sort_order, media_type, media_url, thumb_url, duration_sec, sticker_category, created_at',
+      'id, story_id, author_id, sort_order, media_type, media_url, thumb_url, duration_sec, sticker_category, stickers_json, created_at',
     )
     .eq('story_id', storyRow.id)
     .eq('status', 'published')
@@ -82,6 +84,7 @@ export async function fetchStoryBundleFallback(
     thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
     durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
     stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
+    framing: parseStoryFraming(row.stickers_json),
     createdAt: row.created_at,
     hasReacted: reactedIds.has(row.id),
   }));

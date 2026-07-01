@@ -1,5 +1,7 @@
 import { STORY_MAX_VIDEO_SEC, STORY_TTL_HOURS } from '@/features/stories/constants';
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
+import type { StoryFraming } from '@/features/stories/utils/storyFraming';
+import { serializeStoryFraming } from '@/features/stories/utils/storyFraming';
 import { uploadStoryMedia, type UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
@@ -13,6 +15,7 @@ export type PublishStoryInput = {
   durationSec?: number;
   regionId?: string | null;
   stickerCategory?: StoryStickerCategoryId | null;
+  framing?: StoryFraming | null;
   onUploadProgress?: (progress: UploadStoryMediaProgress) => void;
 };
 
@@ -136,6 +139,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       thumb_url: thumbUrl,
       duration_sec: mediaType === 'video' ? durationSec : null,
       sticker_category: input.stickerCategory ?? null,
+      stickers_json: input.framing ? serializeStoryFraming(input.framing) : [],
       status: 'published',
       expires_at: expiresAt,
     })

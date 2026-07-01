@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -14,12 +14,19 @@ import { useStoryRings } from '@/features/stories/hooks/useStoryRings';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { useStoryViewerStore } from '@/features/stories/store/storyViewerStore';
 import type { StoryRing } from '@/features/stories/types';
-import { shouldDeferStoryRingBar } from '@/lib/device/androidPerfProfile';
+import { getStoryRingMountDelayMs, shouldDeferStoryRingBar } from '@/lib/device/androidPerfProfile';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
+
+type RingListItem = StoryRing | 'own';
+
+function ringKey(item: RingListItem, index: number): string {
+  if (item === 'own') return 'own';
+  return item.userId || `ring-${index}`;
+}
 
 export function StoryRingBar() {
   const { colors } = useTheme();
@@ -29,9 +36,27 @@ export function StoryRingBar() {
   const [mounted, setMounted] = useState(!shouldDeferStoryRingBar());
 
   useEffect(() => {
-    if (!shouldDeferStoryRingBar()) return;
-    const task = deferBackgroundWork(() => setMounted(true));
-    return () => task.cancel();
+    const delayMs = getStoryRingMountDelayMs();
+    if (!shouldDeferStoryRingBar() && delayMs === 0) return;
+
+    let cancelled = false;
+    const mount = () => {
+      if (!cancelled) setMounted(true);
+    };
+
+    if (delayMs > 0) {
+      const timer = setTimeout(mount, delayMs);
+      return () => {
+        cancelled = true;
+        clearTimeout(timer);
+      };
+    }
+
+    const task = deferBackgroundWork(mount);
+    return () => {
+      cancelled = true;
+      task.cancel();
+    };
   }, []);
 
   const { rings, loading, refresh, loadMore } = useStoryRings({
@@ -48,7 +73,7 @@ export function StoryRingBar() {
 
   const openViewer = useCallback(
     (startUserId: string) => {
-      const ringUserIds = rings.map((r) => r.userId);
+      const ringUserIds = rings.map((r) => r.userId).filter(Boolean);
       if (!ringUserIds.includes(startUserId)) ringUserIds.unshift(startUserId);
       useStoryViewerStore.getState().openSession({ ringUserIds, startUserId });
       router.push(`/stories/${startUserId}` as Href);
@@ -76,40 +101,11 @@ export function StoryRingBar() {
     handleOwnAdd();
   }, [handleOwnAdd, openViewer, rings, user?.id]);
 
-  const data: (StoryRing | 'own')[] = user ? ['own', ...rings.filter((r) => r.userId !== user.id)] : rings;
-
-  const renderRing = useCallback(
-    (item: StoryRing | 'own') => {
-      if (item === 'own') {
-        const own = rings.find((r) => r.userId === user?.id);
-        return (
-          <StoryRingAvatar
-            label="Hikayen"
-            avatarUrl={ownAvatar}
-            hasStory={!!own}
-            hasUnseen={false}
-            isOwn
-            onPress={handleOwnPress}
-            onAddPress={handleOwnAdd}
-          />
-        );
-      }
-
-      return (
-        <StoryRingAvatar
-          label={item.fullName?.trim() || item.username}
-          avatarUrl={item.avatarUrl}
-          hasStory
-          hasUnseen={item.hasUnseen}
-          onPress={() => {
-            if (item.hasUnseen) markUserSeen(item.userId);
-            handlePress(item);
-          }}
-        />
-      );
-    },
-    [handleOwnAdd, handleOwnPress, handlePress, markUserSeen, ownAvatar, rings, user?.id],
-  );
+  const data = useMemo<RingListItem[]>(() => {
+    const validRings = rings.filter((ring) => Boolean(ring.userId));
+    if (!user) return validRings;
+    return ['own', ...validRings.filter((ring) => ring.userId !== user.id)];
+  }, [rings, user]);
 
   const handleHorizontalScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -122,6 +118,10 @@ export function StoryRingBar() {
   );
 
   if (!mounted) {
+    return null;
+  }
+
+  if (!loading && data.length === 0) {
     return null;
   }
 
@@ -139,9 +139,39 @@ export function StoryRingBar() {
             onScroll={handleHorizontalScroll}
             scrollEventThrottle={200}
           >
-            {data.map((item, index) => (
-              <View key={item === 'own' ? 'own' : item.userId || `ring-${index}`}>{renderRing(item)}</View>
-            ))}
+            {data.map((item, index) => {
+              const key = ringKey(item, index);
+
+              if (item === 'own') {
+                const own = rings.find((r) => r.userId === user?.id);
+                return (
+                  <StoryRingAvatar
+                    key={key}
+                    label="Hikayen"
+                    avatarUrl={ownAvatar}
+                    hasStory={!!own}
+                    hasUnseen={false}
+                    isOwn
+                    onPress={handleOwnPress}
+                    onAddPress={handleOwnAdd}
+                  />
+                );
+              }
+
+              return (
+                <StoryRingAvatar
+                  key={key}
+                  label={item.fullName?.trim() || item.username || 'Kullanıcı'}
+                  avatarUrl={item.avatarUrl}
+                  hasStory
+                  hasUnseen={item.hasUnseen}
+                  onPress={() => {
+                    if (item.hasUnseen) markUserSeen(item.userId);
+                    handlePress(item);
+                  }}
+                />
+              );
+            })}
           </ScrollView>
           {loading && rings.length > 0 ? (
             <View style={styles.inlineLoader}>
@@ -160,6 +190,8 @@ const styles = StyleSheet.create({
     minHeight: 92,
   },
   list: {
+    paddingHorizontal: spacing.md,
+    alignItems: 'center',
     gap: spacing.sm,
   },
   inlineLoader: {

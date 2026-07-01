@@ -1,6 +1,7 @@
 import type { StoryBundle, StoryItem } from '@/features/stories/types';
 import { fetchStoryBundleFallback } from '@/features/stories/services/fetchStoryBundleFallback';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
+import { parseStoryFraming } from '@/features/stories/utils/storyFraming';
 import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
 import { supabase } from '@/lib/supabase/client';
 
@@ -18,6 +19,7 @@ type BundleRow = {
   thumb_url: string | null;
   duration_sec: number | null;
   sticker_category: string | null;
+  stickers_json: unknown;
   created_at: string;
   has_reacted: boolean;
 };
@@ -52,6 +54,7 @@ export async function fetchStoryBundle(
     thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
     durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
     stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
+    framing: parseStoryFraming(row.stickers_json),
     createdAt: row.created_at,
     hasReacted: row.has_reacted ?? false,
   }));

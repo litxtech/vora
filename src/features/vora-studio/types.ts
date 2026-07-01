@@ -8,7 +8,7 @@ export type StudioTool =
   | 'thumbnail'
   | 'subtitles';
 
-export type StudioExportMode = 'reel' | 'post' | 'standalone' | 'live-support';
+export type StudioExportMode = 'reel' | 'post' | 'standalone' | 'live-support' | 'story';
 
 export type TextAnimation = 'none' | 'fade' | 'slide' | 'pop';
 
