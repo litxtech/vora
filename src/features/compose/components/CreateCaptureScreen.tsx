@@ -15,7 +15,7 @@ import type { CameraView as CameraViewType } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Haptics from 'expo-haptics';
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
@@ -26,6 +26,7 @@ import {
   finalizeCapturedPhoto,
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
+import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -49,9 +50,15 @@ function isRenderableGalleryUri(uri: string): boolean {
   return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
+type CaptureShareMode = 'story' | 'post' | 'reels';
+
 export function CreateCaptureScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const initialMode: CaptureShareMode =
+    params.mode === 'story' ? 'story' : params.mode === 'reels' ? 'reels' : 'post';
+  const [shareMode, setShareMode] = useState<CaptureShareMode>(initialMode);
   const { requireAuth } = useRequireAuth();
   const cameraRef = useRef<CameraViewType>(null);
 
@@ -236,7 +243,34 @@ export function CreateCaptureScreen() {
   const goToMediaEditor = (
     items: { uri: string; width?: number; height?: number }[],
     mediaType: 'image' | 'video',
+    durationSec?: number,
   ) => {
+    if (shareMode === 'story') {
+      router.replace({
+        pathname: '/stories/publish',
+        params: {
+          mediaUri: items[0]?.uri ?? '',
+          mediaType,
+          durationSec: durationSec != null ? String(durationSec) : undefined,
+        },
+      } as Href);
+      return;
+    }
+
+    if (shareMode === 'reels') {
+      router.replace({
+        pathname: '/media-editor',
+        params: {
+          mediaUris: items.map((item) => item.uri).join(','),
+          mediaType,
+          mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
+          mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
+          publishAs: 'reel',
+        },
+      } as Href);
+      return;
+    }
+
     router.replace({
       pathname: '/media-editor',
       params: {
@@ -298,7 +332,9 @@ export function CreateCaptureScreen() {
 
       for (let attempt = 0; attempt < RECORD_ASYNC_MAX_ATTEMPTS; attempt += 1) {
         try {
-          const recordPromise = camera.recordAsync({ maxDuration: MAX_VIDEO_DURATION_SEC });
+          const recordPromise = camera.recordAsync({
+            maxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
+          });
           if (shouldStopImmediately) {
             setTimeout(() => {
               try {
@@ -330,11 +366,16 @@ export function CreateCaptureScreen() {
           }
           return;
         }
+        const elapsedSec = (recordStartedAt.current ? Date.now() - recordStartedAt.current : 0) / 1000;
+        if (shareMode === 'story' && elapsedSec > STORY_MAX_VIDEO_SEC) {
+          Alert.alert('Hikaye limiti', `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir.`);
+          return;
+        }
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setCameraLive(false);
         setCameraReady(false);
         await handoffCameraToVideoPlayback();
-        goToMediaEditor([{ uri: video.uri }], 'video');
+        goToMediaEditor([{ uri: video.uri }], 'video', elapsedSec);
       }
     } catch (err) {
       if (!shouldStopImmediately) {
@@ -343,7 +384,7 @@ export function CreateCaptureScreen() {
     } finally {
       resetRecordingState();
     }
-  }, [resetRecordingState]);
+  }, [goToMediaEditor, resetRecordingState, shareMode]);
 
   useEffect(() => {
     if (!cameraReady || !pendingRecordRef.current || cameraMode !== 'video') return;
@@ -423,7 +464,7 @@ export function CreateCaptureScreen() {
       mediaTypes: mediaType === 'videos' ? ['videos'] : ['images'],
       allowsMultipleSelection: mediaType === 'images',
       selectionLimit: mediaType === 'images' ? 4 : 1,
-      videoMaxDuration: MAX_VIDEO_DURATION_SEC,
+      videoMaxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
       quality: 0.9,
     });
 
@@ -431,7 +472,8 @@ export function CreateCaptureScreen() {
 
     if (mediaType === 'videos') {
       const uri = result.assets[0]?.uri;
-      if (uri) goToMediaEditor([{ uri }], 'video');
+      const duration = result.assets[0]?.duration ?? undefined;
+      if (uri) goToMediaEditor([{ uri }], 'video', duration);
       return;
     }
 
@@ -534,6 +576,22 @@ export function CreateCaptureScreen() {
             <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
           </Pressable>
         </View>
+      </View>
+
+      <View style={[styles.modeBar, { top: insets.top + spacing.sm + 44 }]}>
+        {(['story', 'post', 'reels'] as const).map((mode) => {
+          const active = shareMode === mode;
+          const label = mode === 'story' ? 'Hikaye' : mode === 'post' ? 'Gönderi' : 'Reels';
+          return (
+            <Pressable
+              key={mode}
+              style={[styles.modeChip, active && styles.modeChipActive]}
+              onPress={() => setShareMode(mode)}
+            >
+              <Text style={[styles.modeChipText, active && styles.modeChipTextActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
       </View>
 
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.lg }]}>
@@ -771,6 +829,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  modeBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 11,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  modeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  modeChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  modeChipText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modeChipTextActive: {
+    color: '#000',
   },
   busyOverlay: {
     ...StyleSheet.absoluteFillObject,

@@ -10,6 +10,8 @@ import { fetchFeaturedProfiles } from '@/features/profile/services/featuredProfi
 import type { FeaturedProfileCard } from '@/features/profile/services/featuredProfiles';
 import { FeedHeader } from '@/features/feed/components/FeedHeader';
 import { PostUploadBanner } from '@/features/compose/components/PostUploadBanner';
+import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
+import { StoryRingBar } from '@/features/stories/components/StoryRingBar';
 import { FeedList } from '@/features/feed/components/FeedList';
 import { NewPostsBanner } from '@/features/feed/components/NewPostsBanner';
 import { useFeed } from '@/features/feed/hooks/useFeed';
@@ -42,6 +44,7 @@ export function FeedScreenContent() {
   const { user } = useAuth();
   const { isVisible } = useFeatureFlags();
   const featuredProfilesVisible = isVisible('featured-profiles');
+  const storiesVisible = isVisible('stories');
   const resetNewPosts = useFeedStore((s) => s.resetNewPosts);
   const category = useFeedStore((s) => s.category);
   const regionId = useFeedStore((s) => s.regionId);
@@ -115,6 +118,11 @@ export function FeedScreenContent() {
           <NewPostsBanner onRefresh={handleBannerRefresh} />
         </View>
         <FeedHeader />
+        {category === 'all' && storiesVisible ? (
+          <FeatureGate featureId="stories">
+            <StoryRingBar regionId={regionId} />
+          </FeatureGate>
+        ) : null}
         {category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
           <FeaturedProfilesCarousel profiles={featuredProfiles} onSeeAll={handleSeeAllFeatured} />
         ) : null}
@@ -130,6 +138,8 @@ export function FeedScreenContent() {
       category,
       featuredProfiles,
       featuredProfilesVisible,
+      storiesVisible,
+      regionId,
       handleBannerRefresh,
       handleSeeAllFeatured,
       headerEvents,
