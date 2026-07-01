@@ -1,0 +1,142 @@
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { Text } from '@/components/ui/Text';
+import { radius, spacing } from '@/constants/theme';
+
+export type StoryPublishToolId = 'music' | 'sticker' | 'location' | 'background';
+
+type ToolDef = {
+  id: StoryPublishToolId;
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+};
+
+const TOOLS: ToolDef[] = [
+  { id: 'music', icon: 'musical-notes-outline', label: 'Müzik' },
+  { id: 'sticker', icon: 'pricetag-outline', label: 'Etiket' },
+  { id: 'location', icon: 'location-outline', label: 'Konum' },
+  { id: 'background', icon: 'color-palette-outline', label: 'Arka plan' },
+];
+
+type StoryPublishRailProps = {
+  activeTool: StoryPublishToolId | null;
+  hasMusic: boolean;
+  hasSticker: boolean;
+  hasLocation: boolean;
+  onPress: (tool: StoryPublishToolId) => void;
+};
+
+export function StoryPublishRail({
+  activeTool,
+  hasMusic,
+  hasSticker,
+  hasLocation,
+  onPress,
+}: StoryPublishRailProps) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View
+      style={[styles.railWrap, { top: insets.top + 52, bottom: insets.bottom + 120 }]}
+      pointerEvents="box-none"
+    >
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={styles.rail}
+        showsVerticalScrollIndicator
+        indicatorStyle="white"
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
+      >
+        {TOOLS.map((tool) => {
+          const active = activeTool === tool.id;
+          const badge =
+            (tool.id === 'music' && hasMusic) ||
+            (tool.id === 'sticker' && hasSticker) ||
+            (tool.id === 'location' && hasLocation);
+
+          return (
+            <Pressable
+              key={tool.id}
+              style={[styles.item, active && styles.itemActive]}
+              onPress={() => onPress(tool.id)}
+              hitSlop={4}
+            >
+              <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
+                <Ionicons name={tool.icon} size={20} color="#fff" />
+                {badge ? <View style={styles.badge} /> : null}
+              </View>
+              <Text style={styles.label} numberOfLines={1}>
+                {tool.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  railWrap: {
+    position: 'absolute',
+    right: 0,
+    width: 68,
+    zIndex: 30,
+  },
+  scroll: {
+    flex: 1,
+  },
+  rail: {
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.xs,
+    paddingBottom: spacing.lg,
+  },
+  item: {
+    alignItems: 'center',
+    gap: 2,
+    width: 60,
+    paddingVertical: 2,
+    borderRadius: radius.md,
+  },
+  itemActive: {
+    backgroundColor: 'rgba(255,255,255,0.14)',
+  },
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.15)',
+  },
+  iconWrapActive: {
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderColor: 'rgba(255,255,255,0.5)',
+  },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 7,
+    height: 7,
+    borderRadius: radius.full,
+    backgroundColor: '#4cd964',
+    borderWidth: 1,
+    borderColor: '#000',
+  },
+  label: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '600',
+    textAlign: 'center',
+    maxWidth: 58,
+    textShadowColor: 'rgba(0,0,0,0.9)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+});

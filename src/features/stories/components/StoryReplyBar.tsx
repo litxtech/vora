@@ -12,7 +12,6 @@ type StoryReplyBarProps = {
   onSend: (text: string) => Promise<void>;
   onToggleReaction: () => Promise<void>;
   onOpenInsights?: () => void;
-  onDelete?: () => void;
   onInputFocus?: () => void;
   onInputBlur?: () => void;
   inputRef?: RefObject<TextInput | null>;
@@ -25,7 +24,6 @@ export function StoryReplyBar({
   onSend,
   onToggleReaction,
   onOpenInsights,
-  onDelete,
   onInputFocus,
   onInputBlur,
   inputRef,
@@ -36,22 +34,12 @@ export function StoryReplyBar({
   if (isOwnStory) {
     return (
       <View style={styles.ownWrap}>
-        <View style={styles.ownActions}>
-          <Pressable style={styles.insightsPill} onPress={onOpenInsights} hitSlop={8}>
-            <Ionicons name="chevron-up" size={18} color="#fff" />
-            <Text variant="caption" style={styles.insightsLabel}>
-              İstatistikler
-            </Text>
-          </Pressable>
-          {onDelete ? (
-            <Pressable style={styles.deletePill} onPress={onDelete} hitSlop={8}>
-              <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
-              <Text variant="caption" style={styles.deleteLabel}>
-                Sil
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <Pressable style={styles.insightsPill} onPress={onOpenInsights} hitSlop={8}>
+          <Ionicons name="chevron-up" size={18} color="#fff" />
+          <Text variant="caption" style={styles.insightsLabel}>
+            İstatistikler
+          </Text>
+        </Pressable>
       </View>
     );
   }
@@ -103,11 +91,6 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
-  ownActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
   insightsPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -119,20 +102,6 @@ const styles = StyleSheet.create({
   },
   insightsLabel: {
     color: '#fff',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  deletePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255,107,107,0.16)',
-  },
-  deleteLabel: {
-    color: '#ff8a8a',
     fontWeight: '700',
     fontSize: 13,
   },

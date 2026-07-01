@@ -43,13 +43,17 @@ export async function prepareStoryVideoUpload(
 ): Promise<UploadStoryMediaResult> {
   onProgress?.({ stage: 'preparing', message: 'Video hazırlanıyor…' });
 
-  const reserved = await reserveStoryVideo(userId, regionId as RegionId | null, localUri);
+  const [reserved, thumbUrl] = await Promise.all([
+    reserveStoryVideo(userId, regionId as RegionId | null, localUri),
+    (async () => {
+      onProgress?.({ stage: 'thumbnail', message: 'Önizleme oluşturuluyor…' });
+      return uploadStoryVideoThumb(userId, localUri);
+    })(),
+  ]);
+
   if ('error' in reserved) {
     return { mediaUrl: null, thumbUrl: null, error: reserved.error };
   }
-
-  onProgress?.({ stage: 'thumbnail', message: 'Önizleme oluşturuluyor…' });
-  const thumbUrl = await uploadStoryVideoThumb(userId, localUri);
 
   return {
     mediaUrl: storyReservationMediaUrl(reserved),

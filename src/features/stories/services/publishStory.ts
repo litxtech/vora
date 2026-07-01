@@ -1,7 +1,12 @@
 import { STORY_MAX_VIDEO_SEC, STORY_TTL_HOURS } from '@/features/stories/constants';
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import type { StoryFraming } from '@/features/stories/utils/storyFraming';
-import { serializeStoryFraming } from '@/features/stories/utils/storyFraming';
+import {
+  musicSelectionToManifest,
+  serializeStoryManifest,
+  type StoryLocationManifest,
+  type StoryMusicManifest,
+} from '@/features/stories/utils/storyManifest';
 import {
   finishStoryVideoUpload,
   prepareStoryVideoUpload,
@@ -9,9 +14,16 @@ import {
   type UploadStoryMediaProgress,
 } from '@/features/stories/services/uploadStoryMedia';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
-import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
+import {
+  setCachedMuxPlaybackUrl,
+} from '@/features/stories/services/storyMuxPlaybackCache';
+import { parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
+import { kickstartMuxSync, pollMuxUntilReady } from '@/services/video/muxPoll';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
+import type { MusicSelection } from '@/features/music/types';
+import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
+import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 
 export type PublishStoryInput = {
   authorId: string;
@@ -21,6 +33,8 @@ export type PublishStoryInput = {
   regionId?: string | null;
   stickerCategory?: StoryStickerCategoryId | null;
   framing?: StoryFraming | null;
+  music?: MusicSelection | null;
+  location?: SelectedLocation | null;
   /** Studio'da kırpıldıysa dosya süresi yerine bu değer kullanılır. */
   trimmedInStudio?: boolean;
   onUploadProgress?: (progress: UploadStoryMediaProgress) => void;
@@ -127,6 +141,24 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     mediaUrl = prepared.mediaUrl;
     thumbUrl = prepared.thumbUrl;
     videoReservation = prepared.reservation;
+
+    if (videoReservation) {
+      input.onUploadProgress?.({ stage: 'uploading', message: 'Video yükleniyor…' });
+      const uploaded = await finishStoryVideoUpload(videoReservation, input.onUploadProgress);
+      if (uploaded.error) {
+        return { storyId, itemId: null, mediaUrl: null, error: uploaded.error };
+      }
+
+      const videoId = parseProcessingVideoId(mediaUrl);
+      if (videoId) {
+        kickstartMuxSync(videoId);
+        input.onUploadProgress?.({ stage: 'saving', message: 'Video işleniyor…' });
+        const muxReady = await pollMuxUntilReady(videoId, { maxWaitMs: 25_000 });
+        if (muxReady.status === 'ready' && muxReady.playbackId) {
+          mediaUrl = setCachedMuxPlaybackUrl(videoId, muxReady.playbackId);
+        }
+      }
+    }
   } else {
     const upload = await uploadStoryMedia(input.authorId, input.localUri, 'image', {
       regionId: input.regionId,
@@ -161,6 +193,17 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
 
   const nextOrder = Number(orderRow?.sort_order ?? -1) + 1;
 
+  const musicManifest: StoryMusicManifest | null = musicSelectionToManifest(input.music ?? null);
+  const locationManifest: StoryLocationManifest | null = input.location?.label?.trim()
+    ? { label: input.location.label.trim() }
+    : null;
+
+  const stickersJson = serializeStoryManifest({
+    framing: input.framing ?? null,
+    music: musicManifest,
+    location: locationManifest,
+  });
+
   const { data: item, error: itemError } = await supabase
     .from('story_items')
     .insert({
@@ -172,7 +215,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       thumb_url: resolvedThumbUrl,
       duration_sec: mediaType === 'video' ? durationSec : null,
       sticker_category: input.stickerCategory ?? null,
-      stickers_json: input.framing ? serializeStoryFraming(input.framing) : [],
+      stickers_json: stickersJson,
       status: 'published',
       expires_at: expiresAt,
     })
@@ -186,14 +229,6 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       mediaUrl,
       error: supabaseErrorMessage(itemError)!,
     };
-  }
-
-  if (isVideo && videoReservation) {
-    void finishStoryVideoUpload(videoReservation, input.onUploadProgress).catch((err) => {
-      if (__DEV__) {
-        console.warn('[stories] background mux upload failed:', err);
-      }
-    });
   }
 
   await supabase

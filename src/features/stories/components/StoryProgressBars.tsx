@@ -31,12 +31,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 4,
     paddingHorizontal: spacing.sm,
+    paddingVertical: 2,
   },
   track: {
     flex: 1,
-    height: 2.5,
+    height: 3,
     borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.35)',
+    backgroundColor: 'rgba(255,255,255,0.28)',
     overflow: 'hidden',
   },
   fill: {

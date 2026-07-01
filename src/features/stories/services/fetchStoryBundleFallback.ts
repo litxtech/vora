@@ -1,6 +1,6 @@
 import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
-import { parseStoryFraming } from '@/features/stories/utils/storyFraming';
+import { parseStoryManifest } from '@/features/stories/utils/storyManifest';
 import type { StoryBundle, StoryItem } from '@/features/stories/types';
 import { supabase } from '@/lib/supabase/client';
 
@@ -74,20 +74,25 @@ export async function fetchStoryBundleFallback(
     reactedIds = new Set((reactions ?? []).map((r) => r.story_item_id as string));
   }
 
-  const items: StoryItem[] = (itemRows as ItemRow[]).map((row) => ({
-    id: row.id,
-    storyId: row.story_id,
-    authorId: row.author_id,
-    sortOrder: row.sort_order,
-    mediaType: row.media_type,
-    mediaUrl: resolveStoryMediaUrl(row.media_url) ?? row.media_url,
-    thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
-    durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
-    stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
-    framing: parseStoryFraming(row.stickers_json),
-    createdAt: row.created_at,
-    hasReacted: reactedIds.has(row.id),
-  }));
+  const items: StoryItem[] = (itemRows as ItemRow[]).map((row) => {
+    const manifest = parseStoryManifest(row.stickers_json);
+    return {
+      id: row.id,
+      storyId: row.story_id,
+      authorId: row.author_id,
+      sortOrder: row.sort_order,
+      mediaType: row.media_type,
+      mediaUrl: resolveStoryMediaUrl(row.media_url) ?? row.media_url,
+      thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
+      durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
+      stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
+      framing: manifest.framing,
+      music: manifest.music,
+      location: manifest.location,
+      createdAt: row.created_at,
+      hasReacted: reactedIds.has(row.id),
+    };
+  });
 
   return {
     storyId: (storyRow as StoryRow).id,

@@ -1,7 +1,7 @@
 import type { StoryBundle, StoryItem } from '@/features/stories/types';
 import { fetchStoryBundleFallback } from '@/features/stories/services/fetchStoryBundleFallback';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
-import { parseStoryFraming } from '@/features/stories/utils/storyFraming';
+import { parseStoryManifest } from '@/features/stories/utils/storyManifest';
 import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
 import { supabase } from '@/lib/supabase/client';
 
@@ -44,20 +44,25 @@ export async function fetchStoryBundle(
   }
 
   const head = rows[0];
-  const items: StoryItem[] = rows.map((row) => ({
-    id: row.item_id,
-    storyId: row.story_id,
-    authorId: row.author_id,
-    sortOrder: row.sort_order,
-    mediaType: row.media_type,
-    mediaUrl: resolveStoryMediaUrl(row.media_url) ?? row.media_url,
-    thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
-    durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
-    stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
-    framing: parseStoryFraming(row.stickers_json),
-    createdAt: row.created_at,
-    hasReacted: row.has_reacted ?? false,
-  }));
+  const items: StoryItem[] = rows.map((row) => {
+    const manifest = parseStoryManifest(row.stickers_json);
+    return {
+      id: row.item_id,
+      storyId: row.story_id,
+      authorId: row.author_id,
+      sortOrder: row.sort_order,
+      mediaType: row.media_type,
+      mediaUrl: resolveStoryMediaUrl(row.media_url) ?? row.media_url,
+      thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
+      durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
+      stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
+      framing: manifest.framing,
+      music: manifest.music,
+      location: manifest.location,
+      createdAt: row.created_at,
+      hasReacted: row.has_reacted ?? false,
+    };
+  });
 
   return {
     storyId: head.story_id,

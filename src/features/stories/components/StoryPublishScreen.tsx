@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Pressable,
-  ScrollView,
   StyleSheet,
   View,
   type View as RNView,
@@ -14,9 +13,23 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
 import { Text } from '@/components/ui/Text';
+import { MediaEditorLocationSheet } from '@/features/compose/components/MediaEditorLocationSheet';
+import { MediaEditorMusicPanel } from '@/features/compose/components/MediaEditorMusicPanel';
+import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
+import { MusicPickerSheet } from '@/features/music/components/MusicPickerSheet';
+import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
+import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
+import type { MusicTrack } from '@/features/music/types';
+import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
+import { StoryBackgroundSheet } from '@/features/stories/components/StoryBackgroundSheet';
 import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
+import {
+  StoryPublishRail,
+  type StoryPublishToolId,
+} from '@/features/stories/components/StoryPublishRail';
+import { StoryStickerSheet } from '@/features/stories/components/StoryStickerSheet';
 import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFramedImage';
-import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
+import { STORY_MAX_VIDEO_SEC, type StoryStickerCategoryId } from '@/features/stories/constants';
 import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/stories/services/routeStoryVideo';
 import { publishStory } from '@/features/stories/services/publishStory';
 import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
@@ -29,11 +42,10 @@ import {
   DEFAULT_STORY_FRAMING,
   probeImageSize,
   probeVideoSize,
-  STORY_FRAMING_BACKGROUNDS,
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
 import { useFeedStore } from '@/features/feed/store/feedStore';
-import { spacing } from '@/constants/theme';
+import { DEFAULT_REGION_ID } from '@/constants/regions';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -58,12 +70,26 @@ export function StoryPublishScreen({
   const setRings = useStoryRingStore((s) => s.setRings);
   const captureRef = useRef<RNView>(null);
 
+  const musicSelection = useMusicSelectionStore((s) => s.selection);
+  const setMusicSelection = useMusicSelectionStore((s) => s.setSelection);
+
   const [publishing, setPublishing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [publishUri, setPublishUri] = useState(mediaUri);
-  const [mediaPreparing, setMediaPreparing] = useState(mediaType === 'video');
+  const [stabilizing, setStabilizing] = useState(false);
   const [mediaSize, setMediaSize] = useState<{ width: number; height: number } | null>(null);
   const [framing, setFraming] = useState<StoryFraming>(DEFAULT_STORY_FRAMING);
+  const [activeTool, setActiveTool] = useState<StoryPublishToolId | null>(null);
+  const [musicOpen, setMusicOpen] = useState(false);
+  const [musicPreviewPlaying, setMusicPreviewPlaying] = useState(false);
+  const [stickerCategory, setStickerCategory] = useState<StoryStickerCategoryId | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+
+  useEffect(() => {
+    return () => {
+      useMusicSelectionStore.getState().clearSelection();
+    };
+  }, []);
 
   useEffect(() => {
     setPublishUri(mediaUri);
@@ -129,13 +155,10 @@ export function StoryPublishScreen({
   }, [mediaType, publishUri]);
 
   useEffect(() => {
-    if (mediaType !== 'video') {
-      setMediaPreparing(false);
-      return;
-    }
+    if (mediaType !== 'video') return;
 
     let cancelled = false;
-    setMediaPreparing(true);
+    setStabilizing(true);
 
     void stabilizeStoryVideoUri(mediaUri)
       .then((stable) => {
@@ -156,7 +179,7 @@ export function StoryPublishScreen({
         );
       })
       .finally(() => {
-        if (!cancelled) setMediaPreparing(false);
+        if (!cancelled) setStabilizing(false);
       });
 
     return () => {
@@ -168,14 +191,67 @@ export function StoryPublishScreen({
     setFraming(next);
   }, []);
 
-  const handleBackgroundPick = useCallback((color: string) => {
-    setFraming((prev) => ({ ...prev, backgroundColor: color }));
-  }, []);
+  const handleToolPress = useCallback(
+    (tool: StoryPublishToolId) => {
+      if (tool === 'music') {
+        if (musicSelection) {
+          setActiveTool('music');
+          setMusicOpen(false);
+          setMusicPreviewPlaying(mediaType === 'image');
+          return;
+        }
+        setActiveTool('music');
+        setMusicOpen(true);
+        return;
+      }
+
+      if (tool === 'sticker') {
+        setActiveTool(activeTool === 'sticker' ? null : 'sticker');
+        return;
+      }
+
+      if (tool === 'location') {
+        setActiveTool(activeTool === 'location' ? null : 'location');
+        return;
+      }
+
+      if (tool === 'background') {
+        setActiveTool(activeTool === 'background' ? null : 'background');
+      }
+    },
+    [activeTool, mediaType, musicSelection],
+  );
+
+  const handleMusicSelect = useCallback(
+    (track: MusicTrack) => {
+      const clipDuration = mediaType === 'video'
+        ? Math.min(track.durationSec, normalizedDurationSec ?? track.durationSec)
+        : photoPostMusicEndSec(0, track.durationSec);
+
+      setMusicSelection({
+        trackId: track.id,
+        displayTitle: track.displayTitle,
+        artist: track.artist,
+        audioUrl: track.audioUrl,
+        durationSec: track.durationSec,
+        musicStartSec: 0,
+        musicEndSec: clipDuration,
+        musicVolume: 0.85,
+        originalAudioVolume: mediaType === 'video' ? 0.15 : 0,
+      });
+      setMusicOpen(false);
+      setActiveTool('music');
+      setMusicPreviewPlaying(mediaType === 'image');
+    },
+    [mediaType, normalizedDurationSec, setMusicSelection],
+  );
 
   const handlePublish = useCallback(async () => {
-    if (!user?.id || publishing || mediaPreparing || !mediaSize) return;
+    if (!user?.id || publishing || !mediaSize) return;
+    if (mediaType === 'video' && stabilizing) return;
+
     setPublishing(true);
-    setUploadMessage(mediaType === 'video' ? 'Video hazırlanıyor…' : 'Görsel hazırlanıyor…');
+    setUploadMessage(mediaType === 'video' ? 'Video yükleniyor…' : 'Görsel hazırlanıyor…');
 
     let uploadUri = publishUri;
     let uploadFraming: StoryFraming | null = null;
@@ -206,8 +282,10 @@ export function StoryPublishScreen({
       mediaType,
       durationSec: normalizedDurationSec,
       regionId: regionId ?? null,
-      stickerCategory: null,
+      stickerCategory,
       framing: uploadFraming,
+      music: musicSelection,
+      location: selectedLocation,
       trimmedInStudio,
       onUploadProgress: (progress: UploadStoryMediaProgress) => {
         setUploadMessage(progress.message);
@@ -223,6 +301,7 @@ export function StoryPublishScreen({
     }
 
     useStoryPublishStore.getState().clearDraft();
+    useMusicSelectionStore.getState().clearSelection();
 
     const refreshed = await fetchStoryRings({ viewerId: user.id });
     setRings(refreshed.rings);
@@ -231,32 +310,48 @@ export function StoryPublishScreen({
   }, [
     normalizedDurationSec,
     framing,
-    mediaPreparing,
     mediaSize,
     mediaType,
+    musicSelection,
     publishUri,
     publishing,
     regionId,
+    selectedLocation,
     setRings,
+    stabilizing,
+    stickerCategory,
     trimmedInStudio,
     user,
   ]);
 
-  const canEditFraming = !mediaPreparing && mediaSize != null;
+  const canEditFraming = mediaSize != null;
+  const previewMusicConfig = musicSelection
+    ? {
+        audioUrl: musicSelection.audioUrl,
+        musicStartSec: musicSelection.musicStartSec,
+        musicEndSec: musicSelection.musicEndSec,
+        musicVolume: musicSelection.musicVolume,
+        originalAudioVolume: musicSelection.originalAudioVolume,
+      }
+    : null;
+
+  useStandaloneMusicPlayer({
+    config: previewMusicConfig,
+    scopeActive: mediaType === 'image' && Boolean(musicSelection),
+    playing: mediaType === 'image' && musicPreviewPlaying && Boolean(musicSelection),
+  });
 
   return (
-    <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
+    <View style={[styles.root, { backgroundColor: '#000', paddingTop: insets.top }]}>
       <View style={styles.header}>
         <Pressable onPress={() => router.back()} hitSlop={10} disabled={publishing}>
-          <Ionicons name="chevron-back" size={26} color={colors.text} />
+          <Ionicons name="chevron-back" size={26} color="#fff" />
         </Pressable>
-        <Text variant="title">Hikaye paylaş</Text>
+        <Text variant="h3" style={styles.headerTitle}>
+          Hikaye paylaş
+        </Text>
         <View style={{ width: 26 }} />
       </View>
-
-      <Text variant="caption" style={[styles.hint, { color: colors.textMuted }]}>
-        İki parmakla yakınlaştırın veya uzaklaştırın · Çift dokun: sığdır
-      </Text>
 
       <View ref={captureRef} collapsable={false} style={styles.previewWrap}>
         {canEditFraming ? (
@@ -270,17 +365,30 @@ export function StoryPublishScreen({
             {mediaType === 'image' ? (
               <Image source={{ uri: publishUri }} style={styles.mediaFill} contentFit="cover" />
             ) : (
-              <CapturedVideoPreview uri={publishUri} style={styles.mediaFill} contentFit="cover" />
+              <CapturedVideoPreview
+                uri={publishUri}
+                style={styles.mediaFill}
+                contentFit="cover"
+                music={musicSelection}
+                videoMuted={musicSelection ? musicSelection.originalAudioVolume <= 0.001 : false}
+              />
             )}
           </StoryFramingEditor>
         ) : (
           <View style={styles.previewLoading}>
             <ActivityIndicator color={colors.primary} size="large" />
-            <Text variant="caption" style={{ color: colors.textMuted, marginTop: spacing.sm }}>
-              {mediaType === 'video' ? 'Video hazırlanıyor…' : 'Medya yükleniyor…'}
-            </Text>
           </View>
         )}
+
+        {selectedLocation ? (
+          <View style={styles.locationPreview}>
+            <Ionicons name="location" size={13} color="#fff" />
+            <Text variant="caption" style={styles.locationPreviewText} numberOfLines={1}>
+              {selectedLocation.label}
+            </Text>
+          </View>
+        ) : null}
+
         {mediaType === 'video' && normalizedDurationSec ? (
           <View style={styles.durationBadge}>
             <Ionicons name="videocam" size={12} color="#fff" />
@@ -289,33 +397,24 @@ export function StoryPublishScreen({
             </Text>
           </View>
         ) : null}
+
+        {stabilizing ? (
+          <View style={styles.stabilizeBadge}>
+            <ActivityIndicator color="#fff" size="small" />
+          </View>
+        ) : null}
       </View>
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.colorRow}
-        style={styles.colorScroll}
-      >
-        {STORY_FRAMING_BACKGROUNDS.map((color) => {
-          const selected = framing.backgroundColor === color;
-          return (
-            <Pressable
-              key={color}
-              onPress={() => handleBackgroundPick(color)}
-              disabled={publishing}
-              style={[
-                styles.colorSwatch,
-                { backgroundColor: color },
-                selected && { borderColor: colors.primary, borderWidth: 2 },
-              ]}
-            />
-          );
-        })}
-      </ScrollView>
+      <StoryPublishRail
+        activeTool={activeTool}
+        hasMusic={Boolean(musicSelection)}
+        hasSticker={Boolean(stickerCategory)}
+        hasLocation={Boolean(selectedLocation)}
+        onPress={handleToolPress}
+      />
 
       {uploadMessage ? (
-        <Text variant="caption" style={[styles.uploadHint, { color: colors.textMuted }]}>
+        <Text variant="caption" style={styles.uploadHint}>
           {uploadMessage}
         </Text>
       ) : null}
@@ -325,11 +424,11 @@ export function StoryPublishScreen({
           styles.publishBtn,
           {
             backgroundColor: colors.primary,
-            opacity: publishing || mediaPreparing || !mediaSize ? 0.7 : 1,
+            opacity: publishing || !mediaSize || stabilizing ? 0.7 : 1,
           },
         ]}
         onPress={() => void handlePublish()}
-        disabled={publishing || mediaPreparing || !mediaSize}
+        disabled={publishing || !mediaSize || stabilizing}
       >
         {publishing ? (
           <View style={styles.publishingRow}>
@@ -344,6 +443,54 @@ export function StoryPublishScreen({
           </Text>
         )}
       </Pressable>
+
+      <MusicPickerSheet
+        visible={musicOpen}
+        selectedTrackId={musicSelection?.trackId ?? null}
+        onClose={() => setMusicOpen(false)}
+        onSelect={handleMusicSelect}
+      />
+
+      {musicSelection ? (
+        <MediaEditorMusicPanel
+          visible={activeTool === 'music'}
+          music={musicSelection}
+          previewPlaying={musicPreviewPlaying}
+          onTogglePreview={() => setMusicPreviewPlaying((v) => !v)}
+          onChangeTrack={() => setMusicOpen(true)}
+          onRemove={() => {
+            setMusicSelection(null);
+            setActiveTool(null);
+            setMusicPreviewPlaying(false);
+          }}
+          onUpdate={(patch) => {
+            if (musicSelection) setMusicSelection({ ...musicSelection, ...patch });
+          }}
+          onClose={() => setActiveTool(null)}
+        />
+      ) : null}
+
+      <StoryStickerSheet
+        visible={activeTool === 'sticker'}
+        selected={stickerCategory}
+        onSelect={setStickerCategory}
+        onClose={() => setActiveTool(null)}
+      />
+
+      <StoryBackgroundSheet
+        visible={activeTool === 'background'}
+        selected={framing.backgroundColor}
+        onSelect={(color) => setFraming((prev) => ({ ...prev, backgroundColor: color }))}
+        onClose={() => setActiveTool(null)}
+      />
+
+      <MediaEditorLocationSheet
+        visible={activeTool === 'location'}
+        regionId={regionId ?? DEFAULT_REGION_ID}
+        value={selectedLocation}
+        onChange={setSelectedLocation}
+        onClose={() => setActiveTool(null)}
+      />
     </View>
   );
 }
@@ -357,10 +504,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
   },
-  hint: {
-    textAlign: 'center',
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+  headerTitle: {
+    color: '#fff',
   },
   previewWrap: {
     flex: 1,
@@ -377,12 +522,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#000',
+    backgroundColor: '#111',
   },
   durationBadge: {
     position: 'absolute',
     top: spacing.sm,
-    right: spacing.sm,
+    left: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -396,26 +541,40 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 11,
   },
-  colorScroll: {
-    flexGrow: 0,
-    marginBottom: spacing.sm,
-  },
-  colorRow: {
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
+  stabilizeBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  colorSwatch: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+  locationPreview: {
+    position: 'absolute',
+    bottom: spacing.md,
+    left: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    maxWidth: '70%',
+  },
+  locationPreviewText: {
+    color: '#fff',
+    fontWeight: '700',
+    flexShrink: 1,
   },
   uploadHint: {
     textAlign: 'center',
     marginBottom: spacing.sm,
     paddingHorizontal: spacing.md,
+    color: 'rgba(255,255,255,0.7)',
   },
   publishBtn: {
     marginHorizontal: spacing.md,

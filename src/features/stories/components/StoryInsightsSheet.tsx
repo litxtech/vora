@@ -212,7 +212,7 @@ export function StoryInsightsSheet({
                   <Text variant="caption" style={styles.slideLabel}>
                     {items.length > 1 ? `Slayt ${selected.sortOrder + 1}` : 'Bu hikâye'}
                   </Text>
-                  <Text variant="title" style={styles.slideViews}>
+                  <Text variant="h3" style={styles.slideViews}>
                     {formatCount(selected.itemViews)}
                   </Text>
                   <Text variant="caption" style={styles.slideViewsLabel}>
@@ -382,7 +382,7 @@ function SummaryStat({
   return (
     <View style={styles.summaryStat}>
       <Ionicons name={icon} size={22} color={IG.text} />
-      <Text variant="title" style={styles.summaryValue}>
+      <Text variant="h3" style={styles.summaryValue}>
         {value}
       </Text>
       <Text variant="caption" style={styles.summaryLabel}>

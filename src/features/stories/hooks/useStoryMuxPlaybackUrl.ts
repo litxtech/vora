@@ -1,8 +1,17 @@
 import { useEffect, useState } from 'react';
-import { getMuxPlaybackUrl, syncMuxVideo } from '@/lib/mux/client';
+import { syncMuxVideo } from '@/lib/mux/client';
 import { isProcessingVideoUrl, parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
+import {
+  getCachedMuxPlaybackUrl,
+  setCachedMuxPlaybackUrl,
+} from '@/features/stories/services/storyMuxPlaybackCache';
+import { kickstartMuxSync } from '@/services/video/muxPoll';
 
-const POLL_MS = 2_000;
+function pollDelayMs(elapsedMs: number): number {
+  if (elapsedMs < 20_000) return 500;
+  if (elapsedMs < 60_000) return 1200;
+  return 2500;
+}
 
 /** Mux işlenirken hikâye videosunu oynatılabilir HLS URL'sine çevirir. */
 export function useStoryMuxPlaybackUrl(mediaUrl: string | null | undefined): {
@@ -11,7 +20,9 @@ export function useStoryMuxPlaybackUrl(mediaUrl: string | null | undefined): {
 } {
   const [playbackUrl, setPlaybackUrl] = useState<string | null>(() => {
     if (!mediaUrl) return null;
-    return isProcessingVideoUrl(mediaUrl) ? null : mediaUrl;
+    if (!isProcessingVideoUrl(mediaUrl)) return mediaUrl;
+    const videoId = parseProcessingVideoId(mediaUrl);
+    return videoId ? getCachedMuxPlaybackUrl(videoId) : null;
   });
 
   useEffect(() => {
@@ -31,8 +42,17 @@ export function useStoryMuxPlaybackUrl(mediaUrl: string | null | undefined): {
       return;
     }
 
+    const cached = getCachedMuxPlaybackUrl(videoId);
+    if (cached) {
+      setPlaybackUrl(cached);
+      return;
+    }
+
     let cancelled = false;
     setPlaybackUrl(null);
+    kickstartMuxSync(videoId);
+
+    const started = Date.now();
 
     const poll = async () => {
       while (!cancelled) {
@@ -40,13 +60,13 @@ export function useStoryMuxPlaybackUrl(mediaUrl: string | null | undefined): {
           const result = await syncMuxVideo(videoId);
           if (cancelled) return;
           if (result.status === 'ready' && result.playbackId) {
-            setPlaybackUrl(getMuxPlaybackUrl(result.playbackId));
+            setPlaybackUrl(setCachedMuxPlaybackUrl(videoId, result.playbackId));
             return;
           }
         } catch {
           /* tekrar dene */
         }
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        await new Promise((resolve) => setTimeout(resolve, pollDelayMs(Date.now() - started)));
       }
     };
 

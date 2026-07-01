@@ -43,8 +43,7 @@ import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import { navigateToPublicProfile } from '@/features/profile/services/profileNavigation';
 import { Text } from '@/components/ui/Text';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
-import { Image } from 'expo-image';
-import { resolveStoryMediaUrl } from '@/features/stories/services/storyMediaUrl';
+import { prefetchStoryBundleMedia } from '@/features/stories/services/prefetchStoryMedia';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -168,12 +167,9 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   }, [activeUserId, currentUserIndex, loadBundle, ringUserIds, setCurrentUserIndex]);
 
   useEffect(() => {
-    if (!activeItem) return;
-    const next = items[currentItemIndex + 1];
-    if (!next) return;
-    const uri = resolveStoryMediaUrl(next.mediaType === 'image' ? next.mediaUrl : next.thumbUrl ?? next.mediaUrl);
-    if (uri) void Image.prefetch(uri);
-  }, [activeItem?.id, currentItemIndex, items]);
+    if (!items.length) return;
+    prefetchStoryBundleMedia(items, currentItemIndex);
+  }, [currentItemIndex, items]);
 
   useEffect(() => {
     insightsOpen.value = insightsVisible ? 1 : 0;
@@ -584,7 +580,9 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                 isPaused={isPaused}
                 onVideoPosition={(sec, dur) => {
                   setVideoPositionSec(sec);
-                  setVideoDurationSec(dur);
+                  if (dur != null && dur > 0) setVideoDurationSec(dur);
+                  const duration = Math.max(0.1, dur ?? activeItem.durationSec ?? 15);
+                  setProgress(Math.min(1, sec / duration));
                 }}
                 onVideoEnd={() => goNextItem('auto_forward')}
               />
@@ -657,10 +655,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
             onSend={handleReply}
             onToggleReaction={handleReaction}
             onOpenInsights={openInsights}
-            onDelete={() => {
-              setIsPaused(true);
-              handleDeleteStory();
-            }}
             onInputFocus={handleInputFocus}
             onInputBlur={handleInputBlur}
             inputRef={replyInputRef}

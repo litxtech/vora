@@ -1,5 +1,6 @@
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import type { StoryFraming } from '@/features/stories/utils/storyFraming';
+import type { StoryLocationManifest, StoryMusicManifest } from '@/features/stories/utils/storyManifest';
 
 export type StoryNavigation =
   | 'auto_forward'
@@ -34,6 +35,8 @@ export type StoryItem = {
   durationSec: number | null;
   stickerCategory: StoryStickerCategoryId | null;
   framing: StoryFraming | null;
+  music: StoryMusicManifest | null;
+  location: StoryLocationManifest | null;
   createdAt: string;
   hasReacted: boolean;
 };
