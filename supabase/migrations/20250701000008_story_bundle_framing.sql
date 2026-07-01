@@ -1,5 +1,8 @@
--- Hikâye çerçeveleme (yakınlaştır/uzaklaştır) verisini bundle RPC'sine ekle
-create or replace function public.get_story_bundle(
+-- Hikâye çerçeveleme (yakınlaştır/uzaklaştır) verisini bundle RPC'sine ekle.
+-- Postgres, OUT parametreleri değişince CREATE OR REPLACE'e izin vermez; önce drop gerekir.
+drop function if exists public.get_story_bundle(uuid, uuid);
+
+create function public.get_story_bundle(
   p_viewer_id uuid,
   p_author_id uuid
 )
