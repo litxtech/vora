@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
 import { Text } from '@/components/ui/Text';
-import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
-import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import { publishStory } from '@/features/stories/services/publishStory';
+import type { UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
+import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { spacing } from '@/constants/theme';
@@ -26,27 +26,14 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const regionId = useFeedStore((s) => s.regionId);
-  const optimisticOwnRing = useStoryRingStore((s) => s.optimisticOwnRing);
-  const [sticker, setSticker] = useState<StoryStickerCategoryId | null>(null);
+  const setRings = useStoryRingStore((s) => s.setRings);
   const [publishing, setPublishing] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<string | null>(null);
 
   const handlePublish = useCallback(async () => {
     if (!user?.id || publishing) return;
     setPublishing(true);
-
-    optimisticOwnRing({
-      userId: user.id,
-      username: user.user_metadata?.username ?? 'sen',
-      fullName: user.user_metadata?.full_name ?? null,
-      avatarUrl: user.user_metadata?.avatar_url ?? null,
-      isVerified: false,
-      storyId: 'optimistic',
-      itemCount: 1,
-      previewThumb: mediaUri,
-      latestItemAt: new Date().toISOString(),
-      hasUnseen: false,
-      regionId: regionId ?? null,
-    });
+    setUploadMessage(mediaType === 'video' ? 'Video hazırlanıyor…' : null);
 
     const result = await publishStory({
       authorId: user.id,
@@ -54,23 +41,30 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
       mediaType,
       durationSec,
       regionId: regionId ?? null,
-      stickerCategory: sticker,
+      stickerCategory: null,
+      onUploadProgress: (progress: UploadStoryMediaProgress) => {
+        setUploadMessage(progress.message);
+      },
     });
 
     setPublishing(false);
+    setUploadMessage(null);
 
     if (result.error) {
       Alert.alert('Hikaye paylaşılamadı', result.error);
       return;
     }
 
+    const refreshed = await fetchStoryRings({ viewerId: user.id });
+    setRings(refreshed.rings);
+
     router.replace('/(tabs)');
-  }, [durationSec, mediaType, mediaUri, optimisticOwnRing, publishing, regionId, sticker, user]);
+  }, [durationSec, mediaType, mediaUri, publishing, regionId, setRings, user]);
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background, paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
+        <Pressable onPress={() => router.back()} hitSlop={10} disabled={publishing}>
           <Ionicons name="chevron-back" size={26} color={colors.text} />
         </Pressable>
         <Text variant="title">Hikaye paylaş</Text>
@@ -83,34 +77,21 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
         ) : (
           <CapturedVideoPreview uri={mediaUri} style={styles.preview} />
         )}
+        {mediaType === 'video' && durationSec ? (
+          <View style={styles.durationBadge}>
+            <Ionicons name="videocam" size={12} color="#fff" />
+            <Text variant="caption" style={styles.durationText}>
+              {Math.round(durationSec)} sn
+            </Text>
+          </View>
+        ) : null}
       </View>
 
-      <Text variant="label" style={{ paddingHorizontal: spacing.md }}>
-        Kategori (isteğe bağlı)
-      </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        {STORY_STICKER_CATEGORIES.map((cat) => {
-          const active = sticker === cat.id;
-          return (
-            <Pressable
-              key={cat.id}
-              style={[
-                styles.chip,
-                {
-                  borderColor: active ? colors.primary : colors.border,
-                  backgroundColor: active ? `${colors.primary}18` : colors.surfaceElevated,
-                },
-              ]}
-              onPress={() => setSticker(active ? null : cat.id)}
-            >
-              <Ionicons name={cat.icon} size={14} color={active ? colors.primary : colors.textMuted} />
-              <Text variant="caption" style={{ color: active ? colors.primary : colors.text }}>
-                {cat.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+      {uploadMessage ? (
+        <Text variant="caption" style={[styles.uploadHint, { color: colors.textMuted }]}>
+          {uploadMessage}
+        </Text>
+      ) : null}
 
       <Pressable
         style={[styles.publishBtn, { backgroundColor: colors.primary, opacity: publishing ? 0.7 : 1 }]}
@@ -118,7 +99,12 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
         disabled={publishing}
       >
         {publishing ? (
-          <ActivityIndicator color="#fff" />
+          <View style={styles.publishingRow}>
+            <ActivityIndicator color="#fff" size="small" />
+            <Text variant="label" style={{ color: '#fff' }}>
+              {uploadMessage ?? 'Paylaşılıyor…'}
+            </Text>
+          </View>
         ) : (
           <Text variant="label" style={{ color: '#fff' }}>
             Hikayeyi paylaş
@@ -139,36 +125,49 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   previewWrap: {
+    flex: 1,
     marginHorizontal: spacing.md,
-    borderRadius: 16,
-    overflow: 'hidden',
-    height: 420,
     marginBottom: spacing.md,
+    borderRadius: 22,
+    overflow: 'hidden',
     backgroundColor: '#000',
   },
   preview: {
     width: '100%',
     height: '100%',
   },
-  chips: {
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-  chip: {
+  durationBadge: {
+    position: 'absolute',
+    top: spacing.sm,
+    right: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 999,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
+  },
+  durationText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 11,
+  },
+  uploadHint: {
+    textAlign: 'center',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.md,
   },
   publishBtn: {
     marginHorizontal: spacing.md,
-    marginTop: spacing.md,
+    marginBottom: spacing.lg,
     borderRadius: 999,
     paddingVertical: spacing.md,
     alignItems: 'center',
+  },
+  publishingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
 });

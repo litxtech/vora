@@ -1,4 +1,7 @@
 import type { StoryBundle, StoryItem } from '@/features/stories/types';
+import { fetchStoryBundleFallback } from '@/features/stories/services/fetchStoryBundleFallback';
+import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
+import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
 import { supabase } from '@/lib/supabase/client';
 
 type BundleRow = {
@@ -30,11 +33,13 @@ export async function fetchStoryBundle(
 
   if (error) {
     console.warn('[stories] fetchStoryBundle failed:', error.message);
-    return null;
+    return fetchStoryBundleFallback(viewerId, authorId);
   }
 
   const rows = (data ?? []) as BundleRow[];
-  if (rows.length === 0) return null;
+  if (rows.length === 0) {
+    return fetchStoryBundleFallback(viewerId, authorId);
+  }
 
   const head = rows[0];
   const items: StoryItem[] = rows.map((row) => ({
@@ -43,8 +48,8 @@ export async function fetchStoryBundle(
     authorId: row.author_id,
     sortOrder: row.sort_order,
     mediaType: row.media_type,
-    mediaUrl: row.media_url,
-    thumbUrl: row.thumb_url,
+    mediaUrl: resolveStoryMediaUrl(row.media_url) ?? row.media_url,
+    thumbUrl: resolveStoryThumbUrl(row.thumb_url, row.media_url),
     durationSec: row.duration_sec != null ? Number(row.duration_sec) : null,
     stickerCategory: (row.sticker_category as StoryItem['stickerCategory']) ?? null,
     createdAt: row.created_at,
@@ -56,7 +61,7 @@ export async function fetchStoryBundle(
     authorId: head.author_id,
     username: head.username,
     fullName: head.full_name,
-    avatarUrl: head.avatar_url,
+    avatarUrl: sanitizeAvatarUrl(head.avatar_url, 'active'),
     isVerified: head.is_verified ?? false,
     items,
   };

@@ -1,7 +1,6 @@
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -13,6 +12,10 @@ type StoryReplyBarProps = {
   onSend: (text: string) => Promise<void>;
   onToggleReaction: () => Promise<void>;
   onOpenInsights?: () => void;
+  onDelete?: () => void;
+  onInputFocus?: () => void;
+  onInputBlur?: () => void;
+  inputRef?: RefObject<TextInput | null>;
 };
 
 export function StoryReplyBar({
@@ -22,20 +25,33 @@ export function StoryReplyBar({
   onSend,
   onToggleReaction,
   onOpenInsights,
+  onDelete,
+  onInputFocus,
+  onInputBlur,
+  inputRef,
 }: StoryReplyBarProps) {
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const [text, setText] = useState('');
 
   if (isOwnStory) {
     return (
-      <View style={[styles.ownWrap, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <Pressable style={styles.insightsPill} onPress={onOpenInsights} hitSlop={8}>
-          <Ionicons name="chevron-up" size={18} color="#fff" />
-          <Text variant="caption" style={styles.insightsLabel}>
-            İstatistikler
-          </Text>
-        </Pressable>
+      <View style={styles.ownWrap}>
+        <View style={styles.ownActions}>
+          <Pressable style={styles.insightsPill} onPress={onOpenInsights} hitSlop={8}>
+            <Ionicons name="chevron-up" size={18} color="#fff" />
+            <Text variant="caption" style={styles.insightsLabel}>
+              İstatistikler
+            </Text>
+          </Pressable>
+          {onDelete ? (
+            <Pressable style={styles.deletePill} onPress={onDelete} hitSlop={8}>
+              <Ionicons name="trash-outline" size={18} color="#ff6b6b" />
+              <Text variant="caption" style={styles.deleteLabel}>
+                Sil
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       </View>
     );
   }
@@ -48,8 +64,9 @@ export function StoryReplyBar({
   };
 
   return (
-    <View style={[styles.row, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
+    <View style={styles.row}>
       <TextInput
+        ref={inputRef}
         value={text}
         onChangeText={setText}
         placeholder="Hikayeye yanıt gönder…"
@@ -57,6 +74,8 @@ export function StoryReplyBar({
         style={styles.input}
         returnKeyType="send"
         onSubmitEditing={() => void handleSend()}
+        onFocus={onInputFocus}
+        onBlur={onInputBlur}
       />
       <Pressable style={styles.iconBtn} onPress={() => void onToggleReaction()} hitSlop={8}>
         <Ionicons name={hasReacted ? 'heart' : 'heart-outline'} size={26} color={hasReacted ? '#ff2d55' : '#fff'} />
@@ -77,10 +96,17 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
   },
   ownWrap: {
     alignItems: 'center',
     paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  ownActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
   },
   insightsPill: {
     flexDirection: 'row',
@@ -96,6 +122,20 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 13,
   },
+  deletePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,107,107,0.16)',
+  },
+  deleteLabel: {
+    color: '#ff8a8a',
+    fontWeight: '700',
+    fontSize: 13,
+  },
   input: {
     flex: 1,
     borderWidth: 1,
@@ -105,6 +145,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     color: '#fff',
     fontSize: 15,
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   iconBtn: {
     width: 40,

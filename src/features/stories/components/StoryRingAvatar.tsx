@@ -1,50 +1,71 @@
 import { Pressable, StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
-import { EventLiveAvatar } from '@/features/events/components/EventLiveAvatar';
+import { SafeLinearGradient } from '@/components/ui/SafeLinearGradient';
 import { STORY_RING_AVATAR_SIZE } from '@/features/stories/constants';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
+const STORY_GRADIENT = ['#f09433', '#e6683c', '#dc2743', '#cc2366', '#bc1888'];
+
 type StoryRingAvatarProps = {
   label: string;
-  coverUrl: string | null;
-  hasUnseen: boolean;
+  avatarUrl: string | null;
+  /** Kullanıcının aktif hikayesi var */
+  hasStory?: boolean;
+  /** İzlenmemiş hikaye — renkli halka */
+  hasUnseen?: boolean;
   isOwn?: boolean;
-  hasOwnStory?: boolean;
   onPress: () => void;
   onAddPress?: () => void;
 };
 
 export function StoryRingAvatar({
   label,
-  coverUrl,
-  hasUnseen,
+  avatarUrl,
+  hasStory = false,
+  hasUnseen = false,
   isOwn = false,
-  hasOwnStory = false,
   onPress,
   onAddPress,
 }: StoryRingAvatarProps) {
   const { colors } = useTheme();
+  const innerSize = size - 6;
 
   return (
     <Pressable style={styles.wrap} onPress={onPress}>
       <View>
-        {isOwn && !hasOwnStory ? (
+        {isOwn && !hasStory ? (
           <View style={[styles.addRing, { borderColor: colors.border }]}>
             <View style={[styles.addInner, { backgroundColor: colors.surfaceElevated }]}>
               <Ionicons name="add" size={28} color={colors.primary} />
             </View>
           </View>
         ) : (
-          <EventLiveAvatar
-            coverUrl={coverUrl}
-            size={STORY_RING_AVATAR_SIZE}
-            story={hasUnseen}
-            live={false}
-          />
+          <View style={[styles.ringShell, { width: size, height: size }]}>
+            {hasStory && hasUnseen ? (
+              <SafeLinearGradient
+                colors={STORY_GRADIENT}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={[styles.gradientRing, { width: size, height: size, borderRadius: size / 2 }]}
+              />
+            ) : hasStory ? (
+              <View style={[styles.seenRing, { borderColor: colors.textMuted }]} />
+            ) : null}
+            <View style={[styles.avatarClip, { width: innerSize, height: innerSize, borderRadius: innerSize / 2 }]}>
+              {avatarUrl ? (
+                <Image source={{ uri: avatarUrl }} style={styles.avatarImage} contentFit="cover" />
+              ) : (
+                <View style={[styles.avatarFallback, { backgroundColor: colors.surfaceElevated }]}>
+                  <Ionicons name="person" size={innerSize * 0.42} color={colors.textMuted} />
+                </View>
+              )}
+            </View>
+          </View>
         )}
-        {isOwn && hasOwnStory && onAddPress ? (
+        {isOwn && hasStory && onAddPress ? (
           <Pressable style={[styles.plusBadge, { backgroundColor: colors.primary }]} onPress={onAddPress} hitSlop={8}>
             <Ionicons name="add" size={14} color="#fff" />
           </Pressable>
@@ -69,6 +90,31 @@ const styles = StyleSheet.create({
     maxWidth: size + 8,
     textAlign: 'center',
     fontSize: 11,
+  },
+  ringShell: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gradientRing: {
+    position: 'absolute',
+  },
+  seenRing: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: size / 2,
+    borderWidth: 2,
+  },
+  avatarClip: {
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarFallback: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   addRing: {
     width: size,

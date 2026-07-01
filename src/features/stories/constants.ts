@@ -10,6 +10,12 @@ export const STORY_RING_AVATAR_SIZE = 68;
 
 export const STORY_USER_TRANSITION_MS = 220;
 
+/** Snapchat tarzı kart — kenar boşlukları ve yuvarlak köşe */
+export const STORY_CARD_RADIUS = 22;
+export const STORY_CARD_HORIZONTAL_INSET = 12;
+export const STORY_CARD_TOP_GAP = 10;
+export const STORY_CARD_BOTTOM_GAP = 12;
+
 export const STORY_STICKER_CATEGORIES = [
   { id: 'traffic', label: 'Trafik', icon: 'car-outline' as const },
   { id: 'event', label: 'Etkinlik', icon: 'calendar-outline' as const },

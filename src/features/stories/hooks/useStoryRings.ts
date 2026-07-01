@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
 import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
 import { getStorySeenMap, sortStoryRings } from '@/features/stories/services/storySeenCache';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
@@ -7,14 +7,12 @@ import type { StoryRing } from '@/features/stories/types';
 export function useStoryRings(options: {
   enabled: boolean;
   viewerId: string | null;
-  regionId?: string | null;
 }) {
-  const { enabled, viewerId, regionId } = options;
+  const { enabled, viewerId } = options;
   const rings = useStoryRingStore((s) => s.rings);
   const loading = useStoryRingStore((s) => s.loading);
   const nextCursor = useStoryRingStore((s) => s.nextCursor);
   const setRings = useStoryRingStore((s) => s.setRings);
-  const appendRings = useStoryRingStore((s) => s.appendRings);
   const setLoading = useStoryRingStore((s) => s.setLoading);
   const setNextCursor = useStoryRingStore((s) => s.setNextCursor);
 
@@ -22,13 +20,13 @@ export function useStoryRings(options: {
     if (!enabled) return;
     setLoading(true);
     try {
-      const result = await fetchStoryRings({ viewerId, regionId: regionId ?? null });
+      const result = await fetchStoryRings({ viewerId });
       setRings(result.rings);
       setNextCursor(result.nextCursor);
     } finally {
       setLoading(false);
     }
-  }, [enabled, regionId, setLoading, setNextCursor, setRings, viewerId]);
+  }, [enabled, setLoading, setNextCursor, setRings, viewerId]);
 
   const loadMore = useCallback(async () => {
     if (!enabled || !nextCursor || loading) return;
@@ -36,7 +34,6 @@ export function useStoryRings(options: {
     try {
       const result = await fetchStoryRings({
         viewerId,
-        regionId: regionId ?? null,
         cursor: nextCursor,
       });
       const seenAt = await getStorySeenMap();
@@ -46,7 +43,7 @@ export function useStoryRings(options: {
     } finally {
       setLoading(false);
     }
-  }, [enabled, loading, nextCursor, regionId, rings, setLoading, setNextCursor, setRings, viewerId]);
+  }, [enabled, loading, nextCursor, rings, setLoading, setNextCursor, setRings, viewerId]);
 
   useEffect(() => {
     if (!enabled) {

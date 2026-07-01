@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { STORY_PHOTO_DURATION_MS } from '@/features/stories/constants';
+import { isStoryImageItem } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
 
 type UseStoryAutoAdvanceOptions = {
@@ -21,62 +22,96 @@ export function useStoryAutoAdvance({
   videoPositionSec = 0,
   videoDurationSec,
 }: UseStoryAutoAdvanceOptions) {
+  const onCompleteRef = useRef(onComplete);
+  const onProgressRef = useRef(onProgress);
+  onCompleteRef.current = onComplete;
+  onProgressRef.current = onProgress;
+
+  const completedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const startedAtRef = useRef<number | null>(null);
-  const completedRef = useRef(false);
+  const elapsedBeforePauseRef = useRef(0);
 
-  const clearTimer = useCallback(() => {
+  const itemId = item?.id ?? null;
+  const itemDurationSec = item?.durationSec ?? null;
+  const itemMediaType = item?.mediaType ?? 'image';
+  const itemMediaUrl = item?.mediaUrl ?? '';
+  const isPhoto = item ? isStoryImageItem(itemMediaType, itemMediaUrl) : false;
+
+  useEffect(() => {
+    completedRef.current = false;
+    elapsedBeforePauseRef.current = 0;
+    startedAtRef.current = null;
+    onProgressRef.current(0);
+  }, [itemId]);
+
+  useEffect(() => {
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
-    startedAtRef.current = null;
-  }, []);
 
-  useEffect(() => {
-    completedRef.current = false;
-    clearTimer();
-
-    if (!item || !isActive || isPaused) return;
-
-    if (item.mediaType === 'video') {
-      const durationMs = Math.max(1000, (videoDurationSec ?? item.durationSec ?? 15) * 1000);
-      const tick = () => {
-        const progress = Math.min(1, videoPositionSec / (durationMs / 1000));
-        onProgress(progress);
-        if (progress >= 0.995 && !completedRef.current) {
-          completedRef.current = true;
-          onComplete();
-        }
-      };
-      tick();
+    if (!itemId || !isActive || !isPhoto) {
+      startedAtRef.current = null;
       return;
     }
 
-    const durationMs = STORY_PHOTO_DURATION_MS;
+    if (isPaused) {
+      if (startedAtRef.current != null) {
+        elapsedBeforePauseRef.current += Date.now() - startedAtRef.current;
+        startedAtRef.current = null;
+      }
+      return;
+    }
+
     startedAtRef.current = Date.now();
-    timerRef.current = setInterval(() => {
-      const elapsed = Date.now() - (startedAtRef.current ?? Date.now());
-      const progress = Math.min(1, elapsed / durationMs);
-      onProgress(progress);
+
+    const tick = () => {
+      const runningElapsed = startedAtRef.current != null ? Date.now() - startedAtRef.current : 0;
+      const elapsed = elapsedBeforePauseRef.current + runningElapsed;
+      const progress = Math.min(1, elapsed / STORY_PHOTO_DURATION_MS);
+      onProgressRef.current(progress);
+
       if (progress >= 1 && !completedRef.current) {
         completedRef.current = true;
-        clearTimer();
-        onComplete();
+        if (timerRef.current) {
+          clearInterval(timerRef.current);
+          timerRef.current = null;
+        }
+        onCompleteRef.current();
       }
-    }, 50);
+    };
 
-    return clearTimer;
-  }, [
-    clearTimer,
-    isActive,
-    isPaused,
-    item,
-    onComplete,
-    onProgress,
-    videoDurationSec,
-    videoPositionSec,
-  ]);
+    tick();
+    timerRef.current = setInterval(tick, 50);
 
-  return { clearTimer };
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [isActive, isPaused, isPhoto, itemId]);
+
+  useEffect(() => {
+    if (!itemId || !isActive || isPaused || isPhoto) return;
+
+    const durationSec = Math.max(0.1, videoDurationSec ?? itemDurationSec ?? 15);
+    const progress = Math.min(1, videoPositionSec / durationSec);
+    onProgressRef.current(progress);
+
+    if (progress >= 0.98 && !completedRef.current) {
+      completedRef.current = true;
+      onCompleteRef.current();
+    }
+  }, [isActive, isPaused, isPhoto, itemId, itemDurationSec, videoDurationSec, videoPositionSec]);
+
+  return {
+    clearTimer: () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    },
+  };
 }

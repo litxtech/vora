@@ -13,7 +13,17 @@ import { Ionicons } from '@expo/vector-icons';
 import type { ComponentProps } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
+import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import type { StoryInsights, StoryItemInsight } from '@/features/stories/types';
+import {
+  fetchStoryItemEngagement,
+  type StoryItemEngagement,
+} from '@/features/stories/services/fetchStoryEngagement';
+import {
+  fetchStoryItemViewers,
+  type StoryViewerRow,
+} from '@/features/stories/services/fetchStoryViewers';
+import { navigateToPublicProfile } from '@/features/profile/services/profileNavigation';
 import { Text } from '@/components/ui/Text';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { spacing } from '@/constants/theme';
@@ -22,6 +32,7 @@ type StoryInsightsSheetProps = {
   visible: boolean;
   insights: StoryInsights | null;
   loading?: boolean;
+  authorId?: string | null;
   initialItemIndex?: number;
   onClose: () => void;
 };
@@ -55,12 +66,17 @@ export function StoryInsightsSheet({
   visible,
   insights,
   loading = false,
+  authorId = null,
   initialItemIndex = 0,
   onClose,
 }: StoryInsightsSheetProps) {
   const insets = useSafeAreaInsets();
   const thumbListRef = useRef<FlatList<StoryItemInsight>>(null);
   const [selectedIndex, setSelectedIndex] = useState(initialItemIndex);
+  const [engagement, setEngagement] = useState<StoryItemEngagement | null>(null);
+  const [engagementLoading, setEngagementLoading] = useState(false);
+  const [viewers, setViewers] = useState<StoryViewerRow[]>([]);
+  const [viewersLoading, setViewersLoading] = useState(false);
 
   useEffect(() => {
     if (!visible) return;
@@ -73,6 +89,35 @@ export function StoryInsightsSheet({
 
   const items = insights?.items ?? [];
   const selected = items[selectedIndex] ?? items[0] ?? null;
+
+  useEffect(() => {
+    if (!visible || !authorId || !selected?.itemId) {
+      setEngagement(null);
+      setViewers([]);
+      return;
+    }
+    let cancelled = false;
+    setEngagementLoading(true);
+    setViewersLoading(true);
+
+    void fetchStoryItemEngagement(authorId, selected.itemId).then((data) => {
+      if (!cancelled) {
+        setEngagement(data);
+        setEngagementLoading(false);
+      }
+    });
+
+    void fetchStoryItemViewers(authorId, selected.itemId).then((data) => {
+      if (!cancelled) {
+        setViewers(data);
+        setViewersLoading(false);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authorId, selected?.itemId, visible]);
 
   const renderThumb: ListRenderItem<StoryItemInsight> = ({ item, index }) => {
     const active = index === selectedIndex;
@@ -224,6 +269,90 @@ export function StoryInsightsSheet({
                     value={formatCount(selected.exitedEarlyCount)}
                     isLast
                   />
+                </View>
+
+                <View style={styles.section}>
+                  <SectionTitle title={`Görüntüleyenler (${viewers.length})`} />
+                  {viewersLoading ? (
+                    <ActivityIndicator color={IG.text} style={{ marginVertical: spacing.sm }} />
+                  ) : viewers.length ? (
+                    viewers.map((row) => (
+                      <Pressable
+                        key={`${row.userId}-${row.viewedAt}`}
+                        style={styles.personRow}
+                        onPress={() => {
+                          onClose();
+                          navigateToPublicProfile({ userId: row.userId });
+                        }}
+                      >
+                        <ProfileAvatar username={row.username} avatarUrl={row.avatarUrl} size={36} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="label" style={{ color: IG.text }}>
+                            {row.fullName?.trim() || row.username}
+                          </Text>
+                          <Text variant="caption" style={{ color: IG.muted }}>
+                            {formatDuration(row.watchedSeconds)}
+                            {row.watchCompletion > 0 ? ` · %${Math.round(row.watchCompletion * 100)}` : ''}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={16} color={IG.muted} />
+                      </Pressable>
+                    ))
+                  ) : (
+                    <Text variant="caption" style={styles.emptyRow}>
+                      Henüz görüntüleyen yok
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.section}>
+                  <SectionTitle title={`Beğeniler (${engagement?.reactions.length ?? 0})`} />
+                  {engagementLoading ? (
+                    <ActivityIndicator color={IG.text} style={{ marginVertical: spacing.sm }} />
+                  ) : engagement?.reactions.length ? (
+                    engagement.reactions.map((row) => (
+                      <View key={`${row.userId}-${row.createdAt}`} style={styles.personRow}>
+                        <ProfileAvatar username={row.username} avatarUrl={row.avatarUrl} size={36} />
+                        <View style={{ flex: 1 }}>
+                          <Text variant="label" style={{ color: IG.text }}>
+                            {row.fullName?.trim() || row.username}
+                          </Text>
+                          <Text variant="caption" style={{ color: IG.muted }}>
+                            {row.emoji}
+                          </Text>
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <Text variant="caption" style={styles.emptyRow}>
+                      Henüz beğeni yok
+                    </Text>
+                  )}
+                </View>
+
+                <View style={styles.section}>
+                  <SectionTitle title={`Yanıtlar (${engagement?.replies.length ?? 0})`} />
+                  {engagementLoading ? (
+                    <ActivityIndicator color={IG.text} style={{ marginVertical: spacing.sm }} />
+                  ) : engagement?.replies.length ? (
+                    engagement.replies.map((row) => (
+                      <View key={row.messageId} style={styles.replyRow}>
+                        <ProfileAvatar username={row.username} avatarUrl={row.avatarUrl} size={32} />
+                        <View style={styles.replyBubble}>
+                          <Text variant="caption" style={{ color: IG.muted }}>
+                            {row.fullName?.trim() || row.username}
+                          </Text>
+                          <Text variant="body" style={{ color: IG.text }}>
+                            {row.content}
+                          </Text>
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <Text variant="caption" style={styles.emptyRow}>
+                      Henüz yanıt yok
+                    </Text>
+                  )}
                 </View>
               </ScrollView>
             </>
@@ -486,5 +615,29 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     color: IG.muted,
+  },
+  personRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  replyRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  replyBubble: {
+    flex: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 12,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    gap: 2,
+  },
+  emptyRow: {
+    color: IG.muted,
+    paddingVertical: spacing.sm,
   },
 });

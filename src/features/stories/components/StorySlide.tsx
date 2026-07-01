@@ -1,16 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Dimensions, StyleSheet, View, type LayoutChangeEvent } from 'react-native';
+import { StyleSheet, View, type LayoutChangeEvent } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
 import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
-import { isStoryImageItem } from '@/features/stories/services/storyMediaUrl';
+import { isStoryImageItem, resolveStoryMediaUrl } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
 import { Text } from '@/components/ui/Text';
 import { isPlayableVideoUrl, toVideoSource } from '@/lib/media/videoSource';
 import { spacing } from '@/constants/theme';
 import { Ionicons } from '@expo/vector-icons';
-
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 type StorySlideProps = {
   item: StoryItem;
@@ -29,12 +27,13 @@ export function StorySlide(props: StorySlideProps) {
 
 function StoryImageSlide({ item }: { item: StoryItem }) {
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
+  const uri = resolveStoryMediaUrl(item.mediaUrl);
 
   return (
     <View style={styles.root}>
       <OptimizedImage
-        uri={item.mediaUrl}
-        tier="full"
+        uri={uri}
+        tier="feed"
         style={styles.media}
         contentFit="cover"
         recyclingKey={item.id}
@@ -52,13 +51,13 @@ function StoryVideoSlide({
   onVideoPosition,
   onVideoEnd,
 }: StorySlideProps) {
-  const [layout, setLayout] = useState({ width: SCREEN_WIDTH, height: SCREEN_HEIGHT });
+  const [layout, setLayout] = useState({ width: 0, height: 0 });
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
 
-  const source = useMemo(
-    () => (isPlayableVideoUrl(item.mediaUrl) ? toVideoSource(item.mediaUrl) : null),
-    [item.mediaUrl],
-  );
+  const source = useMemo(() => {
+    const url = resolveStoryMediaUrl(item.mediaUrl);
+    return url && isPlayableVideoUrl(url) ? toVideoSource(url) : null;
+  }, [item.mediaUrl]);
 
   const player = useVideoPlayer(source, (p) => {
     p.loop = false;
@@ -141,16 +140,16 @@ function StoryStickerBadge({
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: '#000',
+    flex: 1,
+    backgroundColor: '#111',
   },
   media: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
+    width: '100%',
+    height: '100%',
   },
   sticker: {
     position: 'absolute',
-    top: spacing.xl + 28,
+    top: spacing.lg + 36,
     left: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',

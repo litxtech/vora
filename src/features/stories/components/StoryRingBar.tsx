@@ -1,28 +1,50 @@
-import { useCallback } from 'react';
-import { ActivityIndicator, FlatList, StyleSheet, View } from 'react-native';
-import { router, type Href } from 'expo-router';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  StyleSheet,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+} from 'react-native';
+import { router, useIsFocused, type Href } from 'expo-router';
 import { StoryRingAvatar } from '@/features/stories/components/StoryRingAvatar';
+import { StoryRingSkeleton } from '@/features/stories/components/StoryRingSkeleton';
 import { useStoryRings } from '@/features/stories/hooks/useStoryRings';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { useStoryViewerStore } from '@/features/stories/store/storyViewerStore';
 import type { StoryRing } from '@/features/stories/types';
+import { shouldDeferStoryRingBar } from '@/lib/device/androidPerfProfile';
+import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
+import { sanitizeAvatarUrl } from '@/features/account-deletion/utils';
 
-type StoryRingBarProps = {
-  regionId?: string | null;
-};
-
-export function StoryRingBar({ regionId }: StoryRingBarProps) {
+export function StoryRingBar() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const isFocused = useIsFocused();
+  const { user, profile } = useAuth();
   const markUserSeen = useStoryRingStore((s) => s.markUserSeen);
-  const { rings, loading, loadMore } = useStoryRings({
-    enabled: true,
+  const [mounted, setMounted] = useState(!shouldDeferStoryRingBar());
+
+  useEffect(() => {
+    if (!shouldDeferStoryRingBar()) return;
+    const task = deferBackgroundWork(() => setMounted(true));
+    return () => task.cancel();
+  }, []);
+
+  const { rings, loading, refresh, loadMore } = useStoryRings({
+    enabled: mounted && isFocused,
     viewerId: user?.id ?? null,
-    regionId: regionId ?? null,
   });
+
+  useEffect(() => {
+    if (!mounted || !isFocused) return;
+    void refresh();
+  }, [isFocused, mounted, refresh]);
+
+  const ownAvatar = sanitizeAvatarUrl(profile?.avatar_url ?? null, profile?.account_status ?? 'active');
 
   const openViewer = useCallback(
     (startUserId: string) => {
@@ -54,17 +76,19 @@ export function StoryRingBar({ regionId }: StoryRingBarProps) {
     handleOwnAdd();
   }, [handleOwnAdd, openViewer, rings, user?.id]);
 
-  const renderItem = useCallback(
-    ({ item }: { item: StoryRing | 'own' }) => {
+  const data: (StoryRing | 'own')[] = user ? ['own', ...rings.filter((r) => r.userId !== user.id)] : rings;
+
+  const renderRing = useCallback(
+    (item: StoryRing | 'own') => {
       if (item === 'own') {
         const own = rings.find((r) => r.userId === user?.id);
         return (
           <StoryRingAvatar
             label="Hikayen"
-            coverUrl={own?.previewThumb ?? user?.user_metadata?.avatar_url ?? null}
+            avatarUrl={ownAvatar}
+            hasStory={!!own}
             hasUnseen={false}
             isOwn
-            hasOwnStory={!!own}
             onPress={handleOwnPress}
             onAddPress={handleOwnAdd}
           />
@@ -74,7 +98,8 @@ export function StoryRingBar({ regionId }: StoryRingBarProps) {
       return (
         <StoryRingAvatar
           label={item.fullName?.trim() || item.username}
-          coverUrl={item.previewThumb ?? item.avatarUrl}
+          avatarUrl={item.avatarUrl}
+          hasStory
           hasUnseen={item.hasUnseen}
           onPress={() => {
             if (item.hasUnseen) markUserSeen(item.userId);
@@ -83,30 +108,47 @@ export function StoryRingBar({ regionId }: StoryRingBarProps) {
         />
       );
     },
-    [handleOwnAdd, handleOwnPress, handlePress, markUserSeen, rings, user?.id, user?.user_metadata?.avatar_url],
+    [handleOwnAdd, handleOwnPress, handlePress, markUserSeen, ownAvatar, rings, user?.id],
   );
 
-  const data: (StoryRing | 'own')[] = user ? ['own', ...rings.filter((r) => r.userId !== user.id)] : rings;
+  const handleHorizontalScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const { layoutMeasurement, contentOffset, contentSize } = event.nativeEvent;
+      if (layoutMeasurement.width + contentOffset.x >= contentSize.width - 48) {
+        void loadMore();
+      }
+    },
+    [loadMore],
+  );
 
-  if (!loading && data.length === 0) return null;
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <View style={styles.wrap}>
       {loading && rings.length === 0 ? (
-        <View style={styles.loading}>
-          <ActivityIndicator color={colors.primary} size="small" />
-        </View>
+        <StoryRingSkeleton />
       ) : (
-        <FlatList
-          horizontal
-          data={data}
-          keyExtractor={(item) => (item === 'own' ? 'own' : item.userId)}
-          renderItem={renderItem}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.list}
-          onEndReached={() => void loadMore()}
-          onEndReachedThreshold={0.6}
-        />
+        <>
+          <ScrollView
+            horizontal
+            nestedScrollEnabled
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.list}
+            onScroll={handleHorizontalScroll}
+            scrollEventThrottle={200}
+          >
+            {data.map((item, index) => (
+              <View key={item === 'own' ? 'own' : item.userId || `ring-${index}`}>{renderRing(item)}</View>
+            ))}
+          </ScrollView>
+          {loading && rings.length > 0 ? (
+            <View style={styles.inlineLoader}>
+              <ActivityIndicator color={colors.primary} size="small" />
+            </View>
+          ) : null}
+        </>
       )}
     </View>
   );
@@ -115,14 +157,14 @@ export function StoryRingBar({ regionId }: StoryRingBarProps) {
 const styles = StyleSheet.create({
   wrap: {
     paddingBottom: spacing.xs,
+    minHeight: 92,
   },
   list: {
-    paddingHorizontal: spacing.md,
     gap: spacing.sm,
   },
-  loading: {
-    height: 92,
-    alignItems: 'center',
-    justifyContent: 'center',
+  inlineLoader: {
+    position: 'absolute',
+    right: spacing.md,
+    top: 28,
   },
 });
