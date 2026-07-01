@@ -2,7 +2,12 @@ import { STORY_MAX_VIDEO_SEC, STORY_TTL_HOURS } from '@/features/stories/constan
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import type { StoryFraming } from '@/features/stories/utils/storyFraming';
 import { serializeStoryFraming } from '@/features/stories/utils/storyFraming';
-import { uploadStoryMedia, type UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
+import {
+  finishStoryVideoUpload,
+  prepareStoryVideoUpload,
+  uploadStoryMedia,
+  type UploadStoryMediaProgress,
+} from '@/features/stories/services/uploadStoryMedia';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { supabase } from '@/lib/supabase/client';
@@ -16,6 +21,8 @@ export type PublishStoryInput = {
   regionId?: string | null;
   stickerCategory?: StoryStickerCategoryId | null;
   framing?: StoryFraming | null;
+  /** Studio'da kırpıldıysa dosya süresi yerine bu değer kullanılır. */
+  trimmedInStudio?: boolean;
   onUploadProgress?: (progress: UploadStoryMediaProgress) => void;
 };
 
@@ -78,7 +85,11 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     };
   }
 
-  if (isVideo && (input.durationSec == null || input.durationSec <= 0)) {
+  if (
+    isVideo &&
+    !input.trimmedInStudio &&
+    (input.durationSec == null || input.durationSec <= 0)
+  ) {
     const probed = await probeVideoDuration(input.localUri);
     if (probed > STORY_MAX_VIDEO_SEC) {
       return {
@@ -98,20 +109,42 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     return { storyId: null, itemId: null, mediaUrl: null, error: storyError ?? 'Hikaye oluşturulamadı' };
   }
 
-  const upload = await uploadStoryMedia(input.authorId, input.localUri, isVideo ? 'video' : 'image', {
-    onProgress: input.onUploadProgress,
-  });
+  let mediaUrl: string | null = null;
+  let thumbUrl: string | null = null;
+  let videoReservation: Awaited<ReturnType<typeof prepareStoryVideoUpload>>['reservation'];
 
-  if (upload.error || !upload.mediaUrl) {
-    return { storyId, itemId: null, mediaUrl: null, error: upload.error ?? 'Medya yüklenemedi' };
+  if (isVideo) {
+    input.onUploadProgress?.({ stage: 'preparing', message: 'Video hazırlanıyor…' });
+    const prepared = await prepareStoryVideoUpload(
+      input.authorId,
+      input.localUri,
+      input.regionId,
+      input.onUploadProgress,
+    );
+    if (prepared.error || !prepared.mediaUrl) {
+      return { storyId, itemId: null, mediaUrl: null, error: prepared.error ?? 'Video hazırlanamadı' };
+    }
+    mediaUrl = prepared.mediaUrl;
+    thumbUrl = prepared.thumbUrl;
+    videoReservation = prepared.reservation;
+  } else {
+    const upload = await uploadStoryMedia(input.authorId, input.localUri, 'image', {
+      regionId: input.regionId,
+      onProgress: input.onUploadProgress,
+    });
+    if (upload.error || !upload.mediaUrl) {
+      return { storyId, itemId: null, mediaUrl: null, error: upload.error ?? 'Medya yüklenemedi' };
+    }
+    mediaUrl = resolveStoryMediaUrl(upload.mediaUrl) ?? upload.mediaUrl;
+    thumbUrl = resolveStoryThumbUrl(upload.thumbUrl, upload.mediaUrl);
   }
 
-  const mediaUrl = resolveStoryMediaUrl(upload.mediaUrl) ?? upload.mediaUrl;
-  const thumbUrl = resolveStoryThumbUrl(upload.thumbUrl, upload.mediaUrl);
+  const resolvedMediaUrl = resolveStoryMediaUrl(mediaUrl) ?? mediaUrl;
+  const resolvedThumbUrl = resolveStoryThumbUrl(thumbUrl, mediaUrl);
   const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
 
   let durationSec = input.durationSec ?? null;
-  if (mediaType === 'video' && (durationSec == null || durationSec <= 0)) {
+  if (mediaType === 'video' && (durationSec == null || durationSec <= 0) && !input.trimmedInStudio) {
     const probed = await probeVideoDuration(input.localUri);
     if (probed > 0) durationSec = probed;
   }
@@ -135,8 +168,8 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       author_id: input.authorId,
       sort_order: nextOrder,
       media_type: mediaType,
-      media_url: mediaUrl,
-      thumb_url: thumbUrl,
+      media_url: resolvedMediaUrl,
+      thumb_url: resolvedThumbUrl,
       duration_sec: mediaType === 'video' ? durationSec : null,
       sticker_category: input.stickerCategory ?? null,
       stickers_json: input.framing ? serializeStoryFraming(input.framing) : [],
@@ -155,13 +188,21 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     };
   }
 
+  if (isVideo && videoReservation) {
+    void finishStoryVideoUpload(videoReservation, input.onUploadProgress).catch((err) => {
+      if (__DEV__) {
+        console.warn('[stories] background mux upload failed:', err);
+      }
+    });
+  }
+
   await supabase
     .from('stories')
     .update({
       expires_at: expiresAt,
       region_id: input.regionId ?? null,
       item_count: nextOrder + 1,
-      latest_thumb_url: thumbUrl ?? mediaUrl,
+      latest_thumb_url: resolvedThumbUrl ?? resolvedMediaUrl,
       latest_item_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
@@ -170,7 +211,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
   return {
     storyId,
     itemId: item.id as string,
-    mediaUrl,
+    mediaUrl: resolvedMediaUrl,
     error: null,
   };
 }

@@ -41,9 +41,15 @@ type StoryPublishScreenProps = {
   mediaUri: string;
   mediaType: 'image' | 'video';
   durationSec?: number;
+  trimmedInStudio?: boolean;
 };
 
-export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPublishScreenProps) {
+export function StoryPublishScreen({
+  mediaUri,
+  mediaType,
+  durationSec,
+  trimmedInStudio = false,
+}: StoryPublishScreenProps) {
   const normalizedDurationSec = normalizeIncomingDurationSec(durationSec);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -64,7 +70,12 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
   }, [mediaUri]);
 
   useEffect(() => {
-    if (mediaType !== 'video') return;
+    if (mediaType !== 'video' || trimmedInStudio) return;
+
+    const knownDuration = normalizedDurationSec;
+    if (knownDuration != null && knownDuration > 0 && knownDuration <= STORY_MAX_VIDEO_SEC) {
+      return;
+    }
 
     let cancelled = false;
 
@@ -86,7 +97,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
     return () => {
       cancelled = true;
     };
-  }, [mediaType, mediaUri]);
+  }, [mediaType, mediaUri, normalizedDurationSec, trimmedInStudio]);
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +145,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
           mediaUri: stable,
           mediaType: 'video',
           durationSec: normalizedDurationSec,
+          trimmedInStudio,
         });
       })
       .catch((err) => {
@@ -150,7 +162,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
     return () => {
       cancelled = true;
     };
-  }, [mediaType, mediaUri, normalizedDurationSec]);
+  }, [mediaType, mediaUri, normalizedDurationSec, trimmedInStudio]);
 
   const handleFramingChange = useCallback((next: StoryFraming) => {
     setFraming(next);
@@ -196,6 +208,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
       regionId: regionId ?? null,
       stickerCategory: null,
       framing: uploadFraming,
+      trimmedInStudio,
       onUploadProgress: (progress: UploadStoryMediaProgress) => {
         setUploadMessage(progress.message);
       },
@@ -225,6 +238,7 @@ export function StoryPublishScreen({ mediaUri, mediaType, durationSec }: StoryPu
     publishing,
     regionId,
     setRings,
+    trimmedInStudio,
     user,
   ]);
 

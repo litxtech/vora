@@ -12,7 +12,7 @@ import { StudioTextEditor } from '@/features/vora-studio/components/StudioTextEd
 import { StudioToolSheet } from '@/features/vora-studio/components/StudioToolSheet';
 import { StudioVideoPreview } from '@/features/vora-studio/components/StudioVideoPreview';
 import { STUDIO_TOOLS, LIVE_SUPPORT_CLIP_MAX_SEC, STORY_CLIP_MAX_SEC } from '@/features/vora-studio/constants';
-import { exportStudioVideo, probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
+import { exportStudioClip, exportStudioVideo, probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { toUserFacingError } from '@/lib/errors';
 import { buildMusicSelectionFromEditor } from '@/features/music/services/buildMusicSelection';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
@@ -109,7 +109,9 @@ export function VoraStudioScreen() {
       setExporting(true);
       setStatus('');
       try {
-        const result = await exportStudioVideo(user.id, username, setStatus);
+        const result = isClipMode
+          ? await exportStudioClip(username, setStatus)
+          : await exportStudioVideo(user.id, username, setStatus);
 
         if (isStory) {
           const stableUri = await stabilizeStoryVideoUri(result.outputUri);
@@ -117,9 +119,16 @@ export function VoraStudioScreen() {
             mediaUri: stableUri,
             mediaType: 'video',
             durationSec: clipDuration,
+            trimmedInStudio: true,
           });
-          reset();
-          router.replace('/stories/publish' as never);
+          router.replace({
+            pathname: '/stories/publish',
+            params: {
+              mediaType: 'video',
+              durationSec: String(Math.max(1, Math.round(clipDuration))),
+              trimmedInStudio: '1',
+            },
+          } as never);
           return;
         }
 

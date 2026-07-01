@@ -8,6 +8,13 @@ export const STORY_RING_PAGE_SIZE = 40;
 
 export const STORY_RING_AVATAR_SIZE = 68;
 
+/** İzlenmemiş / aktif hikâye — uygulama mavisi + Karadeniz yeşili */
+export const STORY_RING_ACTIVE_GRADIENT = ['#1E88E5', '#00BFA5', '#1565C0'] as const;
+
+/** İzlenmiş hikâye halkası (açık/koyu tema üzerinde nötr) */
+export const STORY_RING_SEEN_LIGHT = '#94A3B8';
+export const STORY_RING_SEEN_DARK = '#4B5563';
+
 export const STORY_USER_TRANSITION_MS = 220;
 
 /** Snapchat tarzı kart — kenar boşlukları ve yuvarlak köşe */

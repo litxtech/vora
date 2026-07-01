@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { EventLiveAvatar } from '@/features/events/components/EventLiveAvatar';
+import { StoryRingFrame } from '@/features/stories/components/StoryRingFrame';
 import { STORY_RING_AVATAR_SIZE } from '@/features/stories/constants';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
@@ -16,6 +16,17 @@ type StoryRingAvatarProps = {
   onAddPress?: () => void;
 };
 
+function resolveRingVariant(
+  hasStory: boolean,
+  hasUnseen: boolean,
+  isOwn: boolean,
+): 'none' | 'active' | 'seen' | 'add' {
+  if (isOwn && !hasStory) return 'add';
+  if (!hasStory) return 'none';
+  if (hasUnseen || isOwn) return 'active';
+  return 'seen';
+}
+
 export function StoryRingAvatar({
   label,
   avatarUrl,
@@ -26,31 +37,18 @@ export function StoryRingAvatar({
   onAddPress,
 }: StoryRingAvatarProps) {
   const { colors } = useTheme();
+  const variant = resolveRingVariant(hasStory, hasUnseen, isOwn);
 
   return (
     <Pressable style={styles.wrap} onPress={onPress}>
       <View>
-        {isOwn && !hasStory ? (
-          <View style={[styles.addRing, { borderColor: colors.border }]}>
-            <View style={[styles.addInner, { backgroundColor: colors.surfaceElevated }]}>
-              <Ionicons name="add" size={28} color={colors.primary} />
-            </View>
-          </View>
-        ) : (
-          <View style={hasStory && !hasUnseen ? styles.seenShell : undefined}>
-            {hasStory && !hasUnseen ? (
-              <View style={[styles.seenRing, { borderColor: colors.textMuted }]} />
-            ) : null}
-            <EventLiveAvatar
-              coverUrl={avatarUrl}
-              size={STORY_RING_AVATAR_SIZE}
-              story={hasStory && hasUnseen}
-              live={false}
-            />
-          </View>
-        )}
+        <StoryRingFrame avatarUrl={avatarUrl} variant={variant} />
         {isOwn && hasStory && onAddPress ? (
-          <Pressable style={[styles.plusBadge, { backgroundColor: colors.primary }]} onPress={onAddPress} hitSlop={8}>
+          <Pressable
+            style={[styles.plusBadge, { backgroundColor: colors.primary, borderColor: colors.background }]}
+            onPress={onAddPress}
+            hitSlop={8}
+          >
             <Ionicons name="add" size={14} color="#fff" />
           </Pressable>
         ) : null}
@@ -75,33 +73,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 11,
   },
-  seenShell: {
-    width: size,
-    height: size,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  seenRing: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: size / 2,
-    borderWidth: 2,
-  },
-  addRing: {
-    width: size,
-    height: size,
-    borderRadius: size / 2,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addInner: {
-    width: size - 8,
-    height: size - 8,
-    borderRadius: (size - 8) / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   plusBadge: {
     position: 'absolute',
     right: 0,
@@ -112,6 +83,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor: '#000',
   },
 });

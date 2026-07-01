@@ -30,6 +30,7 @@ import { useStoryKeyboardHeight } from '@/features/stories/hooks/useStoryKeyboar
 import { deleteStoryItem } from '@/features/stories/services/deleteStoryItem';
 import { fetchStoryBundle } from '@/features/stories/services/fetchStoryBundle';
 import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
+import { formatStoryTime } from '@/features/stories/utils/formatStoryTime';
 import { fetchStoryInsights } from '@/features/stories/services/fetchStoryInsights';
 import { recordStoryView } from '@/features/stories/services/recordStoryView';
 import { markStoryUserSeen } from '@/features/stories/services/storySeenCache';
@@ -600,9 +601,16 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                       size={34}
                       isVerified={bundle.isVerified}
                     />
-                    <Text variant="label" style={styles.authorName}>
-                      {bundle.fullName?.trim() || bundle.username}
-                    </Text>
+                    <View style={styles.authorMeta}>
+                      <Text variant="label" style={styles.authorName}>
+                        {bundle.fullName?.trim() || bundle.username}
+                      </Text>
+                      {activeItem?.createdAt ? (
+                        <Text variant="caption" style={styles.storyTime}>
+                          {formatStoryTime(activeItem.createdAt)}
+                        </Text>
+                      ) : null}
+                    </View>
                   </Pressable>
                 ) : (
                   <View />
@@ -742,9 +750,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+    flexShrink: 1,
+  },
+  authorMeta: {
+    flexShrink: 1,
+    gap: 1,
   },
   authorName: {
     color: '#fff',
+    textShadowColor: 'rgba(0,0,0,0.45)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  storyTime: {
+    color: 'rgba(255,255,255,0.78)',
+    fontSize: 11,
     textShadowColor: 'rgba(0,0,0,0.45)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,

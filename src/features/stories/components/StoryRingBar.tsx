@@ -150,7 +150,7 @@ export function StoryRingBar() {
                     label="Hikayen"
                     avatarUrl={ownAvatar}
                     hasStory={!!own}
-                    hasUnseen={false}
+                    hasUnseen={!!own}
                     isOwn
                     onPress={handleOwnPress}
                     onAddPress={handleOwnAdd}
