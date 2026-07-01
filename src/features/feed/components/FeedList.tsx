@@ -127,14 +127,18 @@ export function FeedList({
   const [visibleRowIds, setVisibleRowIds] = useState<Set<string>>(() => new Set());
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingViewableRef = useRef<ViewToken[]>([]);
+  const commitActiveVideoRef = useRef<(viewableItems: ViewToken[]) => void>(() => {});
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const commitActiveVideo = useCallback((viewableItems: ViewToken[]) => {
     useFeedVideoPlaybackStore.getState().setActivePost(pickActiveVideoPostId(viewableItems));
   }, []);
+  commitActiveVideoRef.current = commitActiveVideo;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (useFeedDrawerStore.getState().listInteractionLocked) return;
+
     const isScrolling = useFeedVideoPlaybackStore.getState().isScrolling;
     const nextVisible = new Set<string>();
 
@@ -189,15 +193,27 @@ export function FeedList({
   }, []);
 
   useEffect(() => {
+    const clipSubviews = listPerf.removeClippedSubviews ?? false;
+
     const applyListInteraction = (locked: boolean) => {
+      const videoStore = useFeedVideoPlaybackStore.getState();
+      if (locked) {
+        videoStore.setScrolling(true);
+        videoStore.setActivePost(null);
+      } else {
+        videoStore.setScrolling(false);
+        commitActiveVideoRef.current(pendingViewableRef.current);
+      }
+
       listRef.current?.setNativeProps?.({
         scrollEnabled: !locked,
         pointerEvents: locked ? 'none' : 'auto',
+        removeClippedSubviews: locked ? false : clipSubviews,
       });
     };
 
     useFeedDrawerStore.getState().setListInteractionLockHandler(applyListInteraction);
-    applyListInteraction(useFeedDrawerStore.getState().open);
+    applyListInteraction(useFeedDrawerStore.getState().listInteractionLocked);
 
     return () => {
       useFeedDrawerStore.getState().setListInteractionLockHandler(null);
