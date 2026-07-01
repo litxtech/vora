@@ -53,6 +53,7 @@ export function ProfileOwnActionsBar({
   const showEditProfile = useFeatureVisible(PROFILE_FEATURE.editProfile);
   const showInsights = useFeatureVisible(PROFILE_FEATURE.insights);
   const showCloseFriends = useFeatureVisible(PROFILE_FEATURE.closeFriends);
+  const showSoundCreate = useFeatureVisible('user-sounds');
   const showBusinessApplicationFlag = useFeatureVisible(BUSINESS_FEATURE.section.application);
   const showBusinessHubFlag = useFeatureVisible(BUSINESS_FEATURE.section.accountHub);
   const isBusinessAccount = effectiveAccountType === 'business';
@@ -128,6 +129,17 @@ export function ProfileOwnActionsBar({
             tone: 'default' as const,
             onPress: () =>
               onInsightsPress ? onInsightsPress() : router.push('/settings/insights' as Href),
+          },
+        ]
+      : []),
+    ...(showSoundCreate
+      ? [
+          {
+            key: 'sound-create',
+            label: 'Ses Oluştur',
+            icon: 'mic-outline' as const,
+            tone: 'default' as const,
+            onPress: () => router.push('/sounds/create' as Href),
           },
         ]
       : []),

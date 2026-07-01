@@ -103,11 +103,11 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
     routes: ['/stories', '/stories/publish'],
   },
   {
-    id: 'featured-profiles',
-    label: 'Öne Çıkan Profiller',
+    id: 'user-sounds',
+    label: 'Ses Oluştur',
     group: 'social',
     kind: 'root',
-    routes: ['/featured-profiles'],
+    routes: ['/sounds', '/sounds/create'],
   },
   {
     id: 'proximity-match',

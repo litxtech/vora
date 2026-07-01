@@ -27,3 +27,4 @@ export { SUB_FEATURES as wallet } from '@/features/wallet/featureFlags';
 export { SUB_FEATURES as insights } from '@/features/insights/featureFlags';
 export { SUB_FEATURES as auth } from '@/features/auth/featureFlags';
 export { SUB_FEATURES as announcements } from '@/features/announcements/featureFlags';
+export { SUB_FEATURES as userSounds } from '@/features/sounds/featureFlags';

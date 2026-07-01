@@ -30,11 +30,11 @@ import {
 import type { PostAudience } from '@/features/profile/services/audienceFilter';
 import { MusicAttributionBadge } from '@/features/music/components/MusicAttributionBadge';
 import { MusicMarqueeOverlay } from '@/features/music/components/MusicMarqueeOverlay';
-import { MusicPickerSheet } from '@/features/music/components/MusicPickerSheet';
+import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
 import { ComposePhotoMusicEditor } from '@/features/compose/components/ComposePhotoMusicEditor';
 import { PostUploadProgressPanel } from '@/features/compose/components/PostUploadProgressPanel';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
-import type { MusicTrack } from '@/features/music/types';
+import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { SyncedVideoPreview } from '@/features/vora-studio/components/SyncedVideoPreview';
 import { useStudioExportStore } from '@/features/vora-studio/store/studioExportStore';
@@ -328,15 +328,11 @@ export function ComposeScreen() {
     } as never);
   };
 
-  const handleMusicSelect = (track: MusicTrack) => {
+  const handleMusicSelect = (selection: MusicSelection) => {
     setMusicSelection({
-      trackId: track.id,
-      displayTitle: track.displayTitle,
-      artist: track.artist,
-      audioUrl: track.audioUrl,
-      durationSec: track.durationSec,
+      ...selection,
       musicStartSec: 0,
-      musicEndSec: photoPostMusicEndSec(0, track.durationSec),
+      musicEndSec: photoPostMusicEndSec(0, selection.durationSec),
       musicVolume: 0.85,
       originalAudioVolume: 0,
     });
@@ -771,7 +767,7 @@ export function ComposeScreen() {
           onClose={() => setPreviewIndex(null)}
         />
 
-        <MusicPickerSheet
+        <AudioPickerSheet
           visible={musicOpen}
           selectedTrackId={musicSelection?.trackId ?? null}
           onClose={() => setMusicOpen(false)}

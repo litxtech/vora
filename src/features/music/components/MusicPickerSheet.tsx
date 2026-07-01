@@ -48,6 +48,8 @@ type MusicPickerSheetProps = {
   onSelect: (track: MusicTrack) => void;
   /** Video önizlemesini duraklat — ses oturumu çakışmasını önler */
   pauseVideo?: () => void;
+  alternateModeLabel?: string;
+  onAlternateMode?: () => void;
 };
 
 export function MusicPickerSheet({
@@ -56,6 +58,8 @@ export function MusicPickerSheet({
   onClose,
   onSelect,
   pauseVideo,
+  alternateModeLabel,
+  onAlternateMode,
 }: MusicPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -196,7 +200,15 @@ export function MusicPickerSheet({
           <Text variant="label" style={styles.headerTitle}>
             Müzik ekle
           </Text>
-          <View style={styles.iconBtn} />
+          {alternateModeLabel && onAlternateMode ? (
+            <Pressable onPress={onAlternateMode} hitSlop={12} style={styles.iconBtn}>
+              <Text variant="caption" style={{ color: colors.primary, fontWeight: '700' }}>
+                {alternateModeLabel}
+              </Text>
+            </Pressable>
+          ) : (
+            <View style={styles.iconBtn} />
+          )}
         </View>
 
         <View style={[styles.searchWrap, { backgroundColor: `${colors.textMuted}12` }]}>

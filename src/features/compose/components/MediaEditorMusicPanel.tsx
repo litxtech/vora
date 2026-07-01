@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { MusicEditorPanel } from '@/features/music/components/MusicEditorPanel';
 import { fetchMusicTrackById } from '@/features/music/services/musicData';
+import { fetchSoundById } from '@/features/sounds/services/soundData';
 import type { MusicSelection, MusicTrack } from '@/features/music/types';
 import { radius, spacing } from '@/constants/theme';
 
@@ -33,15 +34,48 @@ export function MediaEditorMusicPanel({
   const [track, setTrack] = useState<MusicTrack | null>(null);
 
   useEffect(() => {
+    if (music.source === 'sound') {
+      void fetchSoundById(music.trackId).then((sound) => {
+        if (!sound) {
+          setTrack(null);
+          return;
+        }
+        setTrack({
+          id: sound.id,
+          title: sound.title,
+          displayTitle: sound.title,
+          artist: sound.author?.username ? `@${sound.author.username}` : 'Orijinal Ses',
+          album: null,
+          categoryId: null,
+          categorySlug: null,
+          categoryLabel: null,
+          coverUrl: sound.coverUrl,
+          audioUrl: sound.audioUrl,
+          durationSec: sound.durationSec,
+          licenseStatus: 'licensed',
+          licenseInfo: null,
+          publicationStatus: 'active',
+          isTrending: sound.isTrending,
+          isFeatured: false,
+          isEditorPick: false,
+          sortOrder: 0,
+          usageCount: sound.usageCount,
+          viewCount: sound.listenCount,
+          lastUsedAt: sound.lastUsedAt,
+          createdAt: sound.createdAt,
+        });
+      });
+      return;
+    }
     void fetchMusicTrackById(music.trackId).then(setTrack);
-  }, [music.trackId]);
+  }, [music.source, music.trackId]);
 
   if (!visible || !track) return null;
 
   return (
     <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}>
       <View style={styles.header}>
-        <Text style={styles.title}>Müzik</Text>
+        <Text style={styles.title}>{music.source === 'sound' ? 'Ses' : 'Müzik'}</Text>
         <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
           <Ionicons name="chevron-down" size={22} color="#fff" />
         </Pressable>

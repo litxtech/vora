@@ -38,7 +38,11 @@ export type MusicTrack = {
   createdAt: string;
 };
 
+export type AudioSource = 'music' | 'sound';
+
 export type MusicSelection = {
+  /** @default 'music' */
+  source?: AudioSource;
   trackId: string;
   displayTitle: string;
   artist: string;

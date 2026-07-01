@@ -16,10 +16,10 @@ import { Text } from '@/components/ui/Text';
 import { MediaEditorLocationSheet } from '@/features/compose/components/MediaEditorLocationSheet';
 import { MediaEditorMusicPanel } from '@/features/compose/components/MediaEditorMusicPanel';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
-import { MusicPickerSheet } from '@/features/music/components/MusicPickerSheet';
+import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
 import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
-import type { MusicTrack } from '@/features/music/types';
+import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { StoryBackgroundSheet } from '@/features/stories/components/StoryBackgroundSheet';
 import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
@@ -45,7 +45,8 @@ import {
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
 import { useFeedStore } from '@/features/feed/store/feedStore';
-import { DEFAULT_REGION_ID } from '@/constants/regions';
+import { resolveMarketplaceRegionId } from '@/constants/regions';
+import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -223,17 +224,13 @@ export function StoryPublishScreen({
   );
 
   const handleMusicSelect = useCallback(
-    (track: MusicTrack) => {
+    (selection: MusicSelection) => {
       const clipDuration = mediaType === 'video'
-        ? Math.min(track.durationSec, normalizedDurationSec ?? track.durationSec)
-        : photoPostMusicEndSec(0, track.durationSec);
+        ? Math.min(selection.durationSec, normalizedDurationSec ?? selection.durationSec)
+        : photoPostMusicEndSec(0, selection.durationSec);
 
       setMusicSelection({
-        trackId: track.id,
-        displayTitle: track.displayTitle,
-        artist: track.artist,
-        audioUrl: track.audioUrl,
-        durationSec: track.durationSec,
+        ...selection,
         musicStartSec: 0,
         musicEndSec: clipDuration,
         musicVolume: 0.85,
@@ -444,7 +441,7 @@ export function StoryPublishScreen({
         )}
       </Pressable>
 
-      <MusicPickerSheet
+      <AudioPickerSheet
         visible={musicOpen}
         selectedTrackId={musicSelection?.trackId ?? null}
         onClose={() => setMusicOpen(false)}
@@ -486,7 +483,7 @@ export function StoryPublishScreen({
 
       <MediaEditorLocationSheet
         visible={activeTool === 'location'}
-        regionId={regionId ?? DEFAULT_REGION_ID}
+        regionId={resolveMarketplaceRegionId(regionId)}
         value={selectedLocation}
         onChange={setSelectedLocation}
         onClose={() => setActiveTool(null)}

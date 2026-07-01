@@ -4,7 +4,7 @@ import { shouldSkipVideoCompression } from '@/lib/video/compress';
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import type { MusicSelection } from '@/features/music/types';
 import type { PublishedEditManifest } from '@/features/vora-studio/types';
-import { recordMusicUsage } from '@/features/music/services/recordUsage';
+import { recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import { VIDEO_PROGRESS } from '@/services/video/progressMessages';
 import { uploadVideo } from '@/services/video/upload';
 import { pollMuxUntilReady } from '@/services/video/muxPoll';
@@ -66,7 +66,7 @@ export async function createReel(
 
     if (error) return { reelId: null, error };
     if (input.music && reelId) {
-      await recordMusicUsage(input.music, { reelId });
+      await recordAudioUsage(input.music, { reelId });
     }
 
     onProgress?.('done', 'Reel paylaşıldı, video işleniyor...');

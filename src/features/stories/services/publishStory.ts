@@ -22,6 +22,7 @@ import { kickstartMuxSync, pollMuxUntilReady } from '@/services/video/muxPoll';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 import type { MusicSelection } from '@/features/music/types';
+import { recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 
@@ -242,6 +243,10 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       updated_at: new Date().toISOString(),
     })
     .eq('id', storyId);
+
+  if (input.music) {
+    await recordAudioUsage(input.music, { storyItemId: item.id as string });
+  }
 
   return {
     storyId,

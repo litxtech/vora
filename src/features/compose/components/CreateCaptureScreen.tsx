@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
+import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import {
   CAPTURE_PHOTO_QUALITY,
   capturePictureOptions,
@@ -62,6 +63,7 @@ export function CreateCaptureScreen() {
     params.mode === 'story' ? 'story' : params.mode === 'reels' ? 'reels' : 'post';
   const [shareMode, setShareMode] = useState<CaptureShareMode>(initialMode);
   const { requireAuth } = useRequireAuth();
+  const showSoundCreate = useFeatureVisible('user-sounds');
   const cameraRef = useRef<CameraViewType>(null);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -610,6 +612,18 @@ export function CreateCaptureScreen() {
         )}
 
         <View style={styles.topRight}>
+          {showSoundCreate ? (
+            <Pressable
+              hitSlop={12}
+              style={styles.topBtn}
+              onPress={async () => {
+                if (!(await requireAuth('Ses Oluştur'))) return;
+                router.push('/sounds/create' as Href);
+              }}
+            >
+              <Ionicons name="mic-outline" size={22} color="#fff" />
+            </Pressable>
+          ) : null}
           <Pressable onPress={cycleFlash} hitSlop={12} style={styles.topBtn}>
             <Ionicons
               name={flash === 'on' ? 'flash' : flash === 'auto' ? 'flash-outline' : 'flash-off-outline'}

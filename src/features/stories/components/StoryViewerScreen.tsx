@@ -83,6 +83,13 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const [videoPositionSec, setVideoPositionSec] = useState(0);
   const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
 
+  const handleVideoPosition = useCallback((sec: number, dur?: number | null) => {
+    setVideoPositionSec(sec);
+    if (dur != null && dur > 0) {
+      setVideoDurationSec((prev) => (prev === dur ? prev : dur));
+    }
+  }, []);
+
   const replyInputRef = useRef<TextInput>(null);
   const inputFocusedRef = useRef(false);
 
@@ -578,12 +585,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                 item={activeItem}
                 isActive={!loading && !isPaused}
                 isPaused={isPaused}
-                onVideoPosition={(sec, dur) => {
-                  setVideoPositionSec(sec);
-                  if (dur != null && dur > 0) setVideoDurationSec(dur);
-                  const duration = Math.max(0.1, dur ?? activeItem.durationSec ?? 15);
-                  setProgress(Math.min(1, sec / duration));
-                }}
+                onVideoPosition={handleVideoPosition}
                 onVideoEnd={() => goNextItem('auto_forward')}
               />
             ) : null}
