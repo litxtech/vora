@@ -12,6 +12,8 @@ import { FeedHeader } from '@/features/feed/components/FeedHeader';
 import { PostUploadBanner } from '@/features/compose/components/PostUploadBanner';
 import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
 import { StoryRingBar } from '@/features/stories/components/StoryRingBar';
+import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
+import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { FeedList } from '@/features/feed/components/FeedList';
 import { NewPostsBanner } from '@/features/feed/components/NewPostsBanner';
 import { useFeed } from '@/features/feed/hooks/useFeed';
@@ -24,7 +26,16 @@ import { fetchFeedHeaderEvents } from '@/features/feed/services/featuredEvents';
 import { fetchFeedHeaderLostItems } from '@/features/feed/services/featuredLostItems';
 import type { EventListing } from '@/features/events/types';
 import type { LostListing } from '@/features/lost-found/types';
-import { shouldDeferFeedHeaderContent } from '@/lib/device/androidPerfProfile';
+import {
+  getFeedRichHeaderDelayMs,
+  shouldDeferFeedHeaderContent,
+  shouldDeferFeedRichHeader,
+  shouldLoadFeedFeaturedProfiles,
+  shouldLoadFeedSpotlightCarousel,
+  shouldPollFeedProcessingVideos,
+  shouldUseFeedRealtime,
+  shouldWarmupAndroidTabModules,
+} from '@/lib/device/androidPerfProfile';
 import { warmupAndroidTabModules } from '@/lib/device/androidTabWarmup';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { useAuth } from '@/providers/AuthProvider';
@@ -51,14 +62,29 @@ export function FeedScreenContent() {
   const [headerEvents, setHeaderEvents] = useState<EventListing[]>([]);
   const [headerLostItems, setHeaderLostItems] = useState<LostListing[]>([]);
   const [featuredProfiles, setFeaturedProfiles] = useState<FeaturedProfileCard[]>([]);
+  const [richHeaderReady, setRichHeaderReady] = useState(!shouldDeferFeedRichHeader());
 
   const { items, loading, refreshing, loadingMore, error, refresh, loadMore, updateItem, removeItem } = useFeed();
 
-  useFeedProcessingVideos(items, updateItem, isFocused);
-  useFeedRealtime(isFocused);
+  useFeedProcessingVideos(items, updateItem, isFocused && shouldPollFeedProcessingVideos());
+  useFeedRealtime(isFocused && shouldUseFeedRealtime());
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || !shouldDeferFeedRichHeader()) return;
+    setRichHeaderReady(false);
+    const delayMs = getFeedRichHeaderDelayMs();
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) setRichHeaderReady(true);
+    }, delayMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused || !shouldWarmupAndroidTabModules()) return;
     const task = warmupAndroidTabModules();
     return () => task.cancel();
   }, [isFocused]);
@@ -78,11 +104,17 @@ export function FeedScreenContent() {
       return;
     }
 
-    const loadHeaderContent = () => {
-      fetchFeedHeaderEvents(regionId).then(setHeaderEvents);
-      fetchFeedHeaderLostItems(regionId).then(setHeaderLostItems);
+    if (shouldDeferFeedRichHeader() && !richHeaderReady) {
+      return;
+    }
 
-      if (!featuredProfilesVisible) {
+    const loadHeaderContent = () => {
+      if (shouldLoadFeedSpotlightCarousel()) {
+        fetchFeedHeaderEvents(regionId).then(setHeaderEvents);
+        fetchFeedHeaderLostItems(regionId).then(setHeaderLostItems);
+      }
+
+      if (!featuredProfilesVisible || !shouldLoadFeedFeaturedProfiles()) {
         setFeaturedProfiles([]);
         return;
       }
@@ -100,7 +132,7 @@ export function FeedScreenContent() {
     }
 
     loadHeaderContent();
-  }, [isFocused, category, regionId, user?.id, featuredProfilesVisible]);
+  }, [isFocused, category, regionId, user?.id, featuredProfilesVisible, richHeaderReady]);
 
   const handleBannerRefresh = useCallback(() => {
     resetNewPosts();
@@ -118,15 +150,15 @@ export function FeedScreenContent() {
           <NewPostsBanner onRefresh={handleBannerRefresh} />
         </View>
         <FeedHeader />
-        {category === 'all' && storiesVisible ? (
+        {richHeaderReady && category === 'all' && storiesVisible ? (
           <FeatureGate featureId="stories">
-            <StoryRingBar regionId={regionId} />
+            <StoryRingBar />
           </FeatureGate>
         ) : null}
-        {category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
+        {richHeaderReady && category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
           <FeaturedProfilesCarousel profiles={featuredProfiles} onSeeAll={handleSeeAllFeatured} />
         ) : null}
-        {category === 'all' && (headerEvents.length > 0 || headerLostItems.length > 0) ? (
+        {richHeaderReady && category === 'all' && (headerEvents.length > 0 || headerLostItems.length > 0) ? (
           <FeedSpotlightCarousel events={headerEvents} lostItems={headerLostItems} />
         ) : null}
         <View style={styles.filtersSection}>
@@ -140,6 +172,7 @@ export function FeedScreenContent() {
       featuredProfilesVisible,
       storiesVisible,
       regionId,
+      richHeaderReady,
       handleBannerRefresh,
       handleSeeAllFeatured,
       headerEvents,
@@ -156,7 +189,12 @@ export function FeedScreenContent() {
   const handleRefresh = useCallback(() => {
     resetNewPosts();
     refresh();
-  }, [resetNewPosts, refresh]);
+    if (storiesVisible && user?.id) {
+      void fetchStoryRings({ viewerId: user.id }).then((result) => {
+        useStoryRingStore.getState().setRings(result.rings);
+      });
+    }
+  }, [refresh, resetNewPosts, storiesVisible, user?.id]);
 
   return (
     <FeedSideDrawerShell>

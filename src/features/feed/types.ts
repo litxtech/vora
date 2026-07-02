@@ -139,4 +139,6 @@ export type FeedQuery = {
   followingOnly: boolean;
   cursor: string | null;
   userId: string | null;
+  /** Yenilemede birleşik ilanlar / reklamlar atlanır — daha hızlı ilk boyama. */
+  refreshLight?: boolean;
 };

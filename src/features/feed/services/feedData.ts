@@ -3,12 +3,23 @@ import {
   sanitizeAvatarUrl,
   sanitizeDisplayName,
 } from '@/features/account-deletion/utils';
-import { DEMO_FEED_ITEMS, FEED_PAGE_SIZE } from '@/features/feed/constants';
+import { DEMO_FEED_ITEMS } from '@/features/feed/constants';
+import { getFeedFetchLimits } from '@/lib/device/androidPerfProfile';
 import { isDemoDataEnabled } from '@/lib/demo/demoData';
 import type { FeedAuthor, FeedCategory, FeedItem, FeedQuery, QuotedPostPreview } from '@/features/feed/types';
 import { excludeCommunityPosts, excludeReelsFromCommunities } from '@/features/communities/services/publicScope';
 import { fetchUnifiedItems } from '@/features/feed/services/unifiedFeed';
 import { fetchBoostedAuthorIds, sortFeedWithBoost } from '@/features/feed/services/feedBoost';
+import {
+  feedRankWindowStart,
+  isChronoFeedCursor,
+  isRankCursor,
+  paginateRankedFeed,
+  parseChronoCursor,
+  parseRankOffset,
+  shouldRankFeedCategory,
+  sortFeedRanked,
+} from '@/features/feed/services/feedRank';
 import { isPinActive } from '@/features/feed/services/postPinning';
 import { fetchQuotedPreviews, resolveQuotedPost } from '@/features/feed/services/quotedPostPreviews';
 import { enrichFeedAuthorsInItems } from '@/features/profile/services/businessIdentity';
@@ -30,6 +41,15 @@ import type { GenderId } from '@/constants/registration';
 import type { UserRole } from '@/types/database';
 
 const UNIFIED_CATEGORIES: FeedCategory[] = ['job', 'business', 'event', 'lost_found'];
+
+function feedPageSize(): number {
+  return getFeedFetchLimits().pageSize;
+}
+
+function feedRankPoolSize(): number {
+  const { pageSize, rankPoolMultiplier } = getFeedFetchLimits();
+  return pageSize * rankPoolMultiplier;
+}
 
 type ProfileRow = {
   id: string;
@@ -365,6 +385,7 @@ function mergeAndSort(
   items: FeedItem[],
   cursor: string | null,
   boostedAuthors: Set<string> = new Set(),
+  options: { ranked?: boolean; poolFull?: boolean; windowStart?: string } = {},
 ): {
   items: FeedItem[];
   nextCursor: string | null;
@@ -372,15 +393,39 @@ function mergeAndSort(
   const tagged = items.map((item) =>
     boostedAuthors.has(item.author.id) ? { ...item, isAuthorBoosted: true } : item,
   );
+
+  if (options.ranked) {
+    const sorted = sortFeedRanked(tagged, boostedAuthors);
+    const offset = isRankCursor(cursor) ? parseRankOffset(cursor) : 0;
+    const windowStart = options.windowStart ?? feedRankWindowStart();
+
+    const filtered = isChronoFeedCursor(cursor)
+      ? sorted.filter((item) => item.createdAt < parseChronoCursor(cursor!))
+      : sorted;
+
+    const { page, nextCursor } = paginateRankedFeed(
+      filtered,
+      isChronoFeedCursor(cursor) ? 0 : offset,
+      feedPageSize(),
+      options.poolFull ?? false,
+      windowStart,
+    );
+
+    return { items: page, nextCursor };
+  }
+
   const sorted = sortFeedWithBoost(tagged, boostedAuthors);
 
-  const filtered = cursor
+  const filtered = cursor && !isRankCursor(cursor) && !isChronoFeedCursor(cursor)
     ? sorted.filter((item) => item.createdAt < cursor)
-    : sorted;
+    : isChronoFeedCursor(cursor)
+      ? sorted.filter((item) => item.createdAt < parseChronoCursor(cursor!))
+      : sorted;
 
-  const page = filtered.slice(0, FEED_PAGE_SIZE);
+  const pageSize = feedPageSize();
+  const page = filtered.slice(0, pageSize);
   const nextCursor =
-    filtered.length > FEED_PAGE_SIZE ? page[page.length - 1].createdAt : null;
+    filtered.length > pageSize ? page[page.length - 1].createdAt : null;
 
   return { items: page, nextCursor };
 }
@@ -399,11 +444,19 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
       return { items: isDemoDataEnabled() ? filterDemoItems(query) : [], nextCursor: null };
     }
     const boostedAuthors = await fetchBoostedAuthorIds([...new Set(unified.map((i) => i.author.id))]);
-    const { items: page, nextCursor } = mergeAndSort(unified, query.cursor, boostedAuthors);
+    const useRanking = shouldRankFeedCategory(query.category) && !query.searchQuery.trim();
+    const { items: page, nextCursor } = mergeAndSort(unified, query.cursor, boostedAuthors, {
+      ranked: useRanking,
+    });
     return { items: await enrichFeedAuthorsInItems(page), nextCursor };
   }
 
   const buildFeedQuery = (select: string) => {
+    const useRanking =
+      shouldRankFeedCategory(query.category) && !query.searchQuery.trim();
+    const rankWindowStart = feedRankWindowStart();
+    const rankPoolSize = feedRankPoolSize();
+
     let q = excludeAdEngagementPosts(
       excludeCommunityPosts(
       supabase
@@ -411,18 +464,33 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
       .select(select)
       .eq('status', 'published')
     ),
-    )
-      .order('created_at', { ascending: false })
-      .limit(FEED_PAGE_SIZE);
+    );
+
+    if (useRanking && !isChronoFeedCursor(query.cursor)) {
+      q = q
+        .gte('created_at', rankWindowStart)
+        .order('created_at', { ascending: false })
+        .limit(rankPoolSize);
+    } else {
+      q = q.order('created_at', { ascending: false }).limit(feedPageSize());
+      if (isChronoFeedCursor(query.cursor)) {
+        q = q.lt('created_at', parseChronoCursor(query.cursor));
+      } else if (query.cursor && !isRankCursor(query.cursor)) {
+        q = q.lt('created_at', query.cursor);
+      }
+    }
 
     if (query.regionId) q = q.eq('region_id', query.regionId);
     if (query.district) q = q.eq('district', query.district);
     if (query.category !== 'all' && query.category !== 'following' && query.category !== 'general') {
       q = q.eq('category', query.category);
     }
-    if (query.cursor) q = q.lt('created_at', query.cursor);
     return q;
   };
+
+  const useRanking = shouldRankFeedCategory(query.category) && !query.searchQuery.trim();
+  const rankWindowStart = feedRankWindowStart();
+  const rankPoolSize = feedRankPoolSize();
 
   const [pinnedResult, feedResult] = await Promise.all([
     !query.cursor ? fetchActivePinnedPosts(query.regionId, query.district, query.category) : Promise.resolve([]),
@@ -448,15 +516,17 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
   const authorIds = [...new Set(rows.map((r) => r.author_id))];
   const quotedIds = rows.map((r) => r.quoted_post_id).filter((id): id is string => !!id);
 
-  const [engagement, following, quotedPreviews, unifiedItems, hidden, trustRecords] = await Promise.all([
+  const [engagement, following, quotedPreviews, unifiedItems, hidden, trustRecords, boostedAuthors] =
+    await Promise.all([
     fetchEngagementState(postIds, query.userId),
     fetchFollowingSet(query.userId, authorIds),
     fetchQuotedPreviews(quotedIds),
-    query.category === 'all' && !query.cursor
+    query.category === 'all' && !query.cursor && !query.refreshLight
       ? fetchUnifiedItems(query.regionId, 'all', query.district)
       : Promise.resolve([] as FeedItem[]),
     fetchHiddenAuthors(query.userId),
     fetchTrustRecordsForPosts(postIds),
+    fetchBoostedAuthorIds(authorIds),
   ]);
 
   let items = rows
@@ -487,28 +557,44 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
   if (items.length === 0) {
     const demo = isDemoDataEnabled() ? filterDemoItems(query) : [];
     if (query.category !== 'reels' && query.category !== 'following') {
-      const withAds = await injectFeedBusinessAds(demo, query.regionId);
+      const withAds = query.refreshLight ? demo : await injectFeedBusinessAds(demo, query.regionId);
       return { items: withAds, nextCursor: null };
     }
     return { items: demo, nextCursor: null };
   }
 
-  items = enrichWithDemoContent(items, query);
+  if (!query.refreshLight) {
+    items = enrichWithDemoContent(items, query);
+  }
 
-  const boostedAuthors = await fetchBoostedAuthorIds([...new Set(items.map((i) => i.author.id))]);
-  const { items: page, nextCursor } = mergeAndSort(items, query.cursor, boostedAuthors);
+  const poolFull = useRanking && rows.length >= rankPoolSize;
+  const { items: page, nextCursor } = mergeAndSort(items, query.cursor, boostedAuthors, {
+    ranked: useRanking && !isChronoFeedCursor(query.cursor),
+    poolFull,
+    windowStart: rankWindowStart,
+  });
   const enriched = await enrichFeedAuthorsInItems(page);
   const withFollowState = await applyBusinessFollowStateToFeedItems(enriched, query.userId);
 
-  if (query.category !== 'reels' && query.category !== 'following') {
+  if (!query.refreshLight && query.category !== 'reels' && query.category !== 'following') {
     const withAds = await injectFeedBusinessAds(withFollowState, query.regionId);
-    return {
-      items: await applyBusinessFollowStateToFeedItems(withAds, query.userId),
-      nextCursor,
-    };
+    return { items: withAds, nextCursor };
   }
 
   return { items: withFollowState, nextCursor };
+}
+
+/** Hafif yenilemeden sonra reklamları arka planda ekler. */
+export async function enrichFeedPageWithAds(
+  items: FeedItem[],
+  regionId: string | null,
+  userId: string | null,
+): Promise<FeedItem[]> {
+  if (items.length === 0 || items.some((item) => item.sourceType === 'business_ad')) {
+    return items;
+  }
+  const withAds = await injectFeedBusinessAds(items, regionId);
+  return applyBusinessFollowStateToFeedItems(withAds, userId);
 }
 
 async function fetchReelsPage(query: FeedQuery): Promise<{
@@ -524,7 +610,7 @@ async function fetchReelsPage(query: FeedQuery): Promise<{
     )
     .eq('status', 'published')
     .order('created_at', { ascending: false })
-    .limit(FEED_PAGE_SIZE);
+    .limit(feedPageSize());
 
   if (query.regionId) dbQuery = dbQuery.eq('region_id', query.regionId);
 
@@ -585,8 +671,9 @@ async function fetchReelsPage(query: FeedQuery): Promise<{
     };
   });
 
+  const pageSize = feedPageSize();
   const nextCursor =
-    rows.length === FEED_PAGE_SIZE ? rows[rows.length - 1].created_at : null;
+    rows.length === pageSize ? rows[rows.length - 1].created_at : null;
   const enriched = await enrichFeedAuthorsInItems(items);
   return { items: await applyBusinessFollowStateToFeedItems(enriched, query.userId), nextCursor };
 }

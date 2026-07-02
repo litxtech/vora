@@ -11,9 +11,9 @@ export function isAndroidLowPerfDevice(): boolean {
   return isAndroid() && isAndroidTablet();
 }
 
-/** Tablet: erteleme yok — tıklama ve sayfa geçişi anında. */
+/** Arka plan fetch'leri rAF ile ertele — tablet dahil (anında çalıştırmak JS spike yapıyordu). */
 export function shouldRunUiWorkImmediately(): boolean {
-  return isAndroidTablet();
+  return false;
 }
 
 /** Android: gradient/blur yerine düz arka plan — tablet GPU yükünü azaltır. */
@@ -31,14 +31,104 @@ export function shouldUseScreenFreeze(): boolean {
   return !isAndroid();
 }
 
-/** Sekme odaklanınca ağır işleri ertele — tablet hariç (anında yükle). */
+/** Üst carousel / öne çıkan profiller — tablette gecikmeli. */
+export function shouldDeferFeedRichHeader(): boolean {
+  return isAndroidTablet();
+}
+
+/** Üst zengin header gecikmesi (ms). */
+export function getFeedRichHeaderDelayMs(): number {
+  return isAndroidTablet() ? 3_500 : 0;
+}
+
+/** Tablet: spotlight carousel (etkinlik/kayıp) — ilk açılışta atla. */
+export function shouldLoadFeedSpotlightCarousel(): boolean {
+  return !isAndroidTablet();
+}
+
+/** Tablet: öne çıkan profiller şeridi — ilk açılışta atla. */
+export function shouldLoadFeedFeaturedProfiles(): boolean {
+  return !isAndroidTablet();
+}
+
+/** Mux işleniyor poll — tablette kapalı. */
+export function shouldPollFeedProcessingVideos(): boolean {
+  return !isAndroidTablet();
+}
+
+/** Hikâye halkası mount gecikmesi (ms). */
+export function getStoryRingMountDelayMs(): number {
+  if (isAndroidTablet()) return 4_500;
+  if (isAndroid()) return 1_200;
+  return 0;
+}
+
+/** Akış sayfa boyutu ve sıralama havuzu. */
+export function getFeedFetchLimits(): { pageSize: number; rankPoolMultiplier: number } {
+  if (isAndroidTablet()) return { pageSize: 8, rankPoolMultiplier: 2 };
+  if (isAndroid()) return { pageSize: 12, rankPoolMultiplier: 2.5 };
+  return { pageSize: 15, rankPoolMultiplier: 3 };
+}
+
+/** Feed realtime — tablette yalnızca sekme odaktayken (hook'ta). */
+export function shouldUseFeedRealtime(): boolean {
+  return !isAndroidTablet();
+}
+
+/** Reels / inbox odak işlerini ertele. */
 export function shouldDeferHeavyFocusWork(): boolean {
+  return isAndroid();
+}
+
+/** Mux işleniyor poll aralığı çarpanı (tablet). */
+export function getFeedProcessingVideoPollMultiplier(): number {
+  return isAndroidTablet() ? 2.5 : 1;
+}
+
+/** Drawer açılış süresi (ms) — 0 = anında. */
+export function getFeedDrawerOpenDurationMs(): number {
+  return isAndroidTablet() ? 0 : 400;
+}
+
+/** Drawer kapanış süresi (ms). */
+export function getFeedDrawerCloseDurationMs(): number {
+  return isAndroidTablet() ? 0 : 340;
+}
+
+/** Akış üstü carousel — tablet dahil ertelenir, liste önce etkileşilebilir. */
+export function shouldDeferFeedHeaderContent(): boolean {
+  return isAndroid();
+}
+
+/** Hikâye halkası — akış mount olduktan sonra. */
+export function shouldDeferStoryRingBar(): boolean {
+  return isAndroidTablet();
+}
+
+/** Akışta video otomatik oynatma — tablette kapalı (thumbnail). */
+export function shouldAutoplayFeedVideos(): boolean {
+  return !isAndroidTablet();
+}
+
+/** Mesaj modülü ön-ısıtma — tablette atla. */
+export function shouldWarmupAndroidTabModules(): boolean {
   return isAndroid() && !isAndroidTablet();
 }
 
-/** Akış üstü carousel — tablet hariç ertelenir. */
-export function shouldDeferFeedHeaderContent(): boolean {
+/** Feed TabSwipeShell — tablette tamamen kapalı (drawer menüden). */
+export function shouldUseFeedTabSwipeShell(): boolean {
   return isAndroid() && !isAndroidTablet();
+}
+
+/** FlashList drawDistance çarpanı (tahmini satır yüksekliği ×). */
+export function getFeedFlashListDrawDistance(): number {
+  const item = getFeedEstimatedItemSize();
+  return isAndroidTablet() ? Math.round(item * 0.75) : item * 2;
+}
+
+/** Feed scroll durduktan sonra video seçimi gecikmesi. */
+export function getFeedScrollSettleMs(): number {
+  return isAndroidTablet() ? 200 : 120;
 }
 
 /** Reels sekmesinde hafif tab bar — tüm Android. */
@@ -51,8 +141,8 @@ export function getAndroidTabBarElevation(): number {
 }
 
 export function getReelsVideoCacheBytes(): number {
-  // iOS: 384 MB bellek baskısı/OS kill riski yaratıyordu; 192 MB hâlâ akıcı oynatma için yeterli.
   if (!isAndroid()) return 192 * 1024 * 1024;
+  if (isAndroidTablet()) return 48 * 1024 * 1024;
   return 96 * 1024 * 1024;
 }
 
@@ -75,11 +165,12 @@ const ANDROID_FLAT_LIST_PERF: ListPerfProps = {
   removeClippedSubviews: true,
 };
 
+/** Tablet: dar pencere — minimum eşzamanlı mount. */
 const ANDROID_TABLET_FLAT_LIST_PERF: ListPerfProps = {
-  initialNumToRender: 5,
-  maxToRenderPerBatch: 4,
-  windowSize: 6,
-  updateCellsBatchingPeriod: 32,
+  initialNumToRender: 1,
+  maxToRenderPerBatch: 1,
+  windowSize: 2,
+  updateCellsBatchingPeriod: 100,
   removeClippedSubviews: true,
 };
 
@@ -104,7 +195,12 @@ const IOS_FEED_FLAT_LIST_PERF: ListPerfProps = {
 
 /** FlashList / FlatList tahmini satır yüksekliği — akış kartları. */
 export function getFeedEstimatedItemSize(): number {
-  return isAndroidTablet() ? 380 : isAndroid() ? 420 : 460;
+  return isAndroidTablet() ? 280 : isAndroid() ? 420 : 460;
+}
+
+/** Akış inline medya üst sınırı (px). */
+export function getFeedMediaMaxHeight(): number {
+  return isAndroidTablet() ? 340 : 420;
 }
 
 export function getAndroidFlatListPerfProps(): ListPerfProps {
@@ -162,15 +258,8 @@ export function shouldShowBootSplashVisual(): boolean {
 /** Android telefon: akış + profil eager. */
 const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'profile', 'discover', 'messages']);
 
-/** Android tablet: ana sekmelerin hepsi eager — sekme geçişi soğuk mount olmasın. */
-const ANDROID_TABLET_EAGER_TAB_NAMES = new Set([
-  'index',
-  'discover',
-  'profile',
-  'messages',
-  'reels',
-  'create',
-]);
+/** Android tablet: yalnızca akış eager — profil/keşfet lazy. */
+const ANDROID_TABLET_EAGER_TAB_NAMES = new Set(['index']);
 
 function shouldEagerMountAndroidTab(tabName: string): boolean {
   if (!isAndroid()) return tabName === 'index';
@@ -183,7 +272,9 @@ function shouldEagerMountTabForSwipe(tabName: string): boolean {
     return shouldEagerMountAndroidTab(tabName);
   }
   if (!isAndroid()) return true;
-  if (isAndroidTablet()) return true;
+  if (isAndroidTablet()) {
+    return tabName === 'index';
+  }
   return tabName === 'index' || tabName === 'discover' || ANDROID_EAGER_TAB_NAMES.has(tabName);
 }
 
@@ -210,7 +301,7 @@ export { getHeavyFeatureBootDelayMs as getAndroidHeavyFeatureBootDelayMs } from 
 
 /** Profil ızgarası sütun sayısı — tablette daha küçük hücre, daha az decode. */
 export function getProfileGridColumns(): number {
-  return isAndroidTablet() ? 5 : 3;
+  return isAndroidTablet() ? 4 : 3;
 }
 
 /** Marketplace ızgarası — tablette 3 sütun, daha küçük kapak görselleri. */
@@ -224,11 +315,11 @@ export type ImageSizeTier = 'thumb' | 'feed' | 'grid' | 'avatar' | 'full';
 export function getImageTargetWidth(tier: ImageSizeTier): number {
   if (isAndroidTablet()) {
     const tablet: Record<ImageSizeTier, number> = {
-      thumb: 160,
-      feed: 900,
-      grid: 220,
-      avatar: 128,
-      full: 1400,
+      thumb: 80,
+      feed: 460,
+      grid: 128,
+      avatar: 72,
+      full: 680,
     };
     return tablet[tier];
   }
@@ -254,11 +345,21 @@ export function getImageTargetWidth(tier: ImageSizeTier): number {
 
 /** Profil ızgarası ilk render — ScrollView içinde kademeli yükleme. */
 export function getProfileGridInitialBatch(): number {
-  return isAndroidTablet() ? 15 : 24;
+  return isAndroidTablet() ? 6 : 24;
 }
 
 export function getProfileGridLoadMoreBatch(): number {
-  return isAndroidTablet() ? 12 : 18;
+  return isAndroidTablet() ? 6 : 18;
+}
+
+/** Supabase render kalitesi (0–100). */
+export function getImageRenderQuality(): number {
+  return isAndroidTablet() ? 62 : 78;
+}
+
+/** Decode üst sınırı (layout px × DPI). */
+export function getImageMaxDecodeWidth(): number {
+  return isAndroidTablet() ? 640 : 1200;
 }
 
 /** Boot splash minimum süresi — tüm platformlarda sıfır. */
@@ -279,6 +380,7 @@ export function getAndroidGuestBootTimeoutMs(): number {
 }
 
 export function getAndroidAuthBootstrapTimeoutMs(): number {
+  if (isAndroidTablet()) return 1_200;
   return isAndroid() ? 1_800 : 3_000;
 }
 
@@ -343,7 +445,7 @@ export function getNotificationBootFlushMs(defaultMs: number): number {
 /** Sohbet artımlı senkron — realtime yedek; sık poll JS thread'i meşgul eder. */
 export function getChatPollIntervalMs(): number {
   if (!isAndroid()) return 18_000;
-  return isAndroidTablet() ? 12_000 : 8_000;
+  return isAndroidTablet() ? 18_000 : 8_000;
 }
 
 /** Okundu işareti periyodik güncelleme. */
@@ -365,30 +467,31 @@ export function getChatInitialRenderCount(): number {
 
 /** Keşfet FlashList draw mesafesi. */
 export function getDiscoveryEstimatedItemSize(): number {
-  return isAndroidTablet() ? 320 : isAndroid() ? 360 : 400;
+  return isAndroidTablet() ? 280 : isAndroid() ? 360 : 400;
 }
 
 /** Reels arka plan HLS ısıtma — iOS'ta daha seyrek batch. */
-export function getReelSequentialWarmupMs(defaultMs: number): number {
-  if (Platform.OS === 'ios') return Math.max(defaultMs, 120);
-  return defaultMs;
+export function getReelWarmupBatchSize(): number {
+  if (isAndroidTablet()) return 1;
+  return Platform.OS === 'ios' ? 1 : 2;
 }
 
-/** Reels sıralı ısıtma batch boyutu. */
-export function getReelWarmupBatchSize(): number {
-  return Platform.OS === 'ios' ? 1 : 2;
+export function getReelSequentialWarmupMs(defaultMs: number): number {
+  if (Platform.OS === 'ios') return Math.max(defaultMs, 120);
+  if (isAndroidTablet()) return Math.max(defaultMs, 400);
+  return defaultMs;
 }
 
 /** Konum yayın aralığı (watchPositionAsync timeInterval). */
 export function getProximityPresenceIntervalMs(defaultMs: number): number {
   if (Platform.OS === 'ios') return Math.max(defaultMs, 20_000);
-  return isAndroidTablet() ? 20_000 : 25_000;
+  return isAndroidTablet() ? 45_000 : 25_000;
 }
 
 /** Yakınlık aday poll — pil/ısı için seyrek aralık. */
 export function getProximityCandidatePollMs(defaultMs: number): number {
   if (Platform.OS === 'ios') return Math.max(defaultMs, 18_000);
-  return isAndroidTablet() ? 15_000 : 20_000;
+  return isAndroidTablet() ? 40_000 : 20_000;
 }
 
 /** Aktif reel oynatma sağlık kontrolü aralığı (ms). */

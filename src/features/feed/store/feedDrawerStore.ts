@@ -16,7 +16,10 @@ type FeedDrawerState = {
 export const useFeedDrawerStore = create<FeedDrawerState>((set, get) => ({
   open: false,
   listInteractionLocked: false,
-  openDrawer: () => set({ open: true }),
+  openDrawer: () => {
+    get().setListInteractionLocked(true);
+    set({ open: true });
+  },
   closeDrawer: () => set({ open: false }),
   toggleDrawer: () => set((state) => ({ open: !state.open })),
   _listInteractionLockHandler: null,

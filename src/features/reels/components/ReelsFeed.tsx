@@ -51,6 +51,7 @@ const IOS_REELS_LIST_PERF = {
 
 export function ReelsFeed() {
   const isFocused = useIsFocused();
+  const playbackFocused = isFocused;
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
@@ -388,8 +389,6 @@ export function ReelsFeed() {
     if (!(await requireAuth('Reel paylaşımı'))) return;
     router.push('/reels/create' as never);
   };
-
-  const playbackFocused = isFocused;
 
   const renderItem = useCallback(
     ({ item, index }: { item: ReelItem; index: number }) => (

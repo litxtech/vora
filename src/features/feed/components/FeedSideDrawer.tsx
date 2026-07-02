@@ -8,7 +8,6 @@ import Animated, {
   interpolate,
   runOnJS,
   useAnimatedProps,
-  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -28,21 +27,25 @@ import { useFeedStore } from '@/features/feed/store/feedStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
+import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
+
 const FEED_DRAWER_WIDTH_RATIO = 0.78;
 const DRAWER_INTERACTION_PROGRESS = 0.04;
 const DRAWER_DISMISS_PROGRESS = 0.45;
 const DRAWER_DISMISS_VELOCITY_X = -450;
 const DRAWER_AVATAR_SIZE = 48;
 
-/** iOS stack push (ör. puan sıralaması) benzeri açılış — yumuşak hızlanma, tok duruş. */
+const TABLET_INSTANT_DRAWER = isAndroidTablet();
+
+/** iOS stack push benzeri açılış — tablette anında. */
 const DRAWER_OPEN_TIMING = {
-  duration: 400,
+  duration: TABLET_INSTANT_DRAWER ? 0 : 400,
   easing: Easing.bezier(0.33, 1, 0.68, 1),
 };
 
-/** Stack pop benzeri kapanış — hafif ivmeli çıkış. */
+/** Stack pop benzeri kapanış. */
 const DRAWER_CLOSE_TIMING = {
-  duration: 340,
+  duration: TABLET_INSTANT_DRAWER ? 0 : 340,
   easing: Easing.bezier(0.32, 0, 0.67, 0),
 };
 
@@ -64,16 +67,15 @@ function closeReleaseSpring(velocity: number) {
 
 function openReleaseSpring(velocity: number) {
   'worklet';
+  if (TABLET_INSTANT_DRAWER) {
+    return { duration: 0, easing: Easing.linear };
+  }
   const speed = Math.min(Math.abs(velocity), 2.5);
   return {
     duration: Math.max(260, 400 - speed * 55),
     easing: Easing.bezier(0.33, 1, 0.68, 1),
   };
 }
-
-const MemoFeedChildren = memo(function MemoFeedChildren({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-});
 
 type FeedSideDrawerProfileHeaderProps = {
   onNavigate?: () => void;
@@ -161,7 +163,6 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 }: FeedDrawerAnimatorProps) {
   const progress = useSharedValue(0);
   const drawerWidthSv = useSharedValue(drawerWidth);
-  const drawerOpenSv = useSharedValue(useFeedDrawerStore.getState().open ? 1 : 0);
   const dragStartProgress = useSharedValue(0);
   const ownsProgress = useSharedValue(false);
   const feedInnerRef = useRef<RNView>(null);
@@ -181,7 +182,9 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 
   const finishGestureAnimation = useCallback(() => {
     ownsProgress.value = false;
-    setFeedInteractionLocked(useFeedDrawerStore.getState().open);
+    if (!useFeedDrawerStore.getState().open) {
+      setFeedInteractionLocked(false);
+    }
   }, [ownsProgress, setFeedInteractionLocked]);
 
   useEffect(() => {
@@ -191,51 +194,35 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
   useEffect(() => {
     const initialOpen = useFeedDrawerStore.getState().open;
     progress.value = initialOpen ? 1 : 0;
-    drawerOpenSv.value = initialOpen ? 1 : 0;
     setFeedInteractionLocked(initialOpen);
 
     return useFeedDrawerStore.subscribe((state, previous) => {
-      drawerOpenSv.value = state.open ? 1 : 0;
-
       if (state.open === previous.open) return;
       if (ownsProgress.value) return;
 
       cancelAnimation(progress);
-      progress.value = state.open
-        ? withTiming(1, DRAWER_OPEN_TIMING)
-        : withTiming(0, DRAWER_CLOSE_TIMING);
-
       if (state.open) {
         setFeedInteractionLocked(true);
+        progress.value = withTiming(1, DRAWER_OPEN_TIMING);
+      } else {
+        progress.value = withTiming(0, DRAWER_CLOSE_TIMING, (finished) => {
+          if (!finished) return;
+          runOnJS(setFeedInteractionLocked)(false);
+        });
       }
 
       if (state.open && Platform.OS !== 'android') {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
     });
-  }, [drawerOpenSv, ownsProgress, progress, setFeedInteractionLocked]);
-
-  useAnimatedReaction(
-    () => progress.value,
-    (current, previous) => {
-      const wasLocked = (previous ?? 0) > DRAWER_INTERACTION_PROGRESS;
-      const shouldLock = current > DRAWER_INTERACTION_PROGRESS;
-      if (wasLocked === shouldLock) return;
-
-      if (!shouldLock && drawerOpenSv.value > 0) return;
-
-      runOnJS(setFeedInteractionLocked)(shouldLock);
-    },
-    [drawerOpenSv, setFeedInteractionLocked],
-  );
+  }, [ownsProgress, progress, setFeedInteractionLocked]);
 
   const feedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: Math.round(progress.value * drawerWidthSv.value) }],
+    transform: [{ translateX: progress.value * drawerWidthSv.value }],
   }));
 
   const feedSurfaceProps = useAnimatedProps(() => ({
     renderToHardwareTextureAndroid: progress.value > DRAWER_INTERACTION_PROGRESS,
-    needsOffscreenAlphaCompositing: progress.value > DRAWER_INTERACTION_PROGRESS,
   }));
 
   const scrimStyle = useAnimatedStyle(
@@ -262,6 +249,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
         ownsProgress.value = true;
         cancelAnimation(progress);
         dragStartProgress.value = progress.value;
+        runOnJS(setFeedInteractionLocked)(true);
       })
       .onUpdate((event) => {
         const width = Math.max(drawerWidthSv.value, 1);
@@ -287,7 +275,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 
         progress.value = withTiming(1, openReleaseSpring(velocity), (finished) => {
           if (!finished) return;
-          runOnJS(finishGestureAnimation)();
+          ownsProgress.value = false;
         });
       });
 
@@ -310,6 +298,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
     finishGestureAnimation,
     ownsProgress,
     progress,
+    setFeedInteractionLocked,
   ]);
 
   return (
@@ -331,8 +320,8 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
           style={[shellStyles.feed, { backgroundColor }, feedStyle]}
           collapsable={false}
         >
-          <View ref={feedInnerRef} style={shellStyles.feedInner} collapsable={false}>
-            <MemoFeedChildren>{children}</MemoFeedChildren>
+          <View ref={feedInnerRef} style={shellStyles.feedInner} collapsable={false} pointerEvents="box-none">
+            {children}
           </View>
           <Animated.View pointerEvents="none" style={[shellStyles.scrim, scrimStyle]} />
         </Animated.View>
@@ -416,6 +405,7 @@ const shellStyles = StyleSheet.create({
   },
   feedInner: {
     flex: 1,
+    backfaceVisibility: 'hidden',
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router, useFocusEffect, useIsFocused } from 'expo-router';
+import { useMainTabPrefetchActive } from '@/features/navigation/hooks/useMainTabScreenActive';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
@@ -22,6 +23,7 @@ import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
 
 export function ConversationInbox() {
   const isFocused = useIsFocused();
+  const isScreenActive = useMainTabPrefetchActive('messages');
   const { colors } = useTheme();
   const showNewChat = useFeatureVisible(MESSAGING_FEATURE.newChat);
   const showCreateGroup = useFeatureVisible(MESSAGING_FEATURE.createGroup);
@@ -30,7 +32,7 @@ export function ConversationInbox() {
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
   const [showArchived, setShowArchived] = useState(false);
-  const { conversations, refresh, refreshSilent } = useConversationList(isFocused, showArchived);
+  const { conversations, refresh, refreshSilent } = useConversationList(isScreenActive, showArchived);
   const draftByConversationId = useMessagingStore((s) => s.draftByConversationId);
   useMessageDrafts(user?.id);
   const [query, setQuery] = useState('');

@@ -19,6 +19,7 @@ import { hydrateFeedCacheFromDisk } from '@/features/feed/services/feedCache';
 import { startScreenTimeTracking } from '@/features/screen-time';
 import { holdNativeSplash } from '@/lib/boot/nativeSplash';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
+import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 import { BootShellBackgroundSync } from '@/features/app-appearance/hooks/useBootShellBackground';
 import { resolveBootShellBackground } from '@/lib/boot/resolveBootShellBackground';
 import { resolveStackAnimation } from '@/constants/navigation';
@@ -94,10 +95,13 @@ export default function RootLayout() {
   const [shellBackground, setShellBackground] = useState(resolveBootShellBackground());
 
   useEffect(() => {
-    const task = deferBackgroundWork(() => {
+    const run = () => {
       void hydrateFeedCacheFromDisk();
-      startScreenTimeTracking();
-    });
+      if (!isAndroidTablet()) {
+        startScreenTimeTracking();
+      }
+    };
+    const task = deferBackgroundWork(run);
     return () => task.cancel();
   }, []);
 

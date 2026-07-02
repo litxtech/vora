@@ -7,7 +7,7 @@ import {
   readMemoryFeedCache,
   writeFeedCache,
 } from '@/features/feed/services/feedCache';
-import { fetchFeedPage } from '@/features/feed/services/feedData';
+import { fetchFeedPage, enrichFeedPageWithAds } from '@/features/feed/services/feedData';
 import type { FeedItem } from '@/features/feed/types';
 import { shouldRefreshInBackground, shouldUseSilentListRefresh } from '@/lib/ui/listRefresh';
 
@@ -108,7 +108,7 @@ export function useFeed() {
   );
 
   const loadInitial = useCallback(
-    async (background: boolean) => {
+    async (background: boolean, refreshLight = false) => {
       const fetchId = ++latestFetchId.current;
       if (!background) {
         setLoading(true);
@@ -124,11 +124,28 @@ export function useFeed() {
           followingOnly: category === 'following',
           cursor: null,
           userId: user?.id ?? null,
+          refreshLight,
         });
 
         if (fetchId !== latestFetchId.current) return;
 
         setItems((prev) => applyPageResult(prev, result.items, result.nextCursor, background));
+
+        if (
+          refreshLight &&
+          result.items.length > 0 &&
+          category !== 'reels' &&
+          category !== 'following'
+        ) {
+          void enrichFeedPageWithAds(result.items, regionId, user?.id ?? null).then((withAds) => {
+            if (fetchId !== latestFetchId.current) return;
+            setItems((prev) => {
+              if (prev.length === 0) return prev;
+              const merged = applyPageResult(prev, withAds, result.nextCursor, true);
+              return merged;
+            });
+          });
+        }
       } catch {
         if (fetchId === latestFetchId.current) {
           setItems((prev) => {
@@ -149,7 +166,7 @@ export function useFeed() {
     const background = shouldRefreshInBackground(itemsRef.current.length > 0);
     if (!shouldUseSilentListRefresh()) setRefreshing(true);
     setCursor(null);
-    await loadInitial(background);
+    await loadInitial(background, true);
     if (!shouldUseSilentListRefresh()) setRefreshing(false);
   }, [loadInitial]);
 

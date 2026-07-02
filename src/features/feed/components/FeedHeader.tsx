@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useState } from 'react';
@@ -12,7 +12,6 @@ import { TrustVacationPromoSlot } from '@/features/trust-promo';
 import { AnnouncementStrip } from '@/features/announcements/components/AnnouncementStrip';
 import { FeedIconButton } from '@/features/feed/components/shared/FeedIconButton';
 import { FeedHeaderAvatarButton } from '@/features/feed/components/FeedHeaderAvatarButton';
-import { MapHeaderButton } from '@/features/map/components/MapHeaderButton';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { FEED_ALL_DISTRICTS_LABEL, FEED_ALL_REGIONS_LABEL, getFeedDistrictOptions } from '@/features/feed/constants';
 import { REGIONS } from '@/constants/regions';
@@ -27,14 +26,11 @@ export function FeedHeader() {
   const { unreadCount } = useNotifications();
   const regionId = useFeedStore((s) => s.regionId);
   const district = useFeedStore((s) => s.district);
-  const searchQuery = useFeedStore((s) => s.searchQuery);
   const setRegionId = useFeedStore((s) => s.setRegionId);
   const setDistrict = useFeedStore((s) => s.setDistrict);
-  const setSearchQuery = useFeedStore((s) => s.setSearchQuery);
 
   const [showRegionPicker, setShowRegionPicker] = useState(false);
   const [showDistrictPicker, setShowDistrictPicker] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
   const districts = getFeedDistrictOptions(regionId);
   const showRegionFilter = useFeatureVisible(FEED_FEATURE.regionFilter);
   const showDistrictFilter = useFeatureVisible(FEED_FEATURE.districtFilter);
@@ -66,16 +62,6 @@ export function FeedHeader() {
       <View style={styles.topBar}>
         <FeedHeaderAvatarButton />
         <View style={styles.topActions}>
-          <FeatureGate featureId="feed-header-map">
-            <MapHeaderButton />
-          </FeatureGate>
-          <FeatureGate featureId="feed-header-search">
-            <FeedIconButton
-              icon={showSearch ? 'close-outline' : 'search-outline'}
-              compact
-              onPress={() => setShowSearch((v) => !v)}
-            />
-          </FeatureGate>
           <FeatureGate featureId="notifications">
             <FeedIconButton
               icon="notifications-outline"
@@ -86,29 +72,6 @@ export function FeedHeader() {
           </FeatureGate>
         </View>
       </View>
-
-      {showSearch ? (
-        <FeatureGate featureId="feed-header-search">
-        <View style={[styles.searchWrap, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
-          <Ionicons name="search-outline" size={18} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Akışta ara..."
-            placeholderTextColor={colors.textMuted}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            autoFocus
-            autoCapitalize="none"
-            autoCorrect={false}
-          />
-          {searchQuery ? (
-            <InstantPressable onPress={() => setSearchQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={18} color={colors.textMuted} />
-            </InstantPressable>
-          ) : null}
-        </View>
-        </FeatureGate>
-      ) : null}
 
       <View style={styles.metaRow}>
         {showRegionFilter ? (
@@ -183,19 +146,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    borderWidth: 1,
-    borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: spacing.xs,
   },
   metaRow: {
     flexDirection: 'row',

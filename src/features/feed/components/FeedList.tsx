@@ -15,7 +15,7 @@ import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlayba
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
-import { getFeedListPerfProps, getFeedEstimatedItemSize, isAndroid } from '@/lib/device/androidPerfProfile';
+import { getFeedListPerfProps, getFeedEstimatedItemSize, getFeedFlashListDrawDistance, getFeedScrollSettleMs, isAndroid, shouldAutoplayFeedVideos } from '@/lib/device/androidPerfProfile';
 import { shouldUseSilentListRefresh } from '@/lib/ui/listRefresh';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -132,12 +132,16 @@ export function FeedList({
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const commitActiveVideo = useCallback((viewableItems: ViewToken[]) => {
+    if (!shouldAutoplayFeedVideos()) {
+      useFeedVideoPlaybackStore.getState().setActivePost(null);
+      return;
+    }
     useFeedVideoPlaybackStore.getState().setActivePost(pickActiveVideoPostId(viewableItems));
   }, []);
   commitActiveVideoRef.current = commitActiveVideo;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (useFeedDrawerStore.getState().listInteractionLocked) return;
+    if (useFeedDrawerStore.getState().listInteractionLocked || useFeedDrawerStore.getState().open) return;
 
     const isScrolling = useFeedVideoPlaybackStore.getState().isScrolling;
     const nextVisible = new Set<string>();
@@ -179,7 +183,7 @@ export function FeedList({
 
   const handleScrollEndDrag = useCallback(() => {
     if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
-    scrollSettleTimerRef.current = setTimeout(handleScrollSettled, 120);
+    scrollSettleTimerRef.current = setTimeout(handleScrollSettled, getFeedScrollSettleMs());
   }, [handleScrollSettled]);
 
   useEffect(() => {
@@ -199,7 +203,6 @@ export function FeedList({
       const videoStore = useFeedVideoPlaybackStore.getState();
       if (locked) {
         videoStore.setScrolling(true);
-        videoStore.setActivePost(null);
       } else {
         videoStore.setScrolling(false);
         commitActiveVideoRef.current(pendingViewableRef.current);
@@ -292,7 +295,7 @@ export function FeedList({
       <FlashList
         ref={listRef}
         {...sharedListProps}
-        drawDistance={getFeedEstimatedItemSize() * 2}
+        drawDistance={getFeedFlashListDrawDistance()}
       />
     );
   }

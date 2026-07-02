@@ -45,6 +45,7 @@ import { getAndroidFlatListPerfProps, getDiscoveryEstimatedItemSize, getMarketpl
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { useFeatureTabFilter } from '@/features/feature-flags/hooks/useFeatureTabFilter';
+import { useMainTabPrefetchActive } from '@/features/navigation/hooks/useMainTabScreenActive';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type DiscoveryRow =
@@ -149,6 +150,7 @@ const DiscoveryRowItem = memo(function DiscoveryRowItem({
 
 export function DiscoveryScreen() {
   const isFocused = useIsFocused();
+  const isPrefetchActive = useMainTabPrefetchActive('discover');
   const insets = useSafeAreaInsets();
   const tabBarBottomInset = useStableTabBarInset();
   const listBottomInset = getFloatingTabBarReserve(tabBarBottomInset) + spacing.md;
@@ -168,7 +170,7 @@ export function DiscoveryScreen() {
   // fetch'i beklet — aksi halde önce yanlış bölge için atılıp çöpe giden bir fetch oluşur.
   const regionSettled = !profile?.region_id || regionId === (profile.region_id as RegionId);
   const { result, loading, refreshing, loadingMore, hasMore, error, refresh, loadMore } = useDiscovery(
-    isFocused && regionSettled,
+    isPrefetchActive && regionSettled,
   );
   const { results: userSearchResults, loading: userSearchLoading, error: userSearchError } =
     useDiscoveryUserSearch(userSearchQuery);

@@ -1,7 +1,6 @@
-import { type ReactElement, useCallback, useMemo } from 'react';
+import { type ReactElement, useCallback, useEffect, useMemo } from 'react';
 import { Platform, StyleSheet, useWindowDimensions, View } from 'react-native';
-import type { NavigationProp, ParamListBase } from '@react-navigation/native';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   cancelAnimation,
@@ -34,9 +33,13 @@ const TAB_SWIPE_TIMING = {
   easing: Easing.bezier(0.33, 1, 0.68, 1),
 };
 
+type TabSwipeNavigation = {
+  jumpTo: (routeName: string) => void;
+};
+
 type TabSwipeShellProps = {
   routeName: string;
-  navigation: NavigationProp<ParamListBase>;
+  navigation: TabSwipeNavigation;
   children: ReactElement;
 };
 
@@ -50,6 +53,7 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
   const partnerSide = useMainTabSwipeStore((s) => s.partnerSide);
   const setPartner = useMainTabSwipeStore((s) => s.setPartner);
   const clearPartner = useMainTabSwipeStore((s) => s.clearPartner);
+  const setWarmRoutes = useMainTabSwipeStore((s) => s.setWarmRoutes);
 
   const isFeedTab = routeName === 'index';
   const swipeEnabled =
@@ -68,6 +72,15 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
 
   const isPartner = partnerRoute === currentRoute;
   const isSwipeDriver = swipeEnabled;
+
+  useEffect(() => {
+    if (!isFocused) return;
+    const warm: MainTabRoute[] = [];
+    if (prevRoute) warm.push(prevRoute);
+    if (nextRoute) warm.push(nextRoute);
+    setWarmRoutes(warm);
+    return () => setWarmRoutes([]);
+  }, [isFocused, nextRoute, prevRoute, setWarmRoutes]);
 
   const switchTab = useCallback(
     (direction: 'next' | 'prev') => {
@@ -234,19 +247,20 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
   );
 
   const sceneStyle = useAnimatedStyle(() => {
+    const progress = mainTabSwipeProgress.value;
     if (isPartner && partnerSide === 'right') {
       return {
-        transform: [{ translateX: Math.round(mainTabSwipeProgress.value + width) }],
+        transform: [{ translateX: progress + width }],
       };
     }
     if (isPartner && partnerSide === 'left') {
       return {
-        transform: [{ translateX: Math.round(mainTabSwipeProgress.value - width) }],
+        transform: [{ translateX: progress - width }],
       };
     }
     if (isSwipeDriver) {
       return {
-        transform: [{ translateX: Math.round(mainTabSwipeProgress.value) }],
+        transform: [{ translateX: progress }],
       };
     }
     return {};
