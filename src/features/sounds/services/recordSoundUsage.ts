@@ -78,7 +78,7 @@ export function soundToMusicSelection(sound: {
   durationSec: number;
   authorUsername?: string;
 }): MusicSelection {
-  const endSec = Math.min(sound.durationSec, 60);
+  const endSec = sound.durationSec;
   return {
     source: 'sound',
     trackId: sound.id,

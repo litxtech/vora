@@ -21,6 +21,7 @@ import { SOUND_REPORT_REASONS, soundBadgeLabel } from '@/features/sounds/constan
 import { useMusicPreview } from '@/features/music/hooks/useMusicPreview';
 import {
   checkSoundEngagement,
+  deleteSound,
   fetchSoundById,
   recordSoundListen,
   reportSound,
@@ -153,6 +154,39 @@ export function SoundDetailScreen() {
     );
   };
 
+  const isOwner = !!user && sound?.authorId === user.id;
+
+  const handleEdit = () => {
+    if (!sound) return;
+    router.push(`/sounds/${sound.id}/edit` as Href);
+  };
+
+  const handleDelete = () => {
+    if (!sound || !user) return;
+    Alert.alert(
+      'Sesi Sil',
+      'Bu ses kalıcı olarak kaldırılır ve müzik kütüphanesinden de çıkar. Devam edilsin mi?',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Sil',
+          style: 'destructive',
+          onPress: () => {
+            void deleteSound(sound.id, user.id).then((result) => {
+              if (result.error) {
+                Alert.alert('Silinemedi', result.error);
+                return;
+              }
+              Alert.alert('Silindi', 'Ses kaldırıldı.', [
+                { text: 'Tamam', onPress: () => router.back() },
+              ]);
+            });
+          },
+        },
+      ],
+    );
+  };
+
   const badge = sound ? soundBadgeLabel(sound.badgeTier) : null;
 
   return (
@@ -163,7 +197,13 @@ export function SoundDetailScreen() {
           <Text variant="label" style={styles.topTitle}>
             Ses
           </Text>
-          <View style={{ width: 40 }} />
+          {isOwner && sound ? (
+            <Pressable onPress={handleEdit} hitSlop={12} style={styles.topAction}>
+              <Ionicons name="create-outline" size={22} color={colors.text} />
+            </Pressable>
+          ) : (
+            <View style={{ width: 40 }} />
+          )}
         </View>
 
         {loading ? (
@@ -232,7 +272,13 @@ export function SoundDetailScreen() {
             </View>
 
             <View style={styles.actions}>
-              <Button onPress={handleUse}>Bu Sesi Kullan</Button>
+              <Button title="Bu Sesi Kullan" onPress={handleUse} />
+              {isOwner ? (
+                <View style={styles.ownerRow}>
+                  <Button title="Düzenle" variant="outline" fullWidth={false} style={styles.ownerBtn} onPress={handleEdit} />
+                  <Button title="Sil" variant="danger" fullWidth={false} style={styles.ownerBtn} onPress={handleDelete} />
+                </View>
+              ) : null}
               <View style={styles.row}>
                 <Pressable onPress={() => void handleFavorite()} disabled={busy} style={[styles.actionChip, { borderColor: colors.border }]}>
                   <Ionicons name={favorited ? 'bookmark' : 'bookmark-outline'} size={18} color={colors.text} />
@@ -269,6 +315,12 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.sm,
   },
   topTitle: { fontWeight: '700' },
+  topAction: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   loader: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   content: { padding: spacing.md, gap: spacing.md },
   hero: {
@@ -321,6 +373,13 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   actions: { gap: spacing.sm, marginTop: spacing.sm },
+  ownerRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  ownerBtn: {
+    flex: 1,
+  },
   row: {
     flexDirection: 'row',
     gap: spacing.xs,

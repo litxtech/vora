@@ -80,15 +80,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const [reacted, setReacted] = useState(false);
   const [replyBarHeight, setReplyBarHeight] = useState(56);
   const [inputFocused, setInputFocused] = useState(false);
-  const [videoPositionSec, setVideoPositionSec] = useState(0);
-  const [videoDurationSec, setVideoDurationSec] = useState<number | null>(null);
-
-  const handleVideoPosition = useCallback((sec: number, dur?: number | null) => {
-    setVideoPositionSec(sec);
-    if (dur != null && dur > 0) {
-      setVideoDurationSec((prev) => (prev === dur ? prev : dur));
-    }
-  }, []);
+  const videoProgressRef = useRef({ sec: 0, dur: null as number | null });
 
   const replyInputRef = useRef<TextInput>(null);
   const inputFocusedRef = useRef(false);
@@ -192,8 +184,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   useEffect(() => {
     setProgress(0);
-    setVideoPositionSec(0);
-    setVideoDurationSec(null);
+    videoProgressRef.current = { sec: 0, dur: null };
     slideEnteredAtRef.current = Date.now();
     setReacted(activeItem?.hasReacted ?? false);
   }, [activeItem?.hasReacted, activeItem?.id]);
@@ -271,6 +262,24 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     ],
   );
 
+  const handleVideoPosition = useCallback((sec: number, dur?: number | null) => {
+    videoProgressRef.current.sec = sec;
+    if (dur != null && dur > 0) {
+      videoProgressRef.current.dur = dur;
+    }
+
+    const duration = Math.max(
+      0.1,
+      dur ?? videoProgressRef.current.dur ?? activeItem?.durationSec ?? 15,
+    );
+    const nextProgress = Math.min(1, sec / duration);
+    setProgress((prev) => (Math.abs(prev - nextProgress) < 0.008 ? prev : nextProgress));
+  }, [activeItem?.durationSec]);
+
+  const handleVideoEnd = useCallback(() => {
+    goNextItem('auto_forward');
+  }, [goNextItem]);
+
   const goPrevItem = useCallback(
     (navigation: StoryNavigation) => {
       void flushView(navigation, true);
@@ -343,8 +352,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     isPaused,
     onComplete: () => goNextItem('auto_forward'),
     onProgress: setProgress,
-    videoPositionSec,
-    videoDurationSec,
   });
 
   const openInsights = useCallback(async () => {
@@ -586,7 +593,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                 isActive={!loading && !isPaused}
                 isPaused={isPaused}
                 onVideoPosition={handleVideoPosition}
-                onVideoEnd={() => goNextItem('auto_forward')}
+                onVideoEnd={handleVideoEnd}
               />
             ) : null}
 

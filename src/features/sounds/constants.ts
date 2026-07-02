@@ -2,8 +2,15 @@ import type { SoundListTabId, SoundReportReason } from '@/features/sounds/types'
 
 export const SOUNDS_BUCKET = 'user-sounds';
 
-export const MAX_SOUND_DURATION_SEC = 60;
+/** Supabase `user-sounds` bucket limiti (100 MB) — yüklemeden önce sıkıştırılır */
+export const MAX_SOUND_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+/** Canlı kayıt için üst süre yok; dosya/video uzunluğu da serbest (sıkıştırma uygulanır) */
+export const MAX_SOUND_DURATION_SEC = Number.MAX_SAFE_INTEGER;
 export const MIN_SOUND_DURATION_SEC = 1;
+
+/** UI ipucu — pratik kayıt önerisi */
+export const SOUND_RECORD_HINT_SEC = 60;
 
 export const SOUND_LIST_TABS: { id: SoundListTabId; label: string }[] = [
   { id: 'trending', label: 'Trend Sesler' },

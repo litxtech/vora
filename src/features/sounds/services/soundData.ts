@@ -5,6 +5,7 @@ import type {
   SoundDailyStat,
   SoundPrivacy,
   SoundReportReason,
+  UpdateSoundInput,
 } from '@/features/sounds/types';
 import { defaultSoundTitle } from '@/features/sounds/constants';
 import {
@@ -13,6 +14,8 @@ import {
   setCachedSounds,
 } from '@/features/sounds/services/soundCache';
 import { uploadSoundAudio, uploadSoundCover } from '@/features/sounds/services/soundUpload';
+import { probeSoundDurationSec } from '@/features/sounds/services/prepareSoundAudioForUpload';
+import { invalidateMusicCache } from '@/features/music/services/musicCache';
 import type { FeedAuthor } from '@/features/feed/types';
 import type { UserRole } from '@/types/database';
 import { supabase } from '@/lib/supabase/client';
@@ -264,10 +267,26 @@ export async function publishSound(
   username: string,
   input: PublishSoundInput,
 ): Promise<{ sound: Sound | null; error: string | null }> {
-  const title = input.title.trim() || defaultSoundTitle(username);
+  const title = (input.title.trim() || defaultSoundTitle(username)).slice(0, 120);
+  if (!input.localAudioUri?.trim()) {
+    return { sound: null, error: 'Ses dosyası bulunamadı. Yeniden kaydedin.' };
+  }
 
-  const audioUpload = await uploadSoundAudio(userId, input.localAudioUri);
-  if (audioUpload.error) return { sound: null, error: audioUpload.error };
+  const audioUpload = await uploadSoundAudio(userId, input.localAudioUri, {
+    onProgress: input.onUploadProgress,
+  });
+  if (audioUpload.error || !audioUpload.path || !audioUpload.url) {
+    return { sound: null, error: audioUpload.error ?? 'Ses yüklenemedi.' };
+  }
+
+  let durationSec = Math.max(1, Math.round(input.durationSec));
+  try {
+    const probed = await probeSoundDurationSec(input.localAudioUri);
+    if (probed > 0) durationSec = Math.ceil(probed);
+  } catch {
+    /* keep provided duration */
+  }
+  durationSec = Math.min(86400, durationSec);
 
   let coverPath: string | null = null;
   let coverUrl: string | null = null;
@@ -288,7 +307,7 @@ export async function publishSound(
       cover_url: coverUrl,
       audio_storage_path: audioUpload.path,
       audio_url: audioUpload.url,
-      duration_sec: input.durationSec,
+      duration_sec: durationSec,
       privacy: input.privacy,
       tags: input.tags ?? [],
       status: 'published',
@@ -296,10 +315,77 @@ export async function publishSound(
     .select(SOUND_SELECT)
     .single();
 
-  if (error) return { sound: null, error: supabaseErrorMessage(error)! };
+  if (error) {
+    const message = supabaseErrorMessage(error)!;
+    return {
+      sound: null,
+      error: message.includes('duration') ? 'Ses süresi geçersiz. Daha kısa bir kayıt deneyin.' : message,
+    };
+  }
 
   invalidateSoundCache();
+  invalidateMusicCache();
   return { sound: mapSound(data as unknown as SoundRow), error: null };
+}
+
+export async function updateSound(
+  soundId: string,
+  userId: string,
+  input: UpdateSoundInput,
+): Promise<{ sound: Sound | null; error: string | null }> {
+  const title = input.title.trim();
+  if (!title) return { sound: null, error: 'Ses adı gerekli.' };
+
+  let coverPath: string | undefined;
+  let coverUrl: string | undefined;
+
+  if (input.coverLocalUri) {
+    const coverUpload = await uploadSoundCover(userId, input.coverLocalUri);
+    if (coverUpload.error) return { sound: null, error: coverUpload.error };
+    coverPath = coverUpload.path;
+    coverUrl = coverUpload.url;
+  }
+
+  const payload: Record<string, unknown> = {
+    title,
+    description: input.description?.trim() || null,
+    privacy: input.privacy,
+  };
+
+  if (coverPath) payload.cover_storage_path = coverPath;
+  if (coverUrl) payload.cover_url = coverUrl;
+
+  const { data, error } = await supabase
+    .from('sounds')
+    .update(payload)
+    .eq('id', soundId)
+    .eq('author_id', userId)
+    .select(SOUND_SELECT)
+    .maybeSingle();
+
+  if (error) return { sound: null, error: supabaseErrorMessage(error)! };
+  if (!data) return { sound: null, error: 'Ses güncellenemedi.' };
+
+  invalidateSoundCache();
+  invalidateMusicCache();
+  return { sound: mapSound(data as unknown as SoundRow), error: null };
+}
+
+export async function deleteSound(
+  soundId: string,
+  userId: string,
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
+    .from('sounds')
+    .update({ status: 'removed' })
+    .eq('id', soundId)
+    .eq('author_id', userId);
+
+  if (error) return { error: supabaseErrorMessage(error)! };
+
+  invalidateSoundCache();
+  invalidateMusicCache();
+  return { error: null };
 }
 
 export async function toggleSoundLike(soundId: string): Promise<{ liked: boolean; error: string | null }> {

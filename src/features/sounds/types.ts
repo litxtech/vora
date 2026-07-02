@@ -66,6 +66,14 @@ export type PublishSoundInput = {
   durationSec: number;
   coverLocalUri?: string | null;
   tags?: string[];
+  onUploadProgress?: (stage: 'preparing' | 'compressing', label: string) => void;
+};
+
+export type UpdateSoundInput = {
+  title: string;
+  description?: string | null;
+  privacy: SoundPrivacy;
+  coverLocalUri?: string | null;
 };
 
 export type SoundListTabId = 'trending' | 'new' | 'following' | 'saved' | 'mine';

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
@@ -102,6 +102,11 @@ function StoryVideoSlide({
     active: isActive && !isPaused && Boolean(source),
   });
 
+  const onVideoPositionRef = useRef(onVideoPosition);
+  const onVideoEndRef = useRef(onVideoEnd);
+  onVideoPositionRef.current = onVideoPosition;
+  onVideoEndRef.current = onVideoEnd;
+
   useEffect(() => {
     setIsVideoReady(false);
   }, [item.id, source]);
@@ -118,9 +123,9 @@ function StoryVideoSlide({
 
     const tickSub = player.addListener('timeUpdate', ({ currentTime }) => {
       const duration = player.duration > 0 ? player.duration : item.durationSec ?? 0;
-      onVideoPosition?.(currentTime, duration > 0 ? duration : item.durationSec);
+      onVideoPositionRef.current?.(currentTime, duration > 0 ? duration : item.durationSec);
       if (duration > 0 && currentTime >= duration - 0.05) {
-        onVideoEnd?.();
+        onVideoEndRef.current?.();
       }
     });
 
@@ -128,7 +133,7 @@ function StoryVideoSlide({
       if (status === 'readyToPlay') {
         setIsVideoReady(true);
         const duration = player.duration > 0 ? player.duration : item.durationSec ?? null;
-        onVideoPosition?.(player.currentTime, duration);
+        onVideoPositionRef.current?.(player.currentTime, duration);
         if (isActive && !isPaused) {
           try {
             player.play();
@@ -158,7 +163,7 @@ function StoryVideoSlide({
       tickSub.remove();
       statusSub.remove();
     };
-  }, [isActive, isPaused, item.durationSec, onVideoEnd, onVideoPosition, player, source]);
+  }, [isActive, isPaused, item.durationSec, item.id, player, source]);
 
   const waitingForSource = !source;
   const showProcessingOverlay = waitingForSource && !posterUri;
