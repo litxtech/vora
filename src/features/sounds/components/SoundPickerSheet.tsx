@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { router, type Href } from 'expo-router';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,6 +24,7 @@ import {
   fetchFollowingSounds,
   fetchMySounds,
   fetchNewSounds,
+  fetchRecentSounds,
   fetchSavedSounds,
   fetchTrendingSounds,
 } from '@/features/sounds/services/soundData';
@@ -35,6 +37,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 
 const TAB_ICONS: Record<SoundListTabId, keyof typeof Ionicons.glyphMap> = {
+  recent: 'time-outline',
   trending: 'flame-outline',
   new: 'sparkles-outline',
   following: 'people-outline',
@@ -50,6 +53,7 @@ type SoundPickerSheetProps = {
   pauseVideo?: () => void;
   alternateModeLabel?: string;
   onAlternateMode?: () => void;
+  selectionMode?: boolean;
 };
 
 export function SoundPickerSheet({
@@ -60,12 +64,13 @@ export function SoundPickerSheet({
   pauseVideo,
   alternateModeLabel,
   onAlternateMode,
+  selectionMode = false,
 }: SoundPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<SoundListTabId>('trending');
+  const [tab, setTab] = useState<SoundListTabId>('recent');
   const [sounds, setSounds] = useState<Sound[]>([]);
   const [loading, setLoading] = useState(false);
   const { results: searchResults, searching, hasQuery } = useSoundSearch(query);
@@ -81,6 +86,9 @@ export function SoundPickerSheet({
     setLoading(true);
     try {
       switch (tab) {
+        case 'recent':
+          setSounds(user ? await fetchRecentSounds(user.id) : []);
+          break;
         case 'new':
           setSounds(await fetchNewSounds());
           break;
@@ -109,7 +117,7 @@ export function SoundPickerSheet({
   useEffect(() => {
     if (!visible) {
       setQuery('');
-      setTab('trending');
+      setTab('recent');
       stopPreview();
       return;
     }
@@ -142,6 +150,18 @@ export function SoundPickerSheet({
     stopPreview();
     onClose();
   }, [onClose, stopPreview]);
+
+  const openLibrary = () => {
+    stopPreview();
+    onClose();
+    router.push('/sounds' as Href);
+  };
+
+  const openCreate = () => {
+    stopPreview();
+    onClose();
+    router.push('/sounds/create' as Href);
+  };
 
   const tabButtons = useMemo(
     () =>
@@ -193,6 +213,29 @@ export function SoundPickerSheet({
             </View>
           </View>
 
+          {!selectionMode ? (
+            <View style={styles.quickLinks}>
+              <Pressable
+                style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={openLibrary}
+              >
+                <Ionicons name="library-outline" size={16} color={colors.accent} />
+                <Text variant="caption" style={{ fontWeight: '600' }}>
+                  Kütüphane
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
+                onPress={openCreate}
+              >
+                <Ionicons name="mic-outline" size={16} color={colors.primary} />
+                <Text variant="caption" style={{ fontWeight: '600' }}>
+                  Ses Oluştur
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+
           <View style={[styles.searchRow, { borderColor: colors.border, backgroundColor: colors.surface }]}>
             <Ionicons name="search" size={18} color={colors.textSecondary} />
             <TextInput
@@ -222,7 +265,11 @@ export function SoundPickerSheet({
               ListEmptyComponent={
                 <View style={styles.empty}>
                   <Ionicons name="musical-notes-outline" size={40} color={colors.textSecondary} />
-                  <Text secondary>Ses bulunamadı</Text>
+                  <Text secondary>
+                    {tab === 'recent'
+                      ? 'Henüz ses kullanmadınız. Trend seslere göz atın veya kendi sesinizi oluşturun.'
+                      : 'Ses bulunamadı'}
+                  </Text>
                 </View>
               }
               renderItem={({ item }) => (
@@ -230,6 +277,15 @@ export function SoundPickerSheet({
                   sound={item}
                   playing={playingId === item.id}
                   selected={selectedSoundId === item.id}
+                  onPress={() => {
+                    if (selectionMode) {
+                      void handlePreview(item);
+                      return;
+                    }
+                    stopPreview();
+                    onClose();
+                    router.push(`/sounds/${item.id}` as Href);
+                  }}
                   onPreview={() => void handlePreview(item)}
                   onUse={() => handleUse(item)}
                 />
@@ -278,6 +334,21 @@ const styles = StyleSheet.create({
   altModeBtn: {
     paddingHorizontal: spacing.xs,
   },
+  quickLinks: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  quickLink: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -313,5 +384,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
   },
 });

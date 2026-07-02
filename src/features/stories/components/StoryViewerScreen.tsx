@@ -14,7 +14,6 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
   Extrapolation,
-  FadeIn,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -35,7 +34,6 @@ import {
   STORY_CARD_HORIZONTAL_INSET,
   STORY_CARD_RADIUS,
   STORY_CARD_TOP_GAP,
-  STORY_ITEM_TRANSITION_MS,
   STORY_PHOTO_DURATION_MS,
   STORY_SPRING,
   STORY_USER_TRANSITION_MS,
@@ -259,11 +257,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     router.back();
   }, [flushView]);
 
-  const resetDeckMotion = useCallback(() => {
-    panX.value = 0;
-    transitionX.value = 0;
-  }, [panX, transitionX]);
-
   const animateUserTransition = useCallback(
     (direction: 1 | -1, after: () => void) => {
       dismissY.value = 0;
@@ -277,8 +270,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         (finished) => {
           if (!finished) return;
           runOnJS(after)();
-          transitionX.value = direction * CARD_WIDTH;
-          transitionX.value = withSpring(0, STORY_SPRING);
         },
       );
     },
@@ -369,7 +360,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     void flushView('swipe_forward', true);
     void markStoryUserSeen(activeUserId);
     markRingSeen(activeUserId);
-    resetDeckMotion();
     setCurrentUserIndex(currentUserIndex + 1);
     setCurrentItemIndex(0);
   }, [
@@ -377,14 +367,12 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     currentUserIndex,
     flushView,
     markRingSeen,
-    resetDeckMotion,
     setCurrentItemIndex,
     setCurrentUserIndex,
   ]);
 
   const finishPanPrevUser = useCallback(() => {
     void flushView('swipe_back', true);
-    resetDeckMotion();
     const prevUserId = ringUserIds[currentUserIndex - 1];
     const prevBundle = useStoryViewerStore.getState().bundles[prevUserId];
     const lastIndex = Math.max(0, (prevBundle?.items.length ?? 1) - 1);
@@ -393,7 +381,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   }, [
     currentUserIndex,
     flushView,
-    resetDeckMotion,
     ringUserIds,
     setCurrentItemIndex,
     setCurrentUserIndex,
@@ -495,8 +482,8 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       transform: [{ translateX: CARD_WIDTH + offset }],
       opacity: interpolate(
         -offset,
-        [0, 18, CARD_WIDTH * 0.45],
-        [0, 0.35, 1],
+        [0, 12, CARD_WIDTH * 0.28, CARD_WIDTH],
+        [0, 0.5, 0.92, 1],
         Extrapolation.CLAMP,
       ),
     };
@@ -508,8 +495,8 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       transform: [{ translateX: -CARD_WIDTH + offset }],
       opacity: interpolate(
         offset,
-        [0, 18, CARD_WIDTH * 0.45],
-        [0, 0.35, 1],
+        [0, 12, CARD_WIDTH * 0.28, CARD_WIDTH],
+        [0, 0.5, 0.92, 1],
         Extrapolation.CLAMP,
       ),
     };
@@ -619,7 +606,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         if (e.translationX <= -SWIPE_THRESHOLD && canGoNextUserSv.value === 1) {
           panX.value = withTiming(
             -CARD_WIDTH,
-            { duration: 240, easing: Easing.out(Easing.cubic) },
+            { duration: STORY_USER_TRANSITION_MS, easing: Easing.out(Easing.cubic) },
             (finished) => {
               if (finished) runOnJS(finishPanNextUser)();
             },
@@ -629,7 +616,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         if (e.translationX >= SWIPE_THRESHOLD && canGoPrevUserSv.value === 1) {
           panX.value = withTiming(
             CARD_WIDTH,
-            { duration: 240, easing: Easing.out(Easing.cubic) },
+            { duration: STORY_USER_TRANSITION_MS, easing: Easing.out(Easing.cubic) },
             (finished) => {
               if (finished) runOnJS(finishPanPrevUser)();
             },
@@ -794,11 +781,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
               <Animated.View style={[styles.mediaDeck, mediaDeckStyle]} collapsable={false}>
                 {activeItem ? (
-                  <Animated.View
-                    key={`${activeUserId}-${activeItem.id}`}
-                    entering={FadeIn.duration(STORY_ITEM_TRANSITION_MS)}
-                    style={styles.mediaFill}
-                  >
+                  <View key={`${activeUserId}-${activeItem.id}`} style={styles.mediaFill}>
                     <StorySlide
                       item={activeItem}
                       isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
@@ -806,7 +789,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                       onVideoPosition={handleVideoPosition}
                       onVideoEnd={handleVideoEnd}
                     />
-                  </Animated.View>
+                  </View>
                 ) : null}
               </Animated.View>
 

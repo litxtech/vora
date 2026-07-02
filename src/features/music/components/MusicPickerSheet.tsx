@@ -51,6 +51,8 @@ type MusicPickerSheetProps = {
   pauseVideo?: () => void;
   alternateModeLabel?: string;
   onAlternateMode?: () => void;
+  /** Gönderi/hikâye seçicisinde: detay sayfasına yönlendirme yok */
+  selectionMode?: boolean;
 };
 
 export function MusicPickerSheet({
@@ -61,6 +63,7 @@ export function MusicPickerSheet({
   pauseVideo,
   alternateModeLabel,
   onAlternateMode,
+  selectionMode = false,
 }: MusicPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -206,26 +209,28 @@ export function MusicPickerSheet({
           )}
         </View>
 
-        <View style={styles.quickLinks}>
-          <Pressable
-            style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={openSoundLibrary}
-          >
-            <Ionicons name="library-outline" size={18} color={colors.accent} />
-            <Text variant="caption" style={{ fontWeight: '600' }}>
-              Ses Kütüphanesi
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={openSoundCreate}
-          >
-            <Ionicons name="mic-outline" size={18} color={colors.primary} />
-            <Text variant="caption" style={{ fontWeight: '600' }}>
-              Ses Oluştur
-            </Text>
-          </Pressable>
-        </View>
+        {!selectionMode ? (
+          <View style={styles.quickLinks}>
+            <Pressable
+              style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={openSoundLibrary}
+            >
+              <Ionicons name="library-outline" size={18} color={colors.accent} />
+              <Text variant="caption" style={{ fontWeight: '600' }}>
+                Ses Kütüphanesi
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={openSoundCreate}
+            >
+              <Ionicons name="mic-outline" size={18} color={colors.primary} />
+              <Text variant="caption" style={{ fontWeight: '600' }}>
+                Ses Oluştur
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
 
         <View style={[styles.searchWrap, { backgroundColor: `${colors.textMuted}12` }]}>
           <Ionicons name="search" size={16} color={colors.textMuted} />
@@ -320,6 +325,10 @@ export function MusicPickerSheet({
                 onPreview={() => void handleListen(item)}
                 onUse={() => handleAddTrack(item)}
                 onPress={() => {
+                  if (selectionMode) {
+                    void handleListen(item);
+                    return;
+                  }
                   if (isPersistableMusicTrackId(item.id)) {
                     stopPreview();
                     onClose();

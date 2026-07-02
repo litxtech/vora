@@ -8,29 +8,40 @@ import { fetchMusicTrackById } from '@/features/music/services/musicData';
 import { fetchSoundById } from '@/features/sounds/services/soundData';
 import type { MusicSelection, MusicTrack } from '@/features/music/types';
 import { radius, spacing } from '@/constants/theme';
+import { useTheme } from '@/providers/ThemeProvider';
 
 type MediaEditorMusicPanelProps = {
   visible: boolean;
   music: MusicSelection;
+  /** Hikâye / gönderi medya türü — video için kaydırma kırpma, foto için aralık kırpma */
+  mediaType?: 'image' | 'video';
+  /** Video hikâyede müzik kırpma penceresi (saniye) */
+  clipDurationSec?: number;
   previewPlaying: boolean;
   onTogglePreview: () => void;
   onChangeTrack: () => void;
   onRemove: () => void;
   onUpdate: (patch: Partial<MusicSelection>) => void;
   onClose: () => void;
+  /** Kırpma bitti — temiz önizlemeye geç (hikâye akışı) */
+  onDone?: () => void;
 };
 
 export function MediaEditorMusicPanel({
   visible,
   music,
+  mediaType = 'image',
+  clipDurationSec,
   previewPlaying,
   onTogglePreview,
   onChangeTrack,
   onRemove,
   onUpdate,
   onClose,
+  onDone,
 }: MediaEditorMusicPanelProps) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
   const [track, setTrack] = useState<MusicTrack | null>(null);
 
   useEffect(() => {
@@ -72,10 +83,21 @@ export function MediaEditorMusicPanel({
 
   if (!visible || !track) return null;
 
+  const isPhoto = mediaType === 'image';
+  const resolvedClipDuration =
+    clipDurationSec ?? Math.max(0.5, music.musicEndSec - music.musicStartSec);
+
   return (
-    <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.sm }]}>
+    <View
+      style={[
+        styles.sheet,
+        { paddingBottom: insets.bottom + spacing.sm, maxHeight: onDone ? '62%' : '52%' },
+      ]}
+    >
       <View style={styles.header}>
-        <Text style={styles.title}>{music.source === 'sound' ? 'Ses' : 'Müzik'}</Text>
+        <Text style={styles.title}>
+          {isPhoto ? 'Müziği kırp' : music.source === 'sound' ? 'Sesi kırp' : 'Müziği kırp'}
+        </Text>
         <Pressable onPress={onClose} hitSlop={10} style={styles.closeBtn}>
           <Ionicons name="chevron-down" size={22} color="#fff" />
         </Pressable>
@@ -88,22 +110,32 @@ export function MediaEditorMusicPanel({
         showsVerticalScrollIndicator={false}
       >
         <MusicEditorPanel
-          mode="photo"
+          mode={isPhoto ? 'photo' : 'video'}
           track={track}
-          clipDurationSec={Math.max(0.5, music.musicEndSec - music.musicStartSec)}
+          clipDurationSec={resolvedClipDuration}
           musicStartSec={music.musicStartSec}
           musicEndSec={music.musicEndSec}
           musicVolume={music.musicVolume}
-          originalAudioVolume={0}
+          originalAudioVolume={isPhoto ? 0 : music.originalAudioVolume}
           isPlaying={previewPlaying}
           onStartChange={(sec) => onUpdate({ musicStartSec: sec })}
           onRangeChange={(startSec, endSec) => onUpdate({ musicStartSec: startSec, musicEndSec: endSec })}
           onMusicVolumeChange={(volume) => onUpdate({ musicVolume: volume })}
-          onOriginalVolumeChange={() => undefined}
+          onOriginalVolumeChange={(volume) => onUpdate({ originalAudioVolume: volume })}
           onRemove={onRemove}
           onChangeTrack={onChangeTrack}
           onTogglePreview={onTogglePreview}
         />
+
+        {onDone ? (
+          <Pressable
+            style={[styles.doneBtn, { backgroundColor: colors.primary }]}
+            onPress={onDone}
+          >
+            <Ionicons name="eye-outline" size={18} color="#fff" />
+            <Text style={styles.doneBtnText}>Önizle</Text>
+          </Pressable>
+        ) : null}
       </ScrollView>
     </View>
   );
@@ -116,7 +148,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     zIndex: 14,
-    maxHeight: '52%',
     backgroundColor: 'rgba(12,12,16,0.96)',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
@@ -146,5 +177,20 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  doneBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    marginTop: spacing.xs,
+    paddingVertical: spacing.md,
+    borderRadius: radius.full,
+  },
+  doneBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
   },
 });

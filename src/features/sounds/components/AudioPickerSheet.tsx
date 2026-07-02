@@ -11,7 +11,10 @@ type AudioPickerSheetProps = {
   onClose: () => void;
   onSelect: (selection: MusicSelection) => void;
   pauseVideo?: () => void;
+  /** Hangi kütüphane önce açılsın — gönderi/hikâye düzenlemede müzik keşfi */
   initialMode?: AudioPickerMode;
+  /** true: satıra tıklayınca detay sayfasına gitme, yalnızca seçim/önizleme */
+  selectionMode?: boolean;
 };
 
 export function AudioPickerSheet({
@@ -20,7 +23,8 @@ export function AudioPickerSheet({
   onClose,
   onSelect,
   pauseVideo,
-  initialMode = 'sound',
+  initialMode = 'music',
+  selectionMode = true,
 }: AudioPickerSheetProps) {
   const [mode, setMode] = useState<AudioPickerMode>(initialMode);
 
@@ -36,6 +40,7 @@ export function AudioPickerSheet({
         visible
         selectedTrackId={selectedTrackId ?? null}
         onClose={onClose}
+        selectionMode={selectionMode}
         onSelect={(track: MusicTrack) => {
           onSelect({
             source: 'music',
@@ -62,6 +67,7 @@ export function AudioPickerSheet({
       visible
       selectedSoundId={selectedTrackId ?? null}
       onClose={onClose}
+      selectionMode={selectionMode}
       onSelect={onSelect}
       pauseVideo={pauseVideo}
       alternateModeLabel="Müzik"

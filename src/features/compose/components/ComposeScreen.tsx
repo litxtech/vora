@@ -770,6 +770,7 @@ export function ComposeScreen() {
         <AudioPickerSheet
           visible={musicOpen}
           selectedTrackId={musicSelection?.trackId ?? null}
+          initialMode="music"
           onClose={() => setMusicOpen(false)}
           onSelect={handleMusicSelect}
         />

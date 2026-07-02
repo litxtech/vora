@@ -14,6 +14,7 @@ export type StoryFraming = {
 };
 
 export const DEFAULT_STORY_FRAMING: StoryFraming = {
+  /** Başlangıçta sığdır; createStoryFramingForMedia ile güncellenir */
   zoom: 1,
   translateXNorm: 0,
   translateYNorm: 0,
@@ -21,6 +22,9 @@ export const DEFAULT_STORY_FRAMING: StoryFraming = {
   mediaWidth: 1080,
   mediaHeight: 1920,
 };
+
+/** Tipik story kart en-boy oranı (dikey telefon önizlemesi) */
+export const STORY_CARD_MEDIA_ASPECT = 9 / 16;
 
 export const STORY_FRAMING_BACKGROUNDS = [
   '#0a0a0a',
@@ -58,6 +62,37 @@ export function computeStoryFramingMetrics(
     baseHeight,
     minZoom: Math.min(1, minZoom),
     maxZoom: 4,
+  };
+}
+
+/** Medyanın story kartına tam sığması için zoom (contain). */
+export function computeStoryFitZoom(
+  mediaW: number,
+  mediaH: number,
+  containerW: number,
+  containerH: number,
+): number {
+  return computeStoryFramingMetrics(mediaW, mediaH, containerW, containerH).minZoom;
+}
+
+/** Yeni medya için varsayılan çerçeve: tamamı görünür, arka plan rengiyle letterbox. */
+export function createStoryFramingForMedia(
+  mediaWidth: number,
+  mediaHeight: number,
+  options?: { backgroundColor?: string; containerAspect?: number },
+): StoryFraming {
+  const aspect = options?.containerAspect ?? STORY_CARD_MEDIA_ASPECT;
+  const refHeight = 1000;
+  const refWidth = refHeight * aspect;
+  const fitZoom = computeStoryFitZoom(mediaWidth, mediaHeight, refWidth, refHeight);
+
+  return {
+    zoom: fitZoom,
+    translateXNorm: 0,
+    translateYNorm: 0,
+    backgroundColor: options?.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor,
+    mediaWidth,
+    mediaHeight,
   };
 }
 

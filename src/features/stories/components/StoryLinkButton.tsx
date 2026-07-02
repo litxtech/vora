@@ -1,8 +1,9 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
-import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import { spacing } from '@/constants/theme';
+import { storyLinkWithAlpha } from '@/features/stories/constants/storyLinkColors';
+import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 
 type StoryLinkButtonProps = {
   link: StoryLinkManifest;
@@ -22,9 +23,14 @@ export function StoryLinkButton({ link, onPress, compact = false }: StoryLinkBut
         compact && styles.rootCompact,
         {
           backgroundColor: link.backgroundColor,
-          opacity: pressed && onPress ? 0.88 : 1,
+          borderColor: isGlass
+            ? 'rgba(255,255,255,0.45)'
+            : storyLinkWithAlpha(link.textColor, 0.24),
+          shadowColor: isGlass ? '#000' : link.backgroundColor,
+          opacity: pressed && onPress ? 0.9 : 1,
+          transform: pressed && onPress ? [{ scale: 0.97 }] : undefined,
         },
-        isGlass && styles.glass,
+        isGlass ? styles.glass : styles.solid,
       ]}
       accessibilityRole="button"
       accessibilityLabel={link.label}
@@ -36,7 +42,7 @@ export function StoryLinkButton({ link, onPress, compact = false }: StoryLinkBut
       >
         {link.label}
       </Text>
-      <Ionicons name="arrow-up" size={compact ? 12 : 14} color={link.textColor} />
+      <Ionicons name="open-outline" size={compact ? 13 : 15} color={link.textColor} />
     </Pressable>
   );
 }
@@ -46,16 +52,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 7,
     paddingHorizontal: spacing.md,
     paddingVertical: 10,
     borderRadius: 999,
     maxWidth: 260,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.22,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 1.5,
+  },
+  solid: {
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.34,
+    shadowRadius: 10,
+    elevation: 5,
   },
   rootCompact: {
     paddingHorizontal: spacing.sm,
@@ -63,8 +71,10 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
   glass: {
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.35)',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.24,
+    shadowRadius: 8,
+    elevation: 4,
     overflow: 'hidden',
   },
   label: {

@@ -44,6 +44,7 @@ import {
   DEFAULT_STORY_FRAMING,
   probeImageSize,
   probeVideoSize,
+  createStoryFramingForMedia,
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
 import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
@@ -52,6 +53,8 @@ import { resolveMarketplaceRegionId } from '@/constants/regions';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
+
+type StoryFlowPhase = 'edit' | 'preview';
 
 type StoryPublishScreenProps = {
   mediaUri: string;
@@ -89,8 +92,17 @@ export function StoryPublishScreen({
   const [stickerCategory, setStickerCategory] = useState<StoryStickerCategoryId | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [links, setLinks] = useState<StoryLinkManifest[]>([]);
+  const [flowPhase, setFlowPhase] = useState<StoryFlowPhase>('edit');
+
+  const isCleanPreview = flowPhase === 'preview';
+  const storyVideoClipSec =
+    normalizedDurationSec != null && normalizedDurationSec > 0
+      ? normalizedDurationSec
+      : (musicSelection?.durationSec ?? 15);
+  const showPublishButton = !musicSelection || isCleanPreview;
 
   useEffect(() => {
+    useMusicSelectionStore.getState().clearSelection();
     return () => {
       useMusicSelectionStore.getState().clearSelection();
     };
@@ -141,11 +153,11 @@ export function StoryPublishScreen({
             : await probeVideoSize(publishUri);
         if (cancelled) return;
         setMediaSize(size);
-        setFraming((prev) => ({
-          ...prev,
-          mediaWidth: size.width,
-          mediaHeight: size.height,
-        }));
+        setFraming((prev) =>
+          createStoryFramingForMedia(size.width, size.height, {
+            backgroundColor: prev.backgroundColor,
+          }),
+        );
       } catch {
         if (!cancelled) {
           setMediaSize({ width: 1080, height: 1920 });
@@ -200,15 +212,18 @@ export function StoryPublishScreen({
     (tool: StoryPublishToolId) => {
       if (tool === 'music') {
         if (musicSelection) {
+          setFlowPhase('edit');
           setActiveTool('music');
           setMusicOpen(false);
-          setMusicPreviewPlaying(mediaType === 'image');
+          setMusicPreviewPlaying(true);
           return;
         }
-        setActiveTool('music');
+        setActiveTool(null);
         setMusicOpen(true);
         return;
       }
+
+      setMusicOpen(false);
 
       if (tool === 'sticker') {
         setActiveTool(activeTool === 'sticker' ? null : 'sticker');
@@ -234,8 +249,12 @@ export function StoryPublishScreen({
 
   const handleMusicSelect = useCallback(
     (selection: MusicSelection) => {
+      const videoLen =
+        normalizedDurationSec != null && normalizedDurationSec > 0
+          ? normalizedDurationSec
+          : selection.durationSec;
       const clipDuration = mediaType === 'video'
-        ? Math.min(selection.durationSec, normalizedDurationSec ?? selection.durationSec)
+        ? Math.min(selection.durationSec, videoLen)
         : photoPostMusicEndSec(0, selection.durationSec);
 
       setMusicSelection({
@@ -246,11 +265,37 @@ export function StoryPublishScreen({
         originalAudioVolume: mediaType === 'video' ? 0.15 : 0,
       });
       setMusicOpen(false);
+      setFlowPhase('edit');
       setActiveTool('music');
-      setMusicPreviewPlaying(mediaType === 'image');
+      setMusicPreviewPlaying(true);
     },
     [mediaType, normalizedDurationSec, setMusicSelection],
   );
+
+  const handleMusicTrimDone = useCallback(() => {
+    setMusicOpen(false);
+    setActiveTool(null);
+    setFlowPhase('preview');
+    setMusicPreviewPlaying(true);
+  }, []);
+
+  const handleExitPreview = useCallback(() => {
+    setFlowPhase('edit');
+    setMusicPreviewPlaying(false);
+  }, []);
+
+  const handleHeaderBack = useCallback(() => {
+    if (isCleanPreview) {
+      handleExitPreview();
+      return;
+    }
+    if (activeTool != null) {
+      setActiveTool(null);
+      setMusicOpen(false);
+      return;
+    }
+    router.back();
+  }, [activeTool, handleExitPreview, isCleanPreview]);
 
   const handlePublish = useCallback(async () => {
     if (!user?.id || publishing || !mediaSize) return;
@@ -349,26 +394,40 @@ export function StoryPublishScreen({
     playing: mediaType === 'image' && musicPreviewPlaying && Boolean(musicSelection),
   });
 
+  const framingEnabled = !publishing && !isCleanPreview;
+
   return (
     <View style={[styles.root, { backgroundColor: '#000', paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10} disabled={publishing}>
+        <Pressable onPress={handleHeaderBack} hitSlop={10} disabled={publishing}>
           <Ionicons name="chevron-back" size={26} color="#fff" />
         </Pressable>
         <Text variant="h3" style={styles.headerTitle}>
-          Hikaye paylaş
+          {isCleanPreview ? 'Önizleme' : 'Hikaye paylaş'}
         </Text>
-        <View style={{ width: 26 }} />
+        {isCleanPreview ? (
+          <Pressable onPress={handleExitPreview} hitSlop={10} disabled={publishing}>
+            <Text variant="caption" style={styles.editLink}>
+              Düzenle
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={{ width: 26 }} />
+        )}
       </View>
 
-      <View ref={captureRef} collapsable={false} style={styles.previewWrap}>
+      <View
+        ref={captureRef}
+        collapsable={false}
+        style={[styles.previewWrap, isCleanPreview && styles.previewWrapClean]}
+      >
         {canEditFraming ? (
           <StoryFramingEditor
             framing={framing}
             onFramingChange={handleFramingChange}
             mediaWidth={mediaSize.width}
             mediaHeight={mediaSize.height}
-            enabled={!publishing}
+            enabled={framingEnabled}
           >
             {mediaType === 'image' ? (
               <Image source={{ uri: publishUri }} style={styles.mediaFill} contentFit="cover" />
@@ -397,7 +456,7 @@ export function StoryPublishScreen({
           </View>
         ) : null}
 
-        {mediaType === 'video' && normalizedDurationSec ? (
+        {mediaType === 'video' && normalizedDurationSec && !isCleanPreview ? (
           <View style={styles.durationBadge}>
             <Ionicons name="videocam" size={12} color="#fff" />
             <Text variant="caption" style={styles.durationText}>
@@ -406,23 +465,38 @@ export function StoryPublishScreen({
           </View>
         ) : null}
 
-        {stabilizing ? (
+        {stabilizing && !isCleanPreview ? (
           <View style={styles.stabilizeBadge}>
             <ActivityIndicator color="#fff" size="small" />
           </View>
         ) : null}
 
-        <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={!publishing} />
+        <StoryLinkEditor
+          links={links}
+          onLinksChange={setLinks}
+          enabled={framingEnabled}
+        />
       </View>
 
-      <StoryPublishRail
-        activeTool={activeTool}
-        hasMusic={Boolean(musicSelection)}
-        hasSticker={Boolean(stickerCategory)}
-        hasLocation={Boolean(selectedLocation)}
-        hasLinks={links.length > 0}
-        onPress={handleToolPress}
-      />
+      {musicSelection && isCleanPreview ? (
+        <View style={styles.musicPreviewChip}>
+          <Ionicons name="musical-notes" size={13} color="#fff" />
+          <Text variant="caption" style={styles.musicPreviewChipText} numberOfLines={1}>
+            {musicSelection.displayTitle}
+          </Text>
+        </View>
+      ) : null}
+
+      {!isCleanPreview ? (
+        <StoryPublishRail
+          activeTool={activeTool}
+          hasMusic={Boolean(musicSelection)}
+          hasSticker={Boolean(stickerCategory)}
+          hasLocation={Boolean(selectedLocation)}
+          hasLinks={links.length > 0}
+          onPress={handleToolPress}
+        />
+      ) : null}
 
       {uploadMessage ? (
         <Text variant="caption" style={styles.uploadHint}>
@@ -430,41 +504,53 @@ export function StoryPublishScreen({
         </Text>
       ) : null}
 
-      <Pressable
-        style={[
-          styles.publishBtn,
-          {
-            backgroundColor: colors.primary,
-            opacity: publishing || !mediaSize || stabilizing ? 0.7 : 1,
-          },
-        ]}
-        onPress={() => void handlePublish()}
-        disabled={publishing || !mediaSize || stabilizing}
-      >
-        {publishing ? (
-          <View style={styles.publishingRow}>
-            <ActivityIndicator color="#fff" size="small" />
+      {showPublishButton ? (
+        <Pressable
+          style={[
+            styles.publishBtn,
+            {
+              backgroundColor: colors.primary,
+              opacity: publishing || !mediaSize || stabilizing ? 0.7 : 1,
+            },
+          ]}
+          onPress={() => void handlePublish()}
+          disabled={publishing || !mediaSize || stabilizing}
+        >
+          {publishing ? (
+            <View style={styles.publishingRow}>
+              <ActivityIndicator color="#fff" size="small" />
+              <Text variant="label" style={{ color: '#fff' }}>
+                {uploadMessage ?? 'Paylaşılıyor…'}
+              </Text>
+            </View>
+          ) : (
             <Text variant="label" style={{ color: '#fff' }}>
-              {uploadMessage ?? 'Paylaşılıyor…'}
+              Hikayeyi paylaş
             </Text>
-          </View>
-        ) : (
-          <Text variant="label" style={{ color: '#fff' }}>
-            Hikayeyi paylaş
-          </Text>
-        )}
-      </Pressable>
+          )}
+        </Pressable>
+      ) : musicSelection ? (
+        <Text variant="caption" style={styles.previewHint}>
+          Müziği kırpıp önizlemeye geçin
+        </Text>
+      ) : null}
 
       <AudioPickerSheet
         visible={musicOpen}
         selectedTrackId={musicSelection?.trackId ?? null}
-        onClose={() => setMusicOpen(false)}
+        initialMode="music"
+        onClose={() => {
+          setMusicOpen(false);
+          if (!musicSelection) setActiveTool(null);
+        }}
         onSelect={handleMusicSelect}
       />
 
       {musicSelection ? (
         <MediaEditorMusicPanel
-          visible={activeTool === 'music'}
+          visible={activeTool === 'music' && !isCleanPreview}
+          mediaType={mediaType}
+          clipDurationSec={mediaType === 'video' ? storyVideoClipSec : undefined}
           music={musicSelection}
           previewPlaying={musicPreviewPlaying}
           onTogglePreview={() => setMusicPreviewPlaying((v) => !v)}
@@ -473,11 +559,13 @@ export function StoryPublishScreen({
             setMusicSelection(null);
             setActiveTool(null);
             setMusicPreviewPlaying(false);
+            setFlowPhase('edit');
           }}
           onUpdate={(patch) => {
             if (musicSelection) setMusicSelection({ ...musicSelection, ...patch });
           }}
           onClose={() => setActiveTool(null)}
+          onDone={handleMusicTrimDone}
         />
       ) : null}
 
@@ -525,12 +613,23 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
   },
+  editLink: {
+    color: '#fff',
+    fontWeight: '700',
+    minWidth: 52,
+    textAlign: 'right',
+  },
   previewWrap: {
     flex: 1,
     marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: 22,
     overflow: 'hidden',
+  },
+  previewWrapClean: {
+    marginHorizontal: 0,
+    marginBottom: spacing.md,
+    borderRadius: 0,
   },
   mediaFill: {
     width: '100%',
@@ -605,5 +704,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
+  },
+  musicPreviewChip: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    maxWidth: '80%',
+    marginBottom: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  musicPreviewChipText: {
+    color: '#fff',
+    fontWeight: '600',
+    flexShrink: 1,
+  },
+  previewHint: {
+    textAlign: 'center',
+    marginBottom: spacing.lg,
+    paddingHorizontal: spacing.md,
+    color: 'rgba(255,255,255,0.65)',
   },
 });

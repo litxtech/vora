@@ -26,10 +26,10 @@ import { useMediaEditorStore } from '@/features/compose/store/mediaEditorStore';
 import { cropImageSquare, getImageSize, getOrientedImageSize, rotateImage } from '@/features/compose/services/mediaEditorImage';
 import { DEFAULT_ZOOM } from '@/features/compose/utils/mediaEditorZoom';
 import { saveUriToGallery } from '@/features/compose/services/saveMediaToGallery';
-import { MusicPickerSheet } from '@/features/music/components/MusicPickerSheet';
+import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
+import type { MusicSelection } from '@/features/music/types';
 import { MediaEditorMusicPanel } from '@/features/compose/components/MediaEditorMusicPanel';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
-import type { MusicTrack } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { useStudioExportStore } from '@/features/vora-studio/store/studioExportStore';
@@ -259,7 +259,7 @@ export function MediaEditorScreen() {
         setActivePanel('music');
         return;
       }
-      setActivePanel('music');
+      setActivePanel('none');
       setMusicOpen(true);
       return;
     }
@@ -367,20 +367,17 @@ export function MediaEditorScreen() {
   };
 
   const handleMusicSelect = useCallback(
-    (track: MusicTrack) => {
-      const videoDuration = slide?.durationSec ?? track.durationSec;
+    (selection: MusicSelection) => {
+      const videoDuration = slide?.durationSec ?? selection.durationSec;
       const muted = useMediaEditorStore.getState().videoMuted;
       setMusicSelection({
-        trackId: track.id,
-        displayTitle: track.displayTitle,
-        artist: track.artist,
-        audioUrl: track.audioUrl,
-        durationSec: track.durationSec,
-        musicStartSec: 0,
+        ...selection,
+        source: selection.source ?? 'music',
+        musicStartSec: selection.musicStartSec ?? 0,
         musicEndSec: slide?.isVideo
-          ? Math.min(track.durationSec, videoDuration || track.durationSec)
-          : photoPostMusicEndSec(0, track.durationSec),
-        musicVolume: 0.85,
+          ? Math.min(selection.durationSec, videoDuration || selection.durationSec)
+          : photoPostMusicEndSec(selection.musicStartSec ?? 0, selection.durationSec),
+        musicVolume: selection.musicVolume ?? 0.85,
         originalAudioVolume: slide?.isVideo ? (muted ? 0 : 0.15) : 0,
       });
       setMusicOpen(false);
@@ -610,9 +607,10 @@ export function MediaEditorScreen() {
         }}
       />
 
-      <MusicPickerSheet
+      <AudioPickerSheet
         visible={musicOpen}
         selectedTrackId={musicSelection?.trackId ?? null}
+        initialMode="music"
         onClose={() => {
           setMusicOpen(false);
           if (!musicSelection) setActivePanel('none');

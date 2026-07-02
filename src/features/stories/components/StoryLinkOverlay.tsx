@@ -1,5 +1,6 @@
 import { StyleSheet, View } from 'react-native';
 import { StoryLinkButton } from '@/features/stories/components/StoryLinkButton';
+import { StoryLinkTapCta } from '@/features/stories/components/StoryLinkTapCta';
 import { StorySwipeUpCta } from '@/features/stories/components/StorySwipeUpCta';
 import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 
@@ -21,6 +22,16 @@ export function StoryLinkOverlay({
   if (links.length === 1 && singleLinkMode === 'swipe_up') {
     return (
       <StorySwipeUpCta
+        link={links[0]}
+        onPress={onLinkPress ? () => onLinkPress(links[0]) : undefined}
+        preview={preview}
+      />
+    );
+  }
+
+  if (links.length === 1 && singleLinkMode === 'button') {
+    return (
+      <StoryLinkTapCta
         link={links[0]}
         onPress={onLinkPress ? () => onLinkPress(links[0]) : undefined}
         preview={preview}

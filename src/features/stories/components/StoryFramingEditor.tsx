@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
@@ -34,6 +34,7 @@ export function StoryFramingEditor({
   enabled = true,
 }: StoryFramingEditorProps) {
   const [layout, setLayout] = useState({ width: 0, height: 0 });
+  const autoFitMediaKeyRef = useRef('');
 
   const metrics = useMemo(
     () => computeStoryFramingMetrics(mediaWidth, mediaHeight, layout.width, layout.height),
@@ -100,6 +101,42 @@ export function StoryFramingEditor({
     [framing, layout.height, layout.width, metrics, onFramingChange],
   );
 
+  useEffect(() => {
+    const mediaKey = `${mediaWidth}x${mediaHeight}`;
+    if (autoFitMediaKeyRef.current === mediaKey) return;
+    if (layout.width <= 0 || layout.height <= 0 || mediaWidth <= 0 || mediaHeight <= 0) return;
+
+    autoFitMediaKeyRef.current = mediaKey;
+    const next = clampStoryFraming(
+      {
+        ...framing,
+        zoom: metrics.minZoom,
+        translateXNorm: 0,
+        translateYNorm: 0,
+        mediaWidth,
+        mediaHeight,
+      },
+      metrics.baseWidth,
+      metrics.baseHeight,
+      layout.width,
+      layout.height,
+      metrics.minZoom,
+      metrics.maxZoom,
+    );
+    onFramingChange(next);
+  }, [
+    framing,
+    layout.height,
+    layout.width,
+    mediaHeight,
+    mediaWidth,
+    metrics.baseHeight,
+    metrics.baseWidth,
+    metrics.maxZoom,
+    metrics.minZoom,
+    onFramingChange,
+  ]);
+
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
@@ -143,8 +180,8 @@ export function StoryFramingEditor({
         .enabled(enabled)
         .numberOfTaps(2)
         .onEnd(() => {
-          const resetToFit = Math.abs(savedScale.value - 1) < 0.08;
-          const targetZoom = resetToFit ? metrics.minZoom : 1;
+          const atFit = Math.abs(savedScale.value - metrics.minZoom) < 0.06;
+          const targetZoom = atFit ? 1 : metrics.minZoom;
           scale.value = withTiming(targetZoom);
           savedScale.value = targetZoom;
           translateX.value = withTiming(0);
