@@ -7,7 +7,7 @@ import Animated, {
   Easing,
   interpolate,
   runOnJS,
-  useAnimatedProps,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -165,11 +165,12 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
   const drawerWidthSv = useSharedValue(drawerWidth);
   const dragStartProgress = useSharedValue(0);
   const ownsProgress = useSharedValue(false);
+  const drawerOpenSv = useSharedValue(0);
   const feedInnerRef = useRef<RNView>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
 
-  const setFeedInteractionLocked = useCallback((locked: boolean) => {
+  const applyFeedInteractionLocked = useCallback((locked: boolean) => {
     feedInnerRef.current?.setNativeProps?.({
       pointerEvents: locked ? 'none' : 'auto',
     });
@@ -182,10 +183,8 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 
   const finishGestureAnimation = useCallback(() => {
     ownsProgress.value = false;
-    if (!useFeedDrawerStore.getState().open) {
-      setFeedInteractionLocked(false);
-    }
-  }, [ownsProgress, setFeedInteractionLocked]);
+    applyFeedInteractionLocked(false);
+  }, [ownsProgress, applyFeedInteractionLocked]);
 
   useEffect(() => {
     drawerWidthSv.value = drawerWidth;
@@ -194,35 +193,45 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
   useEffect(() => {
     const initialOpen = useFeedDrawerStore.getState().open;
     progress.value = initialOpen ? 1 : 0;
-    setFeedInteractionLocked(initialOpen);
+    drawerOpenSv.value = initialOpen ? 1 : 0;
+    applyFeedInteractionLocked(initialOpen);
 
     return useFeedDrawerStore.subscribe((state, previous) => {
+      drawerOpenSv.value = state.open ? 1 : 0;
       if (state.open === previous.open) return;
-      if (ownsProgress.value) return;
 
       cancelAnimation(progress);
+
       if (state.open) {
-        setFeedInteractionLocked(true);
+        ownsProgress.value = false;
+        applyFeedInteractionLocked(true);
         progress.value = withTiming(1, DRAWER_OPEN_TIMING);
-      } else {
-        progress.value = withTiming(0, DRAWER_CLOSE_TIMING, (finished) => {
-          if (!finished) return;
-          runOnJS(setFeedInteractionLocked)(false);
-        });
+        if (Platform.OS !== 'android') {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        return;
       }
 
-      if (state.open && Platform.OS !== 'android') {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      }
+      ownsProgress.value = false;
+      progress.value = withTiming(0, DRAWER_CLOSE_TIMING, (finished) => {
+        if (!finished) return;
+        runOnJS(applyFeedInteractionLocked)(false);
+      });
     });
-  }, [ownsProgress, progress, setFeedInteractionLocked]);
+  }, [drawerOpenSv, ownsProgress, progress, applyFeedInteractionLocked]);
+
+  useAnimatedReaction(
+    () => progress.value,
+    (value, previous) => {
+      if (value > 0.02 || drawerOpenSv.value === 1) return;
+      if ((previous ?? 1) <= 0.02) return;
+      ownsProgress.value = false;
+      runOnJS(applyFeedInteractionLocked)(false);
+    },
+  );
 
   const feedStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: progress.value * drawerWidthSv.value }],
-  }));
-
-  const feedSurfaceProps = useAnimatedProps(() => ({
-    renderToHardwareTextureAndroid: progress.value > DRAWER_INTERACTION_PROGRESS,
   }));
 
   const scrimStyle = useAnimatedStyle(
@@ -249,7 +258,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
         ownsProgress.value = true;
         cancelAnimation(progress);
         dragStartProgress.value = progress.value;
-        runOnJS(setFeedInteractionLocked)(true);
+        runOnJS(applyFeedInteractionLocked)(true);
       })
       .onUpdate((event) => {
         const width = Math.max(drawerWidthSv.value, 1);
@@ -298,7 +307,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
     finishGestureAnimation,
     ownsProgress,
     progress,
-    setFeedInteractionLocked,
+    applyFeedInteractionLocked,
   ]);
 
   return (
@@ -316,7 +325,6 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 
       <GestureDetector gesture={feedDismissGesture}>
         <Animated.View
-          animatedProps={feedSurfaceProps}
           style={[shellStyles.feed, { backgroundColor }, feedStyle]}
           collapsable={false}
         >

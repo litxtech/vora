@@ -10,17 +10,22 @@ const AVATAR_SIZE = 34;
 export function FeedHeaderAvatarButton() {
   const { colors } = useTheme();
   const { profile } = useAuth();
+  const drawerOpen = useFeedDrawerStore((s) => s.open);
   const openDrawer = useFeedDrawerStore((s) => s.openDrawer);
+  const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
 
   return (
     <Pressable
       onPress={() => {
-        if (useFeedDrawerStore.getState().open) return;
+        if (drawerOpen) {
+          closeDrawer();
+          return;
+        }
         openDrawer();
       }}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel="Menüyü aç"
+      accessibilityLabel={drawerOpen ? 'Menüyü kapat' : 'Menüyü aç'}
       style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
       {...getAndroidInstantPressableProps()}
     >

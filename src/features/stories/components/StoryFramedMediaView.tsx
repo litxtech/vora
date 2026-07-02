@@ -24,6 +24,7 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
     }
   }, []);
 
+  const hasLayout = layout.width > 0 && layout.height > 0;
   const metrics = computeStoryFramingMetrics(
     framing.mediaWidth,
     framing.mediaHeight,
@@ -31,6 +32,7 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
     layout.height,
   );
   const pixels = storyFramingToPixels(framing, layout.width, layout.height);
+  const zoom = Math.max(0.05, pixels.zoom);
 
   return (
     <View
@@ -39,8 +41,9 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
         { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor },
       ]}
       onLayout={onLayout}
+      collapsable={false}
     >
-      {layout.width > 0 ? (
+      {hasLayout ? (
         <View style={styles.stage}>
           <View
             style={{
@@ -49,22 +52,29 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
               transform: [
                 { translateX: pixels.translateX },
                 { translateY: pixels.translateY },
-                { scale: pixels.zoom },
+                { scale: zoom },
               ],
             }}
           >
             {children}
           </View>
         </View>
-      ) : null}
+      ) : (
+        <View style={styles.fallback}>{children}</View>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
     overflow: 'hidden',
+  },
+  fallback: {
+    flex: 1,
+    width: '100%',
   },
   stage: {
     flex: 1,

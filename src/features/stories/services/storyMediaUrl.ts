@@ -21,9 +21,10 @@ export function resolveStoryMediaUrl(url: string | null | undefined): string | n
     return trimmed;
   }
   if (trimmed.includes('/storage/v1/render/image/')) {
-    return trimmed.replace('/storage/v1/render/image/public/', '/storage/v1/object/public/').split('?')[0] ?? trimmed;
+    const objectUrl = trimmed.replace('/storage/v1/render/image/public/', '/storage/v1/object/public/');
+    return objectUrl.split('?')[0] ?? objectUrl;
   }
-  return trimmed.split('?')[0] ?? trimmed;
+  return trimmed;
 }
 
 export function resolveStoryThumbUrl(

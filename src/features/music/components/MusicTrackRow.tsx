@@ -1,4 +1,13 @@
+import { useEffect } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withTiming,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { formatMusicDuration } from '@/features/music/utils/formatMusicTime';
@@ -11,36 +20,78 @@ type MusicTrackRowProps = {
   track: MusicTrack;
   active?: boolean;
   previewing?: boolean;
-  onListen: () => void;
-  onAdd: () => void;
+  onPress?: () => void;
+  onPreview?: () => void;
+  onUse?: () => void;
 };
 
-export function MusicTrackRow({ track, active, previewing, onListen, onAdd }: MusicTrackRowProps) {
+export function MusicTrackRow({
+  track,
+  active,
+  previewing,
+  onPress,
+  onPreview,
+  onUse,
+}: MusicTrackRowProps) {
   const { colors } = useTheme();
   const playable = isMusicTrackPlayable(track.audioUrl);
+  const rotation = useSharedValue(0);
+
+  useEffect(() => {
+    if (previewing) {
+      rotation.value = withRepeat(
+        withTiming(360, { duration: 4200, easing: Easing.linear }),
+        -1,
+        false,
+      );
+      return;
+    }
+
+    cancelAnimation(rotation);
+    rotation.value = withTiming(0, { duration: 180 });
+  }, [previewing, rotation]);
+
+  const spinStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${rotation.value}deg` }],
+  }));
 
   return (
-    <View
+    <Pressable
+      onPress={onPress}
       style={[
-        styles.row,
-        previewing && { backgroundColor: `${colors.primary}12` },
-        active && !previewing && { backgroundColor: `${colors.accent}08` },
+        styles.card,
+        {
+          borderColor: active ? colors.accent : colors.border,
+          backgroundColor: colors.surface,
+        },
       ]}
     >
-      <View style={styles.coverWrap}>
-        {track.coverUrl ? (
-          <Image source={{ uri: track.coverUrl }} style={styles.cover} />
-        ) : (
-          <View style={[styles.cover, styles.coverFallback, { backgroundColor: `${colors.primary}14` }]}>
-            <Ionicons name="musical-note" size={16} color={colors.primary} />
-          </View>
-        )}
-        {previewing ? (
-          <View style={[styles.playingBadge, { backgroundColor: colors.primary }]}>
-            <Ionicons name="volume-medium" size={10} color="#fff" />
+      <Pressable onPress={onPreview} disabled={!playable || !onPreview} style={styles.coverWrap}>
+        <Animated.View style={[styles.coverSpin, previewing && spinStyle]}>
+          {track.coverUrl ? (
+            <Image
+              source={{ uri: track.coverUrl }}
+              style={[styles.cover, previewing && styles.coverVinyl]}
+            />
+          ) : (
+            <View
+              style={[
+                styles.cover,
+                styles.coverFallback,
+                previewing && styles.coverVinyl,
+                { backgroundColor: `${colors.primary}14` },
+              ]}
+            >
+              <Ionicons name="musical-note" size={20} color={colors.primary} />
+            </View>
+          )}
+        </Animated.View>
+        {onPreview && playable ? (
+          <View style={styles.playBadge}>
+            <Ionicons name={previewing ? 'pause' : 'play'} size={14} color="#fff" />
           </View>
         ) : null}
-      </View>
+      </Pressable>
 
       <View style={styles.meta}>
         <Text variant="label" numberOfLines={1} style={styles.title}>
@@ -48,117 +99,85 @@ export function MusicTrackRow({ track, active, previewing, onListen, onAdd }: Mu
         </Text>
         <Text secondary variant="caption" numberOfLines={1}>
           {track.artist || 'Bilinmeyen sanatçı'}
-          {' · '}
+        </Text>
+        <Text secondary variant="caption">
           {formatMusicDuration(track.durationSec)}
+          {track.usageCount > 0 ? ` · ${track.usageCount.toLocaleString('tr-TR')} kullanım` : ''}
         </Text>
       </View>
 
-      <View style={styles.actions}>
-        {playable ? (
-          <Pressable
-            style={[
-              styles.actionBtn,
-              previewing
-                ? { backgroundColor: colors.primary }
-                : { backgroundColor: `${colors.textMuted}12`, borderColor: `${colors.border}88` },
-            ]}
-            onPress={onListen}
-            hitSlop={6}
-            accessibilityLabel={previewing ? 'Duraklat' : 'Dinle'}
-            accessibilityRole="button"
-          >
-            <Ionicons
-              name={previewing ? 'pause' : 'play'}
-              size={14}
-              color={previewing ? '#fff' : colors.text}
-            />
-            <Text
-              variant="caption"
-              style={{
-                color: previewing ? '#fff' : colors.textSecondary,
-                fontWeight: '600',
-                fontSize: 11,
-              }}
-            >
-              {previewing ? 'Dur' : 'Dinle'}
-            </Text>
-          </Pressable>
-        ) : (
-          <View style={[styles.actionBtn, styles.disabledBtn]}>
-            <Ionicons name="alert-circle-outline" size={14} color={colors.textMuted} />
-          </View>
-        )}
-
-        {active ? (
-          <View style={[styles.actionBtn, styles.addDone, { backgroundColor: `${colors.accent}18` }]}>
-            <Ionicons name="checkmark" size={16} color={colors.accent} />
-          </View>
-        ) : playable ? (
-          <Pressable
-            style={[styles.actionBtn, styles.addBtn, { backgroundColor: colors.accent }]}
-            onPress={onAdd}
-            hitSlop={6}
-            accessibilityLabel="Videoya ekle"
-            accessibilityRole="button"
-          >
-            <Ionicons name="add" size={15} color="#fff" />
-            <Text variant="caption" style={styles.addBtnText}>
-              Ekle
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-    </View>
+      {onUse ? (
+        <Pressable
+          onPress={onUse}
+          disabled={!playable}
+          style={[styles.useBtn, { backgroundColor: playable ? colors.primary : colors.border }]}
+        >
+          <Text variant="caption" style={styles.useBtnText}>
+            Kullan
+          </Text>
+        </Pressable>
+      ) : null}
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
+  card: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    padding: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.xs,
+  },
+  coverWrap: {
+    position: 'relative',
+  },
+  coverSpin: {
+    width: 56,
+    height: 56,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cover: {
+    width: 56,
+    height: 56,
     borderRadius: radius.md,
   },
-  coverWrap: { position: 'relative' },
-  cover: { width: 46, height: 46, borderRadius: radius.sm },
-  coverFallback: { alignItems: 'center', justifyContent: 'center' },
-  playingBadge: {
+  coverVinyl: {
+    borderRadius: 28,
+  },
+  coverFallback: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  playBadge: {
     position: 'absolute',
-    right: -2,
-    bottom: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    right: 4,
+    bottom: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
   },
-  meta: { flex: 1, minWidth: 0, gap: 2 },
-  title: { fontSize: 14, fontWeight: '700' },
-  actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  actionBtn: {
-    minWidth: 52,
-    height: 36,
+  meta: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  title: {
+    fontWeight: '700',
+  },
+  useBtn: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
     borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'transparent',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
   },
-  disabledBtn: {
-    opacity: 0.5,
-  },
-  addBtn: {},
-  addDone: {},
-  addBtnText: {
+  useBtnText: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 11,
   },
 });

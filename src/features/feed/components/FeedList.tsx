@@ -120,6 +120,7 @@ export function FeedList({
   listBottomInset = 0,
 }: FeedListProps) {
   const { colors } = useTheme();
+  const listInteractionLocked = useFeedDrawerStore((s) => s.listInteractionLocked);
   const showInitialEmpty = !loading && items.length === 0;
   const listPerf = getFeedListPerfProps();
   const listRef = useRef<FlatList<FeedItem> | FlashListRef<FeedItem>>(null);
@@ -141,7 +142,7 @@ export function FeedList({
   commitActiveVideoRef.current = commitActiveVideo;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
-    if (useFeedDrawerStore.getState().listInteractionLocked || useFeedDrawerStore.getState().open) return;
+    if (useFeedDrawerStore.getState().listInteractionLocked) return;
 
     const isScrolling = useFeedVideoPlaybackStore.getState().isScrolling;
     const nextVisible = new Set<string>();
@@ -209,7 +210,6 @@ export function FeedList({
       }
 
       listRef.current?.setNativeProps?.({
-        scrollEnabled: !locked,
         pointerEvents: locked ? 'none' : 'auto',
         removeClippedSubviews: locked ? false : clipSubviews,
       });
@@ -284,6 +284,7 @@ export function FeedList({
     onScrollBeginDrag: handleScrollBegin,
     onScrollEndDrag: handleScrollEndDrag,
     onMomentumScrollEnd: handleScrollSettled,
+    scrollEnabled: !listInteractionLocked,
     showsVerticalScrollIndicator: false,
     contentContainerStyle: [styles.content, listBottomInset > 0 && { paddingBottom: listBottomInset }],
     style: styles.list,

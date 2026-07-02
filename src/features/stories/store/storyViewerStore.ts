@@ -20,19 +20,20 @@ export const useStoryViewerStore = create<StoryViewerState>((set) => ({
   currentItemIndex: 0,
   openSession: (session) => {
     const userIndex = Math.max(0, session.ringUserIds.indexOf(session.startUserId));
-    set({
+    set((state) => ({
       session,
       currentUserIndex: userIndex,
       currentItemIndex: session.startItemIndex ?? 0,
-      bundles: {},
-    });
+      bundles: state.bundles,
+    }));
   },
   setBundle: (authorId, bundle) =>
-    set((state) => ({
-      bundles: bundle
-        ? { ...state.bundles, [authorId]: bundle }
-        : { ...state.bundles, [authorId]: undefined },
-    })),
+    set((state) => {
+      if (!bundle) return state;
+      return {
+        bundles: { ...state.bundles, [authorId]: bundle },
+      };
+    }),
   setCurrentUserIndex: (currentUserIndex) => set({ currentUserIndex, currentItemIndex: 0 }),
   setCurrentItemIndex: (currentItemIndex) => set({ currentItemIndex }),
   clear: () =>

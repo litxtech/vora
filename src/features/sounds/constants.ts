@@ -13,11 +13,12 @@ export const MIN_SOUND_DURATION_SEC = 1;
 export const SOUND_RECORD_HINT_SEC = 60;
 
 export const SOUND_LIST_TABS: { id: SoundListTabId; label: string }[] = [
-  { id: 'trending', label: 'Trend Sesler' },
-  { id: 'new', label: 'Yeni Sesler' },
-  { id: 'following', label: 'Takip Ettiklerim' },
+  { id: 'recent', label: 'Son Kullandıklarım' },
   { id: 'saved', label: 'Kaydettiklerim' },
   { id: 'mine', label: 'Benim Seslerim' },
+  { id: 'trending', label: 'Trend' },
+  { id: 'new', label: 'Yeni' },
+  { id: 'following', label: 'Takip' },
 ];
 
 export const SOUND_BADGE_TIERS = [
@@ -50,6 +51,18 @@ export const SOUND_ACCEPTED_AUDIO_MIME = [
 
 export function defaultSoundTitle(username: string): string {
   return `Orijinal Ses - @${username}`;
+}
+
+/** 0:42 veya 1:05:30 — kart ve kayıt ekranında süre gösterimi */
+export function formatSoundDuration(totalSec: number): string {
+  const sec = Math.max(0, Math.floor(totalSec));
+  const hours = Math.floor(sec / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
 export function isSoundPlayable(audioUrl: string | null | undefined): boolean {

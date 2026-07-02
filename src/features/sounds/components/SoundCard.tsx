@@ -2,7 +2,7 @@ import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui/Text';
-import { isSoundPlayable } from '@/features/sounds/constants';
+import { isSoundPlayable, formatSoundDuration } from '@/features/sounds/constants';
 import type { Sound } from '@/features/sounds/types';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -63,7 +63,9 @@ export function SoundCard({
         <Text secondary variant="caption" numberOfLines={1}>
           {authorLabel}
         </Text>
-        <Text secondary variant="caption">
+        <Text secondary variant="caption" numberOfLines={1}>
+          {formatSoundDuration(sound.durationSec)}
+          {' · '}
           {sound.usageCount.toLocaleString('tr-TR')} kullanım
         </Text>
       </View>

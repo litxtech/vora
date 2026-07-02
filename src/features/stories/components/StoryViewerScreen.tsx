@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -13,6 +13,9 @@ import { router } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   Easing,
+  Extrapolation,
+  FadeIn,
+  interpolate,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
@@ -32,6 +35,7 @@ import {
   STORY_CARD_HORIZONTAL_INSET,
   STORY_CARD_RADIUS,
   STORY_CARD_TOP_GAP,
+  STORY_ITEM_TRANSITION_MS,
   STORY_PHOTO_DURATION_MS,
   STORY_SPRING,
   STORY_USER_TRANSITION_MS,
@@ -95,7 +99,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const [reacted, setReacted] = useState(false);
   const [replyBarHeight, setReplyBarHeight] = useState(56);
   const [inputFocused, setInputFocused] = useState(false);
-  const [showHorizontalPeek, setShowHorizontalPeek] = useState(false);
   const videoProgressRef = useRef({ sec: 0, dur: null as number | null });
 
   const replyInputRef = useRef<TextInput>(null);
@@ -104,10 +107,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   useEffect(() => {
     inputFocusedRef.current = inputFocused;
   }, [inputFocused]);
-
-  const setHorizontalPeekVisible = useCallback((visible: boolean) => {
-    setShowHorizontalPeek(visible);
-  }, []);
 
   const dismissReplyKeyboard = useCallback(() => {
     replyInputRef.current?.blur();
@@ -124,8 +123,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   const slideEnteredAtRef = useRef<number>(Date.now());
   const transitionX = useSharedValue(0);
-  const deckOpacity = useSharedValue(1);
-  const deckScale = useSharedValue(1);
   const panX = useSharedValue(0);
   const dismissY = useSharedValue(0);
   const insightsOpen = useSharedValue(0);
@@ -221,14 +218,11 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     canGoNextUserSv.value = currentUserIndex < ringUserIds.length - 1 ? 1 : 0;
   }, [canGoNextUserSv, canGoPrevUserSv, currentUserIndex, ringUserIds.length]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     dismissY.value = 0;
     panX.value = 0;
     transitionX.value = 0;
-    deckScale.value = 1;
-    deckOpacity.value = 1;
-    setShowHorizontalPeek(false);
-  }, [activeItem?.id, activeUserId, deckOpacity, deckScale, dismissY, panX, transitionX]);
+  }, [activeUserId, dismissY, panX, transitionX]);
 
   useEffect(() => {
     setProgress(0);
@@ -268,30 +262,27 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const resetDeckMotion = useCallback(() => {
     panX.value = 0;
     transitionX.value = 0;
-    deckScale.value = 1;
-    deckOpacity.value = 1;
-  }, [deckOpacity, deckScale, panX, transitionX]);
+  }, [panX, transitionX]);
 
   const animateUserTransition = useCallback(
     (direction: 1 | -1, after: () => void) => {
       dismissY.value = 0;
       panX.value = 0;
-      transitionX.value = withTiming(direction * -CARD_WIDTH, {
-        duration: STORY_USER_TRANSITION_MS,
-        easing: Easing.out(Easing.cubic),
-      });
-      deckScale.value = withTiming(0.9, { duration: STORY_USER_TRANSITION_MS });
-      deckOpacity.value = withTiming(0.55, { duration: STORY_USER_TRANSITION_MS * 0.65 }, (finished) => {
-        if (!finished) return;
-        runOnJS(after)();
-        transitionX.value = direction * CARD_WIDTH;
-        deckScale.value = 0.94;
-        transitionX.value = withSpring(0, STORY_SPRING);
-        deckScale.value = withSpring(1, STORY_SPRING);
-        deckOpacity.value = withTiming(1, { duration: 200 });
-      });
+      transitionX.value = withTiming(
+        direction * -CARD_WIDTH,
+        {
+          duration: STORY_USER_TRANSITION_MS,
+          easing: Easing.out(Easing.cubic),
+        },
+        (finished) => {
+          if (!finished) return;
+          runOnJS(after)();
+          transitionX.value = direction * CARD_WIDTH;
+          transitionX.value = withSpring(0, STORY_SPRING);
+        },
+      );
     },
-    [deckOpacity, deckScale, dismissY, panX, transitionX],
+    [dismissY, panX, transitionX],
   );
 
   const goNextItem = useCallback(
@@ -437,13 +428,15 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   const openStoryLink = useCallback(
     async (link: StoryLinkManifest, action: 'tap' | 'swipe_up') => {
-      if (!user?.id || !activeItem || isOwnStory) return;
-      void recordStoryLinkAction({
-        viewerId: user.id,
-        storyItemId: activeItem.id,
-        linkId: link.id,
-        action,
-      });
+      if (!user?.id || !activeItem) return;
+      if (!isOwnStory) {
+        void recordStoryLinkAction({
+          viewerId: user.id,
+          storyItemId: activeItem.id,
+          linkId: link.id,
+          action,
+        });
+      }
       setIsPaused(true);
       try {
         await openUrl(link.url);
@@ -479,31 +472,55 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     return {
       transform: [
         { translateY: dismissY.value },
-        { scale: deckScale.value * (1 - dragProgress * 0.06) },
+        { scale: 1 - dragProgress * 0.06 },
       ],
-      opacity: deckOpacity.value * (1 - dragProgress * 0.45),
+      opacity: 1 - dragProgress * 0.45,
     };
   });
 
-  const slideLayerStyle = useAnimatedStyle(() => {
+  const mediaDeckStyle = useAnimatedStyle(() => {
     const offset = transitionX.value + panX.value;
-    if (Math.abs(offset) < 0.5) {
-      return {};
-    }
+    const progress = Math.min(1, Math.abs(offset) / CARD_WIDTH);
     return {
-      transform: [{ translateX: offset }],
+      transform: [
+        { translateX: offset },
+        { scale: 1 - progress * 0.035 },
+      ],
     };
   });
 
-  const nextPeekStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: CARD_WIDTH + transitionX.value + panX.value }],
-    opacity: panX.value < -6 ? 1 : 0,
-  }));
+  const nextPeekStyle = useAnimatedStyle(() => {
+    const offset = transitionX.value + panX.value;
+    return {
+      transform: [{ translateX: CARD_WIDTH + offset }],
+      opacity: interpolate(
+        -offset,
+        [0, 18, CARD_WIDTH * 0.45],
+        [0, 0.35, 1],
+        Extrapolation.CLAMP,
+      ),
+    };
+  });
 
-  const prevPeekStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: -CARD_WIDTH + transitionX.value + panX.value }],
-    opacity: panX.value > 6 ? 1 : 0,
-  }));
+  const prevPeekStyle = useAnimatedStyle(() => {
+    const offset = transitionX.value + panX.value;
+    return {
+      transform: [{ translateX: -CARD_WIDTH + offset }],
+      opacity: interpolate(
+        offset,
+        [0, 18, CARD_WIDTH * 0.45],
+        [0, 0.35, 1],
+        Extrapolation.CLAMP,
+      ),
+    };
+  });
+
+  const scrimStyle = useAnimatedStyle(() => {
+    const progress = Math.min(1, Math.abs(transitionX.value + panX.value) / CARD_WIDTH);
+    return {
+      opacity: progress * 0.22,
+    };
+  });
 
   const contentLiftStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -keyboardLift.value }],
@@ -558,9 +575,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         if (canGoNextUserSv.value === 0 && tx < 0) tx *= 0.22;
         if (canGoPrevUserSv.value === 0 && tx > 0) tx *= 0.22;
         panX.value = tx;
-        if (Math.abs(tx) > 8) {
-          runOnJS(setHorizontalPeekVisible)(true);
-        }
       }
     })
     .onEnd((e) => {
@@ -577,8 +591,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         dismissY.value = withTiming(SCREEN_HEIGHT * 0.55, { duration: 260, easing: Easing.out(Easing.cubic) }, (finished) => {
           if (finished) runOnJS(closeViewer)();
         });
-        deckOpacity.value = withTiming(0, { duration: 260 });
-        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
@@ -589,7 +601,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       if (isOwnStorySv.value === 1 && e.translationY <= -SWIPE_UP_THRESHOLD && absY > absX) {
         runOnJS(openInsights)();
         panX.value = withSpring(0, STORY_SPRING);
-        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
@@ -601,7 +612,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       ) {
         runOnJS(openSingleStoryLink)();
         panX.value = withSpring(0, STORY_SPRING);
-        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
@@ -614,7 +624,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               if (finished) runOnJS(finishPanNextUser)();
             },
           );
-          runOnJS(setHorizontalPeekVisible)(false);
           return;
         }
         if (e.translationX >= SWIPE_THRESHOLD && canGoPrevUserSv.value === 1) {
@@ -625,16 +634,13 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               if (finished) runOnJS(finishPanPrevUser)();
             },
           );
-          runOnJS(setHorizontalPeekVisible)(false);
           return;
         }
         panX.value = withSpring(0, STORY_SPRING);
-        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
       panX.value = withSpring(0, STORY_SPRING);
-      runOnJS(setHorizontalPeekVisible)(false);
     });
 
   const longPressGesture = Gesture.LongPress()
@@ -774,42 +780,45 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               deckStyle,
             ]}
           >
-            <Animated.View
-              style={[styles.slideHost, slideLayerStyle]}
-              pointerEvents="box-none"
-              collapsable={false}
-            >
-              {showHorizontalPeek && prevPeekItem ? (
-                <Animated.View style={[styles.slideLayer, prevPeekStyle]} pointerEvents="none">
+            <View style={styles.mediaStage} collapsable={false}>
+              {prevPeekItem ? (
+                <Animated.View style={[styles.peekLayer, prevPeekStyle]} pointerEvents="none">
                   <StoryPeekPreview item={prevPeekItem} />
                 </Animated.View>
               ) : null}
-              {showHorizontalPeek && nextPeekItem ? (
-                <Animated.View style={[styles.slideLayer, nextPeekStyle]} pointerEvents="none">
+              {nextPeekItem ? (
+                <Animated.View style={[styles.peekLayer, nextPeekStyle]} pointerEvents="none">
                   <StoryPeekPreview item={nextPeekItem} />
                 </Animated.View>
               ) : null}
 
-              <View style={[styles.slideLayer, styles.slideLayerActive]} collapsable={false}>
+              <Animated.View style={[styles.mediaDeck, mediaDeckStyle]} collapsable={false}>
                 {activeItem ? (
-                  <StorySlide
-                    key={activeItem.id}
-                    item={activeItem}
-                    isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
-                    isPaused={isPaused || insightsVisible}
-                    onVideoPosition={handleVideoPosition}
-                    onVideoEnd={handleVideoEnd}
-                  />
+                  <Animated.View
+                    key={`${activeUserId}-${activeItem.id}`}
+                    entering={FadeIn.duration(STORY_ITEM_TRANSITION_MS)}
+                    style={styles.mediaFill}
+                  >
+                    <StorySlide
+                      item={activeItem}
+                      isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
+                      isPaused={isPaused || insightsVisible}
+                      onVideoPosition={handleVideoPosition}
+                      onVideoEnd={handleVideoEnd}
+                    />
+                  </Animated.View>
                 ) : null}
-              </View>
-            </Animated.View>
+              </Animated.View>
 
-            {!isOwnStory && activeItem && (activeItem.links?.length ?? 0) > 0 ? (
+              <Animated.View pointerEvents="none" style={[styles.transitionScrim, scrimStyle]} />
+            </View>
+
+            {activeItem && (activeItem.links?.length ?? 0) > 0 ? (
               <View style={styles.linkOverlayHost} pointerEvents="box-none">
                 <StoryLinkOverlay
                   links={activeItem.links ?? []}
                   onLinkPress={handleLinkPress}
-                  singleLinkMode="swipe_up"
+                  singleLinkMode={isOwnStory ? 'button' : 'swipe_up'}
                 />
               </View>
             ) : null}
@@ -925,16 +934,29 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#111',
   },
-  slideHost: {
+  mediaStage: {
+    flex: 1,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  mediaDeck: {
+    flex: 1,
+    width: '100%',
+    zIndex: 2,
+  },
+  mediaFill: {
     flex: 1,
     width: '100%',
   },
-  slideLayer: {
+  peekLayer: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
+    zIndex: 1,
   },
-  slideLayerActive: {
-    zIndex: 2,
+  transitionScrim: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+    zIndex: 3,
   },
   footerHost: {
     position: 'absolute',

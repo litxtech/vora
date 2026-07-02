@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
@@ -35,6 +35,26 @@ export function StorySlide(props: StorySlideProps) {
   return <StoryVideoSlide {...props} />;
 }
 
+/** Komşu kullanıcı peek önizlemesi — tam StorySlide yerine hafif thumbnail. */
+export function StoryPeekPreview({ item }: { item: StoryItem }) {
+  const uri = resolveStoryThumbUrl(item.thumbUrl, item.mediaUrl);
+
+  if (!uri) {
+    return <View style={styles.peekFallback} />;
+  }
+
+  return (
+    <OptimizedImage
+      uri={uri}
+      tier="feed"
+      style={styles.mediaFill}
+      contentFit="cover"
+      recyclingKey={`peek-${item.id}`}
+      transition={0}
+    />
+  );
+}
+
 function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
   const uri = resolveStoryMediaUrl(item.mediaUrl);
@@ -46,15 +66,19 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
     playing: isActive && !isPaused,
   });
 
-  const mediaNode = (
+  const imageFit = item.framing ? 'cover' : 'contain';
+
+  const mediaNode = uri ? (
     <OptimizedImage
       uri={uri}
       tier="feed"
       style={styles.mediaFill}
-      contentFit="cover"
+      contentFit={imageFit}
       recyclingKey={item.id}
       transition={0}
     />
+  ) : (
+    <View style={styles.mediaFill} />
   );
 
   return (
@@ -62,7 +86,7 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
       {item.framing ? (
         <StoryFramedMediaView framing={item.framing}>{mediaNode}</StoryFramedMediaView>
       ) : (
-        <View style={styles.media}>{mediaNode}</View>
+        <View style={styles.mediaFit}>{mediaNode}</View>
       )}
       <StorySlideOverlays sticker={sticker} locationLabel={item.location?.label ?? null} />
     </View>
@@ -82,7 +106,6 @@ function StoryVideoSlide({
   const musicConfig = useMemo(() => mapStoryMusicPlayback(item.music), [item.music]);
   const muteOriginal = Boolean(musicConfig && musicConfig.originalAudioVolume <= 0.001);
   const { playbackUrl } = useStoryMuxPlaybackUrl(resolvedUrl);
-  const [isVideoReady, setIsVideoReady] = useState(false);
 
   const source = useMemo(() => {
     if (!playbackUrl || !isPlayableVideoUrl(playbackUrl)) return null;
@@ -104,11 +127,16 @@ function StoryVideoSlide({
 
   const onVideoPositionRef = useRef(onVideoPosition);
   const onVideoEndRef = useRef(onVideoEnd);
+  const endedRef = useRef(false);
+  const isActiveRef = useRef(isActive);
+  const isPausedRef = useRef(isPaused);
   onVideoPositionRef.current = onVideoPosition;
   onVideoEndRef.current = onVideoEnd;
+  isActiveRef.current = isActive;
+  isPausedRef.current = isPaused;
 
   useEffect(() => {
-    setIsVideoReady(false);
+    endedRef.current = false;
   }, [item.id, source]);
 
   useEffect(() => {
@@ -122,16 +150,17 @@ function StoryVideoSlide({
     player.timeUpdateEventInterval = 0.1;
 
     const tickSub = player.addListener('timeUpdate', ({ currentTime }) => {
+      if (!isActiveRef.current || isPausedRef.current) return;
       const duration = player.duration > 0 ? player.duration : item.durationSec ?? 0;
       onVideoPositionRef.current?.(currentTime, duration > 0 ? duration : item.durationSec);
-      if (duration > 0 && currentTime >= duration - 0.05) {
+      if (duration > 0.5 && currentTime >= duration - 0.08 && !endedRef.current) {
+        endedRef.current = true;
         onVideoEndRef.current?.();
       }
     });
 
     const statusSub = player.addListener('statusChange', ({ status }) => {
       if (status === 'readyToPlay') {
-        setIsVideoReady(true);
         const duration = player.duration > 0 ? player.duration : item.durationSec ?? null;
         onVideoPositionRef.current?.(player.currentTime, duration);
         if (isActive && !isPaused) {
@@ -151,7 +180,6 @@ function StoryVideoSlide({
         /* released */
       }
     } else if (player.status === 'readyToPlay') {
-      setIsVideoReady(true);
       try {
         player.play();
       } catch {
@@ -168,14 +196,16 @@ function StoryVideoSlide({
   const waitingForSource = !source;
   const showProcessingOverlay = waitingForSource && !posterUri;
 
+  const videoFit = item.framing ? 'cover' : 'contain';
+
   const mediaContent = (
-    <View style={styles.mediaFill}>
+    <View style={StyleSheet.absoluteFill}>
       {posterUri ? (
         <OptimizedImage
           uri={posterUri}
           tier="feed"
           style={StyleSheet.absoluteFill}
-          contentFit="cover"
+          contentFit={videoFit}
           recyclingKey={`${item.id}-poster`}
           transition={0}
         />
@@ -183,8 +213,8 @@ function StoryVideoSlide({
       {source ? (
         <VideoView
           player={player}
-          style={[styles.mediaFill, !isVideoReady && styles.hiddenVideo]}
-          contentFit="cover"
+          style={StyleSheet.absoluteFill}
+          contentFit={videoFit}
           nativeControls={false}
         />
       ) : null}
@@ -199,7 +229,7 @@ function StoryVideoSlide({
       {item.framing ? (
         <StoryFramedMediaView framing={item.framing}>{mediaContent}</StoryFramedMediaView>
       ) : (
-        <View style={styles.media}>{mediaContent}</View>
+        <View style={styles.mediaFit}>{mediaContent}</View>
       )}
       <StorySlideOverlays sticker={sticker} locationLabel={item.location?.label ?? null} />
     </View>
@@ -249,19 +279,30 @@ function StoryLocationBadge({ label }: { label: string }) {
 
 const styles = StyleSheet.create({
   root: {
-    ...StyleSheet.absoluteFillObject,
+    flex: 1,
+    width: '100%',
     backgroundColor: '#111',
   },
   media: {
+    flex: 1,
     width: '100%',
     height: '100%',
+  },
+  mediaFit: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#0a0a0a',
   },
   mediaFill: {
+    flex: 1,
     width: '100%',
     height: '100%',
   },
-  hiddenVideo: {
-    opacity: 0,
+  peekFallback: {
+    flex: 1,
+    width: '100%',
+    backgroundColor: '#111',
   },
   sticker: {
     position: 'absolute',

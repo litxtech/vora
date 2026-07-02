@@ -10,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { router, type Href } from 'expo-router';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -65,7 +66,7 @@ export function MusicPickerSheet({
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<MusicListTabId>('new');
+  const [tab, setTab] = useState<MusicListTabId>('recent');
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [categories, setCategories] = useState<MusicCategory[]>([]);
   const [tracks, setTracks] = useState<MusicTrack[]>([]);
@@ -115,7 +116,7 @@ export function MusicPickerSheet({
     if (!visible) {
       setQuery('');
       setCategoryId(null);
-      setTab('new');
+      setTab('recent');
       stopPreview();
       return;
     }
@@ -151,27 +152,9 @@ export function MusicPickerSheet({
   };
 
   const handleClose = useCallback(() => {
-    if (playingId) {
-      Alert.alert(
-        'Müzik seçilmedi',
-        'Dinlediğiniz parçayı videoya eklemek için alttaki "Videoya ekle" veya satırdaki "Ekle"ye dokunun.',
-        [
-          { text: 'Dinlemeye devam', style: 'cancel' },
-          {
-            text: 'Kapat',
-            style: 'destructive',
-            onPress: () => {
-              stopPreview();
-              onClose();
-            },
-          },
-        ],
-      );
-      return;
-    }
     stopPreview();
     onClose();
-  }, [onClose, playingId, stopPreview]);
+  }, [onClose, stopPreview]);
 
   const sectionTitle = useMemo(() => {
     if (hasQuery) return 'Arama sonuçları';
@@ -188,6 +171,18 @@ export function MusicPickerSheet({
 
   const selectCategory = (id: string) => {
     setCategoryId((prev) => (prev === id ? null : id));
+  };
+
+  const openSoundLibrary = () => {
+    stopPreview();
+    onClose();
+    router.push('/sounds' as Href);
+  };
+
+  const openSoundCreate = () => {
+    stopPreview();
+    onClose();
+    router.push('/sounds/create' as Href);
   };
 
   return (
@@ -209,6 +204,27 @@ export function MusicPickerSheet({
           ) : (
             <View style={styles.iconBtn} />
           )}
+        </View>
+
+        <View style={styles.quickLinks}>
+          <Pressable
+            style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={openSoundLibrary}
+          >
+            <Ionicons name="library-outline" size={18} color={colors.accent} />
+            <Text variant="caption" style={{ fontWeight: '600' }}>
+              Ses Kütüphanesi
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={openSoundCreate}
+          >
+            <Ionicons name="mic-outline" size={18} color={colors.primary} />
+            <Text variant="caption" style={{ fontWeight: '600' }}>
+              Ses Oluştur
+            </Text>
+          </Pressable>
         </View>
 
         <View style={[styles.searchWrap, { backgroundColor: `${colors.textMuted}12` }]}>
@@ -271,13 +287,6 @@ export function MusicPickerSheet({
           ) : null}
         </View>
 
-        <View style={styles.listHint}>
-          <Ionicons name="headset-outline" size={14} color={colors.primary} />
-          <Text secondary variant="caption" style={{ flex: 1 }}>
-            Dinle ile önizle · Ekle ile seç · Studio&apos;da üstteki İzle ile kontrol et
-          </Text>
-        </View>
-
         {loading && !hasQuery ? (
           <View style={styles.loaderWrap}>
             <ActivityIndicator color={colors.primary} />
@@ -291,14 +300,15 @@ export function MusicPickerSheet({
               { paddingBottom: (previewTrack ? 88 : 0) + insets.bottom + spacing.md },
             ]}
             showsVerticalScrollIndicator={false}
-            ItemSeparatorComponent={() => (
-              <View style={[styles.separator, { backgroundColor: `${colors.border}80` }]} />
-            )}
             ListEmptyComponent={
               <View style={styles.empty}>
                 <Ionicons name="musical-notes-outline" size={32} color={colors.textMuted} />
                 <Text secondary variant="caption" style={{ textAlign: 'center' }}>
-                  {hasQuery ? 'Sonuç bulunamadı.' : 'Henüz müzik eklenmemiş.'}
+                  {hasQuery
+                    ? 'Sonuç bulunamadı.'
+                    : tab === 'recent'
+                      ? 'Henüz müzik kullanmadınız. Trend veya yeni parçalara göz atın.'
+                      : 'Henüz müzik eklenmemiş.'}
                 </Text>
               </View>
             }
@@ -307,15 +317,22 @@ export function MusicPickerSheet({
                 track={item}
                 active={selectedTrackId === item.id}
                 previewing={playingId === item.id}
-                onListen={() => void handleListen(item)}
-                onAdd={() => handleAddTrack(item)}
+                onPreview={() => void handleListen(item)}
+                onUse={() => handleAddTrack(item)}
+                onPress={() => {
+                  if (isPersistableMusicTrackId(item.id)) {
+                    stopPreview();
+                    onClose();
+                    router.push(`/music/${item.id}` as Href);
+                  }
+                }}
               />
             )}
           />
         )}
 
         {previewTrack ? (
-          <View
+          <Pressable
             style={[
               styles.previewBar,
               {
@@ -324,10 +341,14 @@ export function MusicPickerSheet({
                 paddingBottom: insets.bottom + spacing.sm,
               },
             ]}
+            onPress={() => handleAddTrack(previewTrack)}
           >
             <Pressable
               style={[styles.previewPlayBtn, { backgroundColor: colors.primary }]}
-              onPress={() => void handleListen(previewTrack)}
+              onPress={(event) => {
+                event.stopPropagation();
+                void handleListen(previewTrack);
+              }}
             >
               <Ionicons name="pause" size={18} color="#fff" />
             </Pressable>
@@ -336,19 +357,15 @@ export function MusicPickerSheet({
                 {previewTrack.displayTitle}
               </Text>
               <Text secondary variant="caption" numberOfLines={1}>
-                {previewTrack.artist || 'Bilinmeyen sanatçı'} · Şimdi dinleniyor
+                {previewTrack.artist || 'Bilinmeyen sanatçı'}
               </Text>
             </View>
-            <Pressable
-              style={[styles.previewAdd, { backgroundColor: colors.accent }]}
-              onPress={() => handleAddTrack(previewTrack)}
-            >
-              <Ionicons name="add-circle-outline" size={16} color="#fff" />
-              <Text variant="caption" style={{ color: '#fff', fontWeight: '700' }}>
-                Videoya ekle
+            <View style={[styles.previewAdd, { backgroundColor: colors.accent }]}>
+              <Text variant="caption" style={styles.previewAddText}>
+                Kullan
               </Text>
-            </Pressable>
-          </View>
+            </View>
+          </Pressable>
         ) : null}
       </View>
     </Modal>
@@ -365,7 +382,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xs,
   },
   headerTitle: { fontSize: 16, fontWeight: '700' },
-  iconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  iconBtn: { width: 72, height: 36, alignItems: 'center', justifyContent: 'center' },
+  quickLinks: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  quickLink: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   searchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -396,20 +429,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs,
   },
-  listHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
   list: { paddingHorizontal: spacing.md },
-  separator: { height: StyleSheet.hairlineWidth, marginLeft: 56 },
   loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   empty: {
     alignItems: 'center',
     gap: spacing.sm,
     paddingTop: spacing.xxl,
+    paddingHorizontal: spacing.lg,
   },
   previewBar: {
     position: 'absolute',
@@ -436,11 +462,12 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   previewAdd: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    height: 40,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     borderRadius: radius.full,
+  },
+  previewAddText: {
+    color: '#fff',
+    fontWeight: '700',
   },
 });

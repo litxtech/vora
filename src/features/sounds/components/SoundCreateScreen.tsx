@@ -23,7 +23,7 @@ import { Button } from '@/components/ui/Button';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
 import { SoundWaveVisualizer } from '@/features/sounds/components/SoundWaveVisualizer';
-import { defaultSoundTitle } from '@/features/sounds/constants';
+import { defaultSoundTitle, formatSoundDuration, SOUND_RECORD_HINT_SEC } from '@/features/sounds/constants';
 import { useSoundRecorder } from '@/features/sounds/hooks/useSoundRecorder';
 import type { SoundInputMode, SoundRecorderPhase } from '@/features/sounds/hooks/useSoundRecorder';
 import { publishSound } from '@/features/sounds/services/soundData';
@@ -358,12 +358,13 @@ export function SoundCreateScreen() {
     user?.id,
   ]);
 
-  const ringSize = 168;
-  const stroke = 5;
+  const ringSize = 124;
+  const stroke = 4;
   const ringRadius = (ringSize - stroke) / 2;
   const circumference = 2 * Math.PI * ringRadius;
   const ringProgress = step === 'details' ? 1 : recorder.progress;
   const dashOffset = circumference * (1 - ringProgress);
+  const showHintChip = recorder.elapsedSec <= SOUND_RECORD_HINT_SEC;
 
   return (
     <GradientBackground>
@@ -413,49 +414,70 @@ export function SoundCreateScreen() {
           {step === 'record' ? (
             <>
               <LinearGradient colors={[...heroColors]} style={styles.hero}>
-                <View style={styles.ringWrap}>
-                  <Svg width={ringSize} height={ringSize} style={styles.ringSvg}>
-                    <Circle
-                      cx={ringSize / 2}
-                      cy={ringSize / 2}
-                      r={ringRadius}
-                      stroke="rgba(255,255,255,0.18)"
-                      strokeWidth={stroke}
-                      fill="transparent"
-                    />
-                    <Circle
-                      cx={ringSize / 2}
-                      cy={ringSize / 2}
-                      r={ringRadius}
-                      stroke="#fff"
-                      strokeWidth={stroke}
-                      fill="transparent"
-                      strokeDasharray={`${circumference}`}
-                      strokeDashoffset={dashOffset}
-                      strokeLinecap="round"
-                      rotation={-90}
-                      origin={`${ringSize / 2}, ${ringSize / 2}`}
-                    />
-                  </Svg>
-                  <View style={styles.ringCenter}>
-                    <Text style={styles.timerText}>{recorder.elapsedLabel}</Text>
-                    {recorder.elapsedSec <= recorder.maxSec ? (
-                      <Text style={styles.timerSub}>/{recorder.maxSec}s</Text>
-                    ) : null}
+                <View style={styles.heroTopRow}>
+                  <View style={styles.phasePill}>
+                    {recorder.phase === 'recording' ? <View style={styles.liveDot} /> : null}
+                    <Text style={styles.phaseText}>{phaseLabel(recorder.phase, recorder.inputMode)}</Text>
                   </View>
+                  {showHintChip ? (
+                    <View style={styles.hintChip}>
+                      <Ionicons name="time-outline" size={11} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.hintChipText}>Önerilen · {SOUND_RECORD_HINT_SEC} sn</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.hintChip}>
+                      <Ionicons name="timer-outline" size={11} color="rgba(255,255,255,0.9)" />
+                      <Text style={styles.hintChipText}>{formatSoundDuration(recorder.elapsedSec)}</Text>
+                    </View>
+                  )}
                 </View>
 
-                <SoundWaveVisualizer
-                  active={waveActive}
-                  accentColor="#fff"
-                  mutedColor="rgba(255,255,255,0.28)"
-                  height={48}
-                />
+                <View style={styles.heroMain}>
+                  <View style={styles.ringWrap}>
+                    <Svg width={ringSize} height={ringSize} style={styles.ringSvg}>
+                      <Circle
+                        cx={ringSize / 2}
+                        cy={ringSize / 2}
+                        r={ringRadius}
+                        stroke="rgba(255,255,255,0.18)"
+                        strokeWidth={stroke}
+                        fill="transparent"
+                      />
+                      <Circle
+                        cx={ringSize / 2}
+                        cy={ringSize / 2}
+                        r={ringRadius}
+                        stroke="#fff"
+                        strokeWidth={stroke}
+                        fill="transparent"
+                        strokeDasharray={`${circumference}`}
+                        strokeDashoffset={dashOffset}
+                        strokeLinecap="round"
+                        rotation={-90}
+                        origin={`${ringSize / 2}, ${ringSize / 2}`}
+                      />
+                    </Svg>
+                    <View style={styles.ringCenter}>
+                      <Text
+                        style={styles.timerText}
+                        numberOfLines={1}
+                        adjustsFontSizeToFit
+                        minimumFontScale={0.5}
+                      >
+                        {recorder.elapsedLabel}
+                      </Text>
+                    </View>
+                  </View>
 
-                <View style={styles.phasePill}>
-                  {recorder.phase === 'recording' ? <View style={styles.liveDot} /> : null}
-                  <Text style={styles.phaseText}>{phaseLabel(recorder.phase, recorder.inputMode)}</Text>
+                  <SoundWaveVisualizer
+                    active={waveActive}
+                    accentColor="#fff"
+                    mutedColor="rgba(255,255,255,0.28)"
+                    height={36}
+                    style={styles.waveInline}
+                  />
                 </View>
+
                 {recorder.importLabel ? (
                   <Text style={styles.importLabel} numberOfLines={1}>
                     {recorder.importLabel}
@@ -531,24 +553,21 @@ export function SoundCreateScreen() {
               ) : null}
 
               <GlassCard style={styles.tipsCard}>
-                <View style={styles.tipsHeader}>
-                  <Ionicons name="bulb-outline" size={18} color={colors.accent} />
-                  <Text variant="label">İpuçları</Text>
-                </View>
-                {RECORD_TIPS.map((tip) => (
-                  <View key={tip} style={styles.tipRow}>
-                    <View style={[styles.tipBullet, { backgroundColor: `${colors.accent}33` }]} />
-                    <Text secondary variant="caption">
-                      {tip}
+                <View style={styles.tipsCompact}>
+                  {RECORD_TIPS.map((tip) => (
+                    <View key={tip} style={[styles.tipChip, { backgroundColor: `${colors.accent}10`, borderColor: `${colors.accent}22` }]}>
+                      <Ionicons name="checkmark-circle-outline" size={13} color={colors.accent} />
+                      <Text secondary variant="caption" style={styles.tipChipText}>
+                        {tip}
+                      </Text>
+                    </View>
+                  ))}
+                  <View style={[styles.tipChip, styles.tipChipWide, { backgroundColor: `${colors.danger}08`, borderColor: `${colors.danger}22` }]}>
+                    <Ionicons name="alert-circle-outline" size={13} color={colors.danger} />
+                    <Text secondary variant="caption" style={styles.tipChipText}>
+                      YouTube / Spotify bağlantıları desteklenmiyor — kendi kaydınızı veya dosyanızı kullanın.
                     </Text>
                   </View>
-                ))}
-                <View style={styles.tipRow}>
-                  <View style={[styles.tipBullet, { backgroundColor: `${colors.danger}33` }]} />
-                  <Text secondary variant="caption">
-                    YouTube / Spotify bağlantıları telif nedeniyle desteklenmiyor. Kendi kaydınızı, dosyanızı veya
-                    galerideki videonuzu kullanın.
-                  </Text>
                 </View>
               </GlassCard>
             </>
@@ -570,12 +589,20 @@ export function SoundCreateScreen() {
                   </Pressable>
 
                   <View style={styles.previewMeta}>
-                    <Text variant="label" numberOfLines={2}>
+                    <Text variant="label" numberOfLines={2} style={styles.previewTitle}>
                       {title.trim() || suggestedTitle}
                     </Text>
-                    <Text secondary variant="caption">
-                      {recorder.recordedDurationSec}s · @{profile?.username ?? 'kullanici'}
-                    </Text>
+                    <View style={styles.previewMetaRow}>
+                      <View style={[styles.durationBadge, { backgroundColor: `${colors.accent}16` }]}>
+                        <Ionicons name="time-outline" size={12} color={colors.accent} />
+                        <Text variant="caption" style={[styles.durationBadgeText, { color: colors.accent }]}>
+                          {formatSoundDuration(recorder.recordedDurationSec)}
+                        </Text>
+                      </View>
+                      <Text secondary variant="caption" numberOfLines={1} style={styles.previewUsername}>
+                        @{profile?.username ?? 'kullanici'}
+                      </Text>
+                    </View>
                     <Pressable
                       onPress={() => void recorder.togglePreview()}
                       style={[styles.miniPlayBtn, { backgroundColor: `${colors.accent}18`, borderColor: colors.accent }]}
@@ -802,45 +829,81 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: spacing.md,
-    gap: spacing.md,
+    gap: spacing.sm,
   },
   hero: {
-    borderRadius: radius.xl,
-    padding: spacing.lg,
-    alignItems: 'center',
-    gap: spacing.md,
+    borderRadius: radius.lg,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    alignItems: 'stretch',
+    gap: spacing.sm,
   },
-  ringWrap: {
-    width: 168,
-    height: 168,
+  heroTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  heroMain: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
+  },
+  hintChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(255,255,255,0.14)',
+    flexShrink: 0,
+  },
+  hintChipText: {
+    color: 'rgba(255,255,255,0.92)',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  waveInline: {
+    flex: 1,
+    maxWidth: 120,
+  },
+  ringWrap: {
+    width: 124,
+    height: 124,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
   ringSvg: {
     position: 'absolute',
   },
   ringCenter: {
     alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: 96,
+    paddingHorizontal: spacing.xs,
   },
   timerText: {
     color: '#fff',
-    fontSize: 36,
+    fontSize: 26,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
-  },
-  timerSub: {
-    color: 'rgba(255,255,255,0.75)',
-    fontSize: 14,
-    marginTop: 2,
+    textAlign: 'center',
+    width: '100%',
   },
   phasePill: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
     borderRadius: radius.full,
     backgroundColor: 'rgba(0,0,0,0.22)',
+    minWidth: 0,
   },
   liveDot: {
     width: 8,
@@ -850,35 +913,36 @@ const styles = StyleSheet.create({
   },
   phaseText: {
     color: '#fff',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    flexShrink: 1,
   },
   controlsGrid: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: spacing.lg,
-    paddingVertical: spacing.sm,
+    gap: spacing.md,
+    paddingVertical: spacing.xs,
   },
   controlItem: {
     alignItems: 'center',
-    gap: spacing.xs,
-    minWidth: 72,
+    gap: 4,
+    minWidth: 64,
   },
   controlPressed: {
     opacity: 0.85,
   },
   controlBtn: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
   },
   controlBtnPrimary: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     backgroundColor: '#ef4444',
     borderWidth: 0,
   },
@@ -886,24 +950,32 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   tipsCard: {
-    marginTop: spacing.xs,
+    paddingVertical: spacing.sm,
   },
-  tipsHeader: {
+  tipsCompact: {
     flexDirection: 'row',
-    alignItems: 'center',
+    flexWrap: 'wrap',
     gap: spacing.xs,
-    marginBottom: spacing.sm,
   },
-  tipRow: {
+  tipChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 6,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    maxWidth: '48%',
+    flexGrow: 1,
   },
-  tipBullet: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  tipChipWide: {
+    maxWidth: '100%',
+    flexBasis: '100%',
+  },
+  tipChipText: {
+    flex: 1,
+    lineHeight: 15,
+    fontSize: 11,
   },
   previewCard: {
     marginBottom: spacing.xs,
@@ -941,7 +1013,34 @@ const styles = StyleSheet.create({
   },
   previewMeta: {
     flex: 1,
+    minWidth: 0,
     gap: spacing.xs,
+  },
+  previewTitle: {
+    fontWeight: '700',
+  },
+  previewMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    minWidth: 0,
+  },
+  durationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+    flexShrink: 0,
+  },
+  durationBadgeText: {
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  previewUsername: {
+    flex: 1,
+    minWidth: 0,
   },
   miniPlayBtn: {
     flexDirection: 'row',
