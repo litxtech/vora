@@ -27,7 +27,13 @@ import {
   finalizeCapturedPhoto,
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
-import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
+import {
+  STORY_CAPTURE_BOTTOM_OFFSET,
+  STORY_CAPTURE_TOP_OFFSET,
+  STORY_CARD_HORIZONTAL_INSET,
+  STORY_MAX_VIDEO_SEC,
+} from '@/features/stories/constants';
+import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import { routeStoryVideo } from '@/features/stories/services/routeStoryVideo';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
@@ -574,7 +580,41 @@ export function CreateCaptureScreen() {
 
   return (
     <View style={styles.root}>
-      {cameraLive ? (
+      {shareMode === 'story' ? (
+        <View
+          style={[
+            storyCardFrameStyle.frame,
+            styles.storyCameraFrame,
+            {
+              top: insets.top + STORY_CAPTURE_TOP_OFFSET,
+              bottom: insets.bottom + STORY_CAPTURE_BOTTOM_OFFSET,
+              left: STORY_CARD_HORIZONTAL_INSET,
+              right: STORY_CARD_HORIZONTAL_INSET,
+            },
+          ]}
+        >
+          {cameraLive ? (
+            <CameraView
+              key={`${facing}-${cameraMode}`}
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing={facing}
+              flash={flash}
+              mode={cameraMode}
+              mute={cameraMute}
+              mirror={false}
+              {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
+              onCameraReady={handleCameraReady}
+              onMountError={({ message }) => {
+                setCameraLive(false);
+                Alert.alert('Kamera açılamadı', message, [{ text: 'Tamam', onPress: () => router.back() }]);
+              }}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]} />
+          )}
+        </View>
+      ) : cameraLive ? (
         <CameraView
           key={`${facing}-${cameraMode}`}
           ref={cameraRef}
@@ -713,10 +753,17 @@ export function CreateCaptureScreen() {
       <Pressable
         style={[
           styles.cameraTapLayer,
-          {
-            top: insets.top + PREVIEW_TAP_TOP,
-            bottom: insets.bottom + PREVIEW_TAP_BOTTOM,
-          },
+          shareMode === 'story'
+            ? {
+                top: insets.top + STORY_CAPTURE_TOP_OFFSET,
+                bottom: insets.bottom + STORY_CAPTURE_BOTTOM_OFFSET,
+                left: STORY_CARD_HORIZONTAL_INSET,
+                right: STORY_CARD_HORIZONTAL_INSET,
+              }
+            : {
+                top: insets.top + PREVIEW_TAP_TOP,
+                bottom: insets.bottom + PREVIEW_TAP_BOTTOM,
+              },
         ]}
         onPress={handlePreviewTap}
         accessibilityLabel="Kamerayı çevir"
@@ -738,7 +785,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   cameraPlaceholder: {
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
+  },
+  storyCameraFrame: {
+    position: 'absolute',
   },
   cameraTapLayer: {
     position: 'absolute',

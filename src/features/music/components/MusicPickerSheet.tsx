@@ -53,6 +53,8 @@ type MusicPickerSheetProps = {
   onAlternateMode?: () => void;
   /** Gönderi/hikâye seçicisinde: detay sayfasına yönlendirme yok */
   selectionMode?: boolean;
+  /** Seçim modunda satıra dokununca doğrudan seç (hikâye) */
+  tapToSelect?: boolean;
 };
 
 export function MusicPickerSheet({
@@ -64,6 +66,7 @@ export function MusicPickerSheet({
   alternateModeLabel,
   onAlternateMode,
   selectionMode = false,
+  tapToSelect = false,
 }: MusicPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -325,6 +328,10 @@ export function MusicPickerSheet({
                 onPreview={() => void handleListen(item)}
                 onUse={() => handleAddTrack(item)}
                 onPress={() => {
+                  if (selectionMode && tapToSelect) {
+                    handleAddTrack(item);
+                    return;
+                  }
                   if (selectionMode) {
                     void handleListen(item);
                     return;

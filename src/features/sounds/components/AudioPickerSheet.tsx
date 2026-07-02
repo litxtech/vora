@@ -15,6 +15,8 @@ type AudioPickerSheetProps = {
   initialMode?: AudioPickerMode;
   /** true: satıra tıklayınca detay sayfasına gitme, yalnızca seçim/önizleme */
   selectionMode?: boolean;
+  /** Hikâye: satıra dokununca hemen seç */
+  tapToSelect?: boolean;
 };
 
 export function AudioPickerSheet({
@@ -25,6 +27,7 @@ export function AudioPickerSheet({
   pauseVideo,
   initialMode = 'music',
   selectionMode = true,
+  tapToSelect = false,
 }: AudioPickerSheetProps) {
   const [mode, setMode] = useState<AudioPickerMode>(initialMode);
 
@@ -41,6 +44,7 @@ export function AudioPickerSheet({
         selectedTrackId={selectedTrackId ?? null}
         onClose={onClose}
         selectionMode={selectionMode}
+        tapToSelect={tapToSelect}
         onSelect={(track: MusicTrack) => {
           onSelect({
             source: 'music',
@@ -68,6 +72,7 @@ export function AudioPickerSheet({
       selectedSoundId={selectedTrackId ?? null}
       onClose={onClose}
       selectionMode={selectionMode}
+      tapToSelect={tapToSelect}
       onSelect={onSelect}
       pauseVideo={pauseVideo}
       alternateModeLabel="Müzik"

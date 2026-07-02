@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
 import { VideoProcessingOverlay } from '@/components/media/VideoProcessingOverlay';
 import { StoryFramedMediaView } from '@/features/stories/components/StoryFramedMediaView';
+import { StoryMusicBadge } from '@/features/stories/components/StoryMusicBadge';
+import { StoryMusicInfoSheet } from '@/features/stories/components/StoryMusicInfoSheet';
 import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
 import { useStoryMuxPlaybackUrl } from '@/features/stories/hooks/useStoryMuxPlaybackUrl';
 import { mapStoryMusicPlayback } from '@/features/stories/services/mapStoryMusic';
@@ -14,6 +16,8 @@ import {
   resolveStoryThumbUrl,
 } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
+import type { StoryMusicAddedBy } from '@/features/stories/types/storyMusic';
+import type { StoryMusicManifest } from '@/features/stories/utils/storyManifest';
 import { usePublishedMusicPlayer } from '@/features/music/hooks/usePublishedMusicPlayer';
 import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
 import { Text } from '@/components/ui/Text';
@@ -24,6 +28,7 @@ type StorySlideProps = {
   item: StoryItem;
   isActive: boolean;
   isPaused: boolean;
+  musicAuthor?: StoryMusicAddedBy | null;
   onVideoPosition?: (sec: number, durationSec: number | null) => void;
   onVideoEnd?: () => void;
 };
@@ -55,7 +60,7 @@ export function StoryPeekPreview({ item }: { item: StoryItem }) {
   );
 }
 
-function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
+function StoryImageSlide({ item, isActive, isPaused, musicAuthor }: StorySlideProps) {
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
   const uri = resolveStoryMediaUrl(item.mediaUrl);
   const musicConfig = useMemo(() => mapStoryMusicPlayback(item.music), [item.music]);
@@ -88,7 +93,12 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
       ) : (
         <View style={styles.mediaFit}>{mediaNode}</View>
       )}
-      <StorySlideOverlays sticker={sticker} locationLabel={item.location?.label ?? null} />
+      <StorySlideOverlays
+        sticker={sticker}
+        locationLabel={item.location?.label ?? null}
+        music={item.music}
+        musicAuthor={musicAuthor}
+      />
     </View>
   );
 }
@@ -97,6 +107,7 @@ function StoryVideoSlide({
   item,
   isActive,
   isPaused,
+  musicAuthor,
   onVideoPosition,
   onVideoEnd,
 }: StorySlideProps) {
@@ -231,7 +242,12 @@ function StoryVideoSlide({
       ) : (
         <View style={styles.mediaFit}>{mediaContent}</View>
       )}
-      <StorySlideOverlays sticker={sticker} locationLabel={item.location?.label ?? null} />
+      <StorySlideOverlays
+        sticker={sticker}
+        locationLabel={item.location?.label ?? null}
+        music={item.music}
+        musicAuthor={musicAuthor}
+      />
     </View>
   );
 }
@@ -239,14 +255,56 @@ function StoryVideoSlide({
 function StorySlideOverlays({
   sticker,
   locationLabel,
+  music,
+  musicAuthor,
 }: {
   sticker: (typeof STORY_STICKER_CATEGORIES)[number] | undefined;
   locationLabel: string | null;
+  music: StoryMusicManifest | null;
+  musicAuthor?: StoryMusicAddedBy | null;
 }) {
   return (
     <>
       {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
       {locationLabel ? <StoryLocationBadge label={locationLabel} /> : null}
+      {music ? (
+        <StoryMusicViewerOverlay
+          music={music}
+          addedBy={musicAuthor}
+          hasLocation={Boolean(locationLabel)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function StoryMusicViewerOverlay({
+  music,
+  addedBy,
+  hasLocation,
+}: {
+  music: StoryMusicManifest;
+  addedBy?: StoryMusicAddedBy | null;
+  hasLocation: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <StoryMusicBadge
+        title={music.displayTitle}
+        artist={music.artist}
+        stacked={hasLocation}
+        onPress={addedBy ? () => setOpen(true) : undefined}
+      />
+      {addedBy ? (
+        <StoryMusicInfoSheet
+          visible={open}
+          music={music}
+          addedBy={addedBy}
+          onClose={() => setOpen(false)}
+        />
+      ) : null}
     </>
   );
 }

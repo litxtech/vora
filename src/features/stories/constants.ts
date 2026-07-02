@@ -22,11 +22,16 @@ export const STORY_ITEM_TRANSITION_MS = 240;
 /** Instagram tarzı yaylı snap / geçiş */
 export const STORY_SPRING = { damping: 24, stiffness: 280, mass: 0.9 } as const;
 
-/** Snapchat tarzı kart — kenar boşlukları ve yuvarlak köşe */
-export const STORY_CARD_RADIUS = 22;
-export const STORY_CARD_HORIZONTAL_INSET = 12;
+/** Snapchat / Instagram tarzı kart — yumuşak oval köşeler */
+export const STORY_CARD_RADIUS = 32;
+export const STORY_CARD_HORIZONTAL_INSET = 14;
 export const STORY_CARD_TOP_GAP = 10;
 export const STORY_CARD_BOTTOM_GAP = 12;
+/** Kamera önizlemesi — üst mod çubuğunun altından başlar */
+export const STORY_CAPTURE_TOP_OFFSET = 92;
+/** Kamera önizlemesi — alt shutter alanı */
+export const STORY_CAPTURE_BOTTOM_OFFSET = 132;
+export const STORY_CARD_BORDER_COLOR = 'rgba(255,255,255,0.16)';
 
 export const STORY_STICKER_CATEGORIES = [
   { id: 'traffic', label: 'Trafik', icon: 'car-outline' as const },

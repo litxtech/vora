@@ -29,10 +29,10 @@ import { StoryLinkOverlay } from '@/features/stories/components/StoryLinkOverlay
 import { StoryProgressBars } from '@/features/stories/components/StoryProgressBars';
 import { StoryReplyBar } from '@/features/stories/components/StoryReplyBar';
 import { StoryPeekPreview, StorySlide } from '@/features/stories/components/StorySlide';
+import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import {
   STORY_CARD_BOTTOM_GAP,
   STORY_CARD_HORIZONTAL_INSET,
-  STORY_CARD_RADIUS,
   STORY_CARD_TOP_GAP,
   STORY_PHOTO_DURATION_MS,
   STORY_SPRING,
@@ -135,6 +135,19 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const items = bundle?.items ?? [];
   const activeItem: StoryItem | null = items[currentItemIndex] ?? null;
   const isOwnStory = !!user?.id && bundle?.authorId === user.id;
+  const storyMusicAuthor = useMemo(
+    () =>
+      bundle
+        ? {
+            userId: bundle.authorId,
+            username: bundle.username,
+            fullName: bundle.fullName,
+            avatarUrl: bundle.avatarUrl,
+            isVerified: bundle.isVerified,
+          }
+        : null,
+    [bundle],
+  );
 
   useEffect(() => {
     useFeedVideoPlaybackStore.getState().clear();
@@ -759,11 +772,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
           <Animated.View
             style={[
               styles.card,
-              {
-                borderRadius: STORY_CARD_RADIUS,
-                borderWidth: StyleSheet.hairlineWidth,
-                borderColor: 'rgba(255,255,255,0.14)',
-              },
+              storyCardFrameStyle.frame,
               deckStyle,
             ]}
           >
@@ -786,6 +795,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                       item={activeItem}
                       isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
                       isPaused={isPaused || insightsVisible}
+                      musicAuthor={storyMusicAuthor}
                       onVideoPosition={handleVideoPosition}
                       onVideoEnd={handleVideoEnd}
                     />

@@ -54,6 +54,7 @@ type SoundPickerSheetProps = {
   alternateModeLabel?: string;
   onAlternateMode?: () => void;
   selectionMode?: boolean;
+  tapToSelect?: boolean;
 };
 
 export function SoundPickerSheet({
@@ -65,6 +66,7 @@ export function SoundPickerSheet({
   alternateModeLabel,
   onAlternateMode,
   selectionMode = false,
+  tapToSelect = false,
 }: SoundPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
@@ -278,6 +280,10 @@ export function SoundPickerSheet({
                   playing={playingId === item.id}
                   selected={selectedSoundId === item.id}
                   onPress={() => {
+                    if (selectionMode && tapToSelect) {
+                      handleUse(item);
+                      return;
+                    }
                     if (selectionMode) {
                       void handlePreview(item);
                       return;
