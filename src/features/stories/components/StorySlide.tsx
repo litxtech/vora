@@ -249,7 +249,7 @@ function StoryLocationBadge({ label }: { label: string }) {
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#111',
   },
   media: {

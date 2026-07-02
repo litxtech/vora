@@ -12,9 +12,11 @@ import {
 import { router } from 'expo-router';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
+  Easing,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,7 +26,15 @@ import { StoryInsightsSheet } from '@/features/stories/components/StoryInsightsS
 import { StoryProgressBars } from '@/features/stories/components/StoryProgressBars';
 import { StoryReplyBar } from '@/features/stories/components/StoryReplyBar';
 import { StorySlide } from '@/features/stories/components/StorySlide';
-import { STORY_PHOTO_DURATION_MS, STORY_USER_TRANSITION_MS, STORY_CARD_RADIUS, STORY_CARD_HORIZONTAL_INSET, STORY_CARD_TOP_GAP, STORY_CARD_BOTTOM_GAP } from '@/features/stories/constants';
+import {
+  STORY_CARD_BOTTOM_GAP,
+  STORY_CARD_HORIZONTAL_INSET,
+  STORY_CARD_RADIUS,
+  STORY_CARD_TOP_GAP,
+  STORY_PHOTO_DURATION_MS,
+  STORY_SPRING,
+  STORY_USER_TRANSITION_MS,
+} from '@/features/stories/constants';
 import { useStoryAutoAdvance } from '@/features/stories/hooks/useStoryAutoAdvance';
 import { useStoryKeyboardHeight } from '@/features/stories/hooks/useStoryKeyboardHeight';
 import { deleteStoryItem } from '@/features/stories/services/deleteStoryItem';
@@ -48,7 +58,8 @@ import { spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.18;
+const CARD_WIDTH = SCREEN_WIDTH - STORY_CARD_HORIZONTAL_INSET * 2;
+const SWIPE_THRESHOLD = CARD_WIDTH * 0.22;
 const SWIPE_UP_THRESHOLD = 56;
 const SWIPE_DOWN_THRESHOLD = 72;
 const SWIPE_DOWN_VELOCITY = 850;
@@ -105,9 +116,13 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const slideEnteredAtRef = useRef<number>(Date.now());
   const transitionX = useSharedValue(0);
   const deckOpacity = useSharedValue(1);
+  const deckScale = useSharedValue(1);
+  const panX = useSharedValue(0);
   const dismissY = useSharedValue(0);
   const insightsOpen = useSharedValue(0);
   const isOwnStorySv = useSharedValue(0);
+  const canGoPrevUserSv = useSharedValue(0);
+  const canGoNextUserSv = useSharedValue(0);
 
   const ringUserIds = session?.ringUserIds ?? [userId];
   const activeUserId = ringUserIds[currentUserIndex] ?? userId;
@@ -179,6 +194,11 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   }, [isOwnStory, isOwnStorySv]);
 
   useEffect(() => {
+    canGoPrevUserSv.value = currentUserIndex > 0 ? 1 : 0;
+    canGoNextUserSv.value = currentUserIndex < ringUserIds.length - 1 ? 1 : 0;
+  }, [canGoNextUserSv, canGoPrevUserSv, currentUserIndex, ringUserIds.length]);
+
+  useEffect(() => {
     dismissY.value = 0;
   }, [activeItem?.id, dismissY]);
 
@@ -217,18 +237,33 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     router.back();
   }, [flushView]);
 
+  const resetDeckMotion = useCallback(() => {
+    panX.value = 0;
+    transitionX.value = 0;
+    deckScale.value = 1;
+    deckOpacity.value = 1;
+  }, [deckOpacity, deckScale, panX, transitionX]);
+
   const animateUserTransition = useCallback(
     (direction: 1 | -1, after: () => void) => {
       dismissY.value = 0;
-      transitionX.value = withTiming(direction * -SCREEN_WIDTH * 0.22, { duration: STORY_USER_TRANSITION_MS });
-      deckOpacity.value = withTiming(0.88, { duration: STORY_USER_TRANSITION_MS }, () => {
+      panX.value = 0;
+      transitionX.value = withTiming(direction * -CARD_WIDTH, {
+        duration: STORY_USER_TRANSITION_MS,
+        easing: Easing.out(Easing.cubic),
+      });
+      deckScale.value = withTiming(0.9, { duration: STORY_USER_TRANSITION_MS });
+      deckOpacity.value = withTiming(0.55, { duration: STORY_USER_TRANSITION_MS * 0.65 }, (finished) => {
+        if (!finished) return;
         runOnJS(after)();
-        transitionX.value = direction * SCREEN_WIDTH * 0.18;
-        transitionX.value = withTiming(0, { duration: STORY_USER_TRANSITION_MS });
-        deckOpacity.value = withTiming(1, { duration: STORY_USER_TRANSITION_MS });
+        transitionX.value = direction * CARD_WIDTH;
+        deckScale.value = 0.94;
+        transitionX.value = withSpring(0, STORY_SPRING);
+        deckScale.value = withSpring(1, STORY_SPRING);
+        deckOpacity.value = withTiming(1, { duration: 200 });
       });
     },
-    [deckOpacity, dismissY, transitionX],
+    [deckOpacity, deckScale, dismissY, panX, transitionX],
   );
 
   const goNextItem = useCallback(
@@ -242,7 +277,10 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       void markStoryUserSeen(activeUserId);
       markRingSeen(activeUserId);
       if (currentUserIndex < ringUserIds.length - 1) {
-        animateUserTransition(1, () => setCurrentUserIndex(currentUserIndex + 1));
+        animateUserTransition(1, () => {
+          setCurrentUserIndex(currentUserIndex + 1);
+          setCurrentItemIndex(0);
+        });
         return;
       }
       void flushView('manual_close', true);
@@ -308,37 +346,39 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     ],
   );
 
-  const goNextUser = useCallback(
-    (navigation: StoryNavigation) => {
-      void flushView(navigation, true);
-      if (currentUserIndex < ringUserIds.length - 1) {
-        void markStoryUserSeen(activeUserId);
-        markRingSeen(activeUserId);
-        animateUserTransition(1, () => setCurrentUserIndex(currentUserIndex + 1));
-        return;
-      }
-      router.back();
-    },
-    [
-      activeUserId,
-      animateUserTransition,
-      currentUserIndex,
-      flushView,
-      markRingSeen,
-      ringUserIds.length,
-      setCurrentUserIndex,
-    ],
-  );
+  const finishPanNextUser = useCallback(() => {
+    void flushView('swipe_forward', true);
+    void markStoryUserSeen(activeUserId);
+    markRingSeen(activeUserId);
+    resetDeckMotion();
+    setCurrentUserIndex(currentUserIndex + 1);
+    setCurrentItemIndex(0);
+  }, [
+    activeUserId,
+    currentUserIndex,
+    flushView,
+    markRingSeen,
+    resetDeckMotion,
+    setCurrentItemIndex,
+    setCurrentUserIndex,
+  ]);
 
-  const goPrevUser = useCallback(
-    (navigation: StoryNavigation) => {
-      void flushView(navigation, true);
-      if (currentUserIndex > 0) {
-        animateUserTransition(-1, () => setCurrentUserIndex(currentUserIndex - 1));
-      }
-    },
-    [animateUserTransition, currentUserIndex, flushView, setCurrentUserIndex],
-  );
+  const finishPanPrevUser = useCallback(() => {
+    void flushView('swipe_back', true);
+    resetDeckMotion();
+    const prevUserId = ringUserIds[currentUserIndex - 1];
+    const prevBundle = useStoryViewerStore.getState().bundles[prevUserId];
+    const lastIndex = Math.max(0, (prevBundle?.items.length ?? 1) - 1);
+    setCurrentUserIndex(currentUserIndex - 1);
+    setCurrentItemIndex(lastIndex);
+  }, [
+    currentUserIndex,
+    flushView,
+    resetDeckMotion,
+    ringUserIds,
+    setCurrentItemIndex,
+    setCurrentUserIndex,
+  ]);
 
   const resumePlaybackIfAllowed = useCallback(() => {
     if (!inputFocusedRef.current && !insightsVisible) {
@@ -367,17 +407,39 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     }
   }, [bundle, user?.id]);
 
+  const nextUserId = ringUserIds[currentUserIndex + 1];
+  const prevUserId = ringUserIds[currentUserIndex - 1];
+  const nextPeekItem = nextUserId ? (bundles[nextUserId]?.items[0] ?? null) : null;
+  const prevPeekItem = prevUserId
+    ? (bundles[prevUserId]?.items[Math.max(0, (bundles[prevUserId]?.items.length ?? 1) - 1)] ?? null)
+    : null;
+
   const deckStyle = useAnimatedStyle(() => {
     const dragProgress = Math.min(1, Math.max(0, dismissY.value) / 240);
+    const hDrag = Math.min(1, Math.abs(panX.value) / CARD_WIDTH);
+    const horizontalScale = 1 - hDrag * 0.045;
     return {
       transform: [
-        { translateX: transitionX.value },
         { translateY: dismissY.value },
-        { scale: 1 - dragProgress * 0.06 },
+        { scale: deckScale.value * (1 - dragProgress * 0.06) * horizontalScale },
       ],
       opacity: deckOpacity.value * (1 - dragProgress * 0.45),
     };
   });
+
+  const slideLayerStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: transitionX.value + panX.value }],
+  }));
+
+  const nextPeekStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: CARD_WIDTH + transitionX.value + panX.value }],
+    opacity: panX.value < -6 ? 1 : 0,
+  }));
+
+  const prevPeekStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: -CARD_WIDTH + transitionX.value + panX.value }],
+    opacity: panX.value > 6 ? 1 : 0,
+  }));
 
   const contentLiftStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -keyboardLift.value }],
@@ -412,42 +474,82 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   }, [dismissReplyKeyboard, goNextItem, inputFocused]);
 
   const panGesture = Gesture.Pan()
-    .activeOffsetX([-20, 20])
-    .activeOffsetY([-24, 24])
+    .activeOffsetX([-16, 16])
+    .activeOffsetY([-20, 20])
     .onUpdate((e) => {
       if (insightsOpen.value) return;
-      if (e.translationY > 0 && Math.abs(e.translationY) > Math.abs(e.translationX) * 1.15) {
+
+      const absX = Math.abs(e.translationX);
+      const absY = Math.abs(e.translationY);
+
+      if (e.translationY > 0 && absY > absX * 1.15) {
         dismissY.value = e.translationY;
+        panX.value = 0;
+        return;
+      }
+
+      if (absX > absY * 0.82) {
+        dismissY.value = 0;
+        let tx = e.translationX;
+        if (canGoNextUserSv.value === 0 && tx < 0) tx *= 0.22;
+        if (canGoPrevUserSv.value === 0 && tx > 0) tx *= 0.22;
+        panX.value = tx;
       }
     })
     .onEnd((e) => {
       if (insightsOpen.value) return;
 
+      const absX = Math.abs(e.translationX);
+      const absY = Math.abs(e.translationY);
+
       const isDownSwipe =
         e.translationY >= SWIPE_DOWN_THRESHOLD ||
         (e.translationY > 36 && e.velocityY > SWIPE_DOWN_VELOCITY);
 
-      if (isDownSwipe && Math.abs(e.translationY) > Math.abs(e.translationX)) {
-        dismissY.value = withTiming(SCREEN_HEIGHT * 0.55, { duration: 220 }, (finished) => {
+      if (isDownSwipe && absY > absX) {
+        dismissY.value = withTiming(SCREEN_HEIGHT * 0.55, { duration: 260, easing: Easing.out(Easing.cubic) }, (finished) => {
           if (finished) runOnJS(closeViewer)();
         });
-        deckOpacity.value = withTiming(0, { duration: 220 });
+        deckOpacity.value = withTiming(0, { duration: 260 });
         return;
       }
 
       if (dismissY.value > 0) {
-        dismissY.value = withTiming(0, { duration: 180 });
+        dismissY.value = withSpring(0, STORY_SPRING);
       }
 
-      if (isOwnStorySv.value === 1 && e.translationY <= -SWIPE_UP_THRESHOLD && Math.abs(e.translationY) > Math.abs(e.translationX)) {
+      if (isOwnStorySv.value === 1 && e.translationY <= -SWIPE_UP_THRESHOLD && absY > absX) {
         runOnJS(openInsights)();
+        panX.value = withSpring(0, STORY_SPRING);
         return;
       }
-      if (e.translationX <= -SWIPE_THRESHOLD) {
-        runOnJS(goNextUser)('swipe_forward');
-      } else if (e.translationX >= SWIPE_THRESHOLD) {
-        runOnJS(goPrevUser)('swipe_back');
+
+      if (absX > absY * 0.82) {
+        if (e.translationX <= -SWIPE_THRESHOLD && canGoNextUserSv.value === 1) {
+          panX.value = withTiming(
+            -CARD_WIDTH,
+            { duration: 240, easing: Easing.out(Easing.cubic) },
+            (finished) => {
+              if (finished) runOnJS(finishPanNextUser)();
+            },
+          );
+          return;
+        }
+        if (e.translationX >= SWIPE_THRESHOLD && canGoPrevUserSv.value === 1) {
+          panX.value = withTiming(
+            CARD_WIDTH,
+            { duration: 240, easing: Easing.out(Easing.cubic) },
+            (finished) => {
+              if (finished) runOnJS(finishPanPrevUser)();
+            },
+          );
+          return;
+        }
+        panX.value = withSpring(0, STORY_SPRING);
+        return;
       }
+
+      panX.value = withSpring(0, STORY_SPRING);
     });
 
   const longPressGesture = Gesture.LongPress()
@@ -587,15 +689,29 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               deckStyle,
             ]}
           >
-            {activeItem ? (
-              <StorySlide
-                item={activeItem}
-                isActive={!loading && !isPaused}
-                isPaused={isPaused}
-                onVideoPosition={handleVideoPosition}
-                onVideoEnd={handleVideoEnd}
-              />
+            {prevPeekItem ? (
+              <Animated.View style={[styles.slideLayer, prevPeekStyle]} pointerEvents="none">
+                <StorySlide item={prevPeekItem} isActive={false} isPaused />
+              </Animated.View>
             ) : null}
+            {nextPeekItem ? (
+              <Animated.View style={[styles.slideLayer, nextPeekStyle]} pointerEvents="none">
+                <StorySlide item={nextPeekItem} isActive={false} isPaused />
+              </Animated.View>
+            ) : null}
+
+            <Animated.View style={[styles.slideLayer, styles.slideLayerActive, slideLayerStyle]}>
+              {activeItem ? (
+                <StorySlide
+                  key={activeItem.id}
+                  item={activeItem}
+                  isActive={!loading && !isPaused && !insightsVisible}
+                  isPaused={isPaused || insightsVisible}
+                  onVideoPosition={handleVideoPosition}
+                  onVideoEnd={handleVideoEnd}
+                />
+              ) : null}
+            </Animated.View>
 
             <View style={styles.cardChrome} pointerEvents="box-none">
               <StoryProgressBars total={items.length} activeIndex={currentItemIndex} progress={progress} />
@@ -706,6 +822,13 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
     backgroundColor: '#111',
+  },
+  slideLayer: {
+    ...StyleSheet.absoluteFillObject,
+    overflow: 'hidden',
+  },
+  slideLayerActive: {
+    zIndex: 2,
   },
   footerHost: {
     position: 'absolute',

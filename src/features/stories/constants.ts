@@ -15,7 +15,12 @@ export const STORY_RING_ACTIVE_GRADIENT = ['#1E88E5', '#00BFA5', '#1565C0'] as c
 export const STORY_RING_SEEN_LIGHT = '#94A3B8';
 export const STORY_RING_SEEN_DARK = '#4B5563';
 
-export const STORY_USER_TRANSITION_MS = 220;
+export const STORY_USER_TRANSITION_MS = 320;
+
+export const STORY_ITEM_TRANSITION_MS = 240;
+
+/** Instagram tarzı yaylı snap / geçiş */
+export const STORY_SPRING = { damping: 24, stiffness: 280, mass: 0.9 } as const;
 
 /** Snapchat tarzı kart — kenar boşlukları ve yuvarlak köşe */
 export const STORY_CARD_RADIUS = 22;

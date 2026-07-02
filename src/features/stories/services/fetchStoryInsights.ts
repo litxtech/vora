@@ -1,4 +1,5 @@
 import type { StoryInsights, StoryItemInsight } from '@/features/stories/types';
+import { resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
 import { supabase } from '@/lib/supabase/client';
 
 type InsightRow = {
@@ -41,7 +42,7 @@ export async function fetchStoryInsights(
   const items: StoryItemInsight[] = rows.map((row) => ({
     itemId: row.item_id,
     sortOrder: row.sort_order,
-    thumbUrl: row.thumb_url,
+    thumbUrl: resolveStoryThumbUrl(row.thumb_url, null),
     mediaType: row.media_type,
     itemViews: Number(row.item_views ?? 0),
     avgWatchedSeconds: Number(row.avg_watched_seconds ?? 0),

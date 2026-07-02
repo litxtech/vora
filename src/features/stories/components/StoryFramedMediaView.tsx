@@ -63,7 +63,7 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
   stage: {

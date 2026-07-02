@@ -10,23 +10,34 @@ import {
   type ListRenderItem,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import type { ComponentProps } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
-import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import type { StoryInsights, StoryItemInsight } from '@/features/stories/types';
 import {
   fetchStoryItemEngagement,
   type StoryItemEngagement,
 } from '@/features/stories/services/fetchStoryEngagement';
+import { fetchStoryItemViewers, type StoryViewerRow } from '@/features/stories/services/fetchStoryViewers';
+import { resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
 import {
-  fetchStoryItemViewers,
-  type StoryViewerRow,
-} from '@/features/stories/services/fetchStoryViewers';
-import { navigateToPublicProfile } from '@/features/profile/services/profileNavigation';
+  BehaviorGrid,
+  EngagementShortcut,
+  formatInsightCount,
+  formatWatchDuration,
+  InsightEmptyState,
+  InsightSectionHeader,
+  InsightTabBar,
+  MetricTile,
+  ReactionList,
+  ReplyList,
+  STORY_INSIGHTS,
+  SummaryStrip,
+  ViewerList,
+  type InsightTab,
+} from '@/features/stories/components/insights/storyInsightsParts';
 import { Text } from '@/components/ui/Text';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
-import { spacing } from '@/constants/theme';
+import { spacing, radius } from '@/constants/theme';
 
 type StoryInsightsSheetProps = {
   visible: boolean;
@@ -36,31 +47,6 @@ type StoryInsightsSheetProps = {
   initialItemIndex?: number;
   onClose: () => void;
 };
-
-type IoniconName = ComponentProps<typeof Ionicons>['name'];
-
-const IG = {
-  sheet: '#1C1C1E',
-  sheetBorder: 'rgba(255,255,255,0.08)',
-  text: '#FFFFFF',
-  muted: 'rgba(255,255,255,0.55)',
-  divider: 'rgba(255,255,255,0.1)',
-  thumbBorder: '#FFFFFF',
-  thumbInactive: 'rgba(255,255,255,0.35)',
-  thumbSize: { w: 56, h: 78 },
-} as const;
-
-function formatCount(value: number): string {
-  return new Intl.NumberFormat('tr-TR').format(Math.round(value));
-}
-
-function formatDuration(sec: number): string {
-  if (sec < 1) return '<1 sn';
-  if (sec < 60) return `${sec.toFixed(sec < 10 ? 1 : 0)} sn`;
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return `${m} dk ${s} sn`;
-}
 
 export function StoryInsightsSheet({
   visible,
@@ -73,6 +59,7 @@ export function StoryInsightsSheet({
   const insets = useSafeAreaInsets();
   const thumbListRef = useRef<FlatList<StoryItemInsight>>(null);
   const [selectedIndex, setSelectedIndex] = useState(initialItemIndex);
+  const [activeTab, setActiveTab] = useState<InsightTab>('overview');
   const [engagement, setEngagement] = useState<StoryItemEngagement | null>(null);
   const [engagementLoading, setEngagementLoading] = useState(false);
   const [viewers, setViewers] = useState<StoryViewerRow[]>([]);
@@ -82,6 +69,7 @@ export function StoryInsightsSheet({
     if (!visible) return;
     const safeIndex = Math.max(0, Math.min(initialItemIndex, (insights?.items.length ?? 1) - 1));
     setSelectedIndex(safeIndex);
+    setActiveTab('overview');
     requestAnimationFrame(() => {
       thumbListRef.current?.scrollToIndex({ index: safeIndex, animated: false, viewPosition: 0.5 });
     });
@@ -119,6 +107,9 @@ export function StoryInsightsSheet({
     };
   }, [authorId, selected?.itemId, visible]);
 
+  const tabLoading =
+    activeTab === 'viewers' ? viewersLoading : activeTab !== 'overview' ? engagementLoading : false;
+
   const renderThumb: ListRenderItem<StoryItemInsight> = ({ item, index }) => {
     const active = index === selectedIndex;
     return (
@@ -130,7 +121,7 @@ export function StoryInsightsSheet({
       >
         <View style={[styles.thumbFrame, active ? styles.thumbFrameActive : styles.thumbFrameIdle]}>
           <OptimizedImage
-            uri={item.thumbUrl}
+            uri={resolveStoryThumbUrl(item.thumbUrl, null)}
             tier="thumb"
             style={styles.thumb}
             contentFit="cover"
@@ -142,8 +133,143 @@ export function StoryInsightsSheet({
             </View>
           ) : null}
         </View>
+        {items.length > 1 ? (
+          <Text variant="caption" style={[styles.thumbIndex, active && styles.thumbIndexActive]}>
+            {index + 1}
+          </Text>
+        ) : null}
       </Pressable>
     );
+  };
+
+  const renderOverview = () => {
+    if (!insights || !selected) return null;
+
+    const behaviorRows = [
+      { icon: 'chevron-forward' as const, label: 'İleri', value: formatInsightCount(selected.tapForwardCount) },
+      { icon: 'chevron-back' as const, label: 'Geri', value: formatInsightCount(selected.tapBackCount) },
+      { icon: 'arrow-forward-outline' as const, label: 'Sonraki hikâye', value: formatInsightCount(selected.swipeForwardCount) },
+      { icon: 'arrow-back-outline' as const, label: 'Önceki hikâye', value: formatInsightCount(selected.swipeBackCount) },
+      { icon: 'play-skip-forward-outline' as const, label: 'Otomatik geçiş', value: formatInsightCount(selected.autoForwardCount) },
+      { icon: 'close-circle-outline' as const, label: 'Erken çıkış', value: formatInsightCount(selected.exitedEarlyCount) },
+    ];
+
+    return (
+      <View style={styles.tabContent}>
+        <View style={styles.slideHero}>
+          <Text variant="caption" style={styles.slideHeroLabel}>
+            {items.length > 1 ? `Slayt ${selected.sortOrder + 1}` : 'Bu hikâye'}
+          </Text>
+          <Text variant="h2" style={styles.slideHeroValue}>
+            {formatInsightCount(selected.itemViews)}
+          </Text>
+          <Text variant="caption" style={styles.slideHeroSub}>
+            görüntülenme
+          </Text>
+        </View>
+
+        {selected.mediaType === 'video' ? (
+          <View style={styles.metricRow}>
+            <MetricTile
+              icon="time-outline"
+              label="Ort. izlenme"
+              value={formatWatchDuration(selected.avgWatchedSeconds)}
+            />
+            <MetricTile
+              icon="pulse-outline"
+              label="Tamamlama"
+              value={`%${Math.round(selected.avgCompletion * 100)}`}
+              tint={STORY_INSIGHTS.reply}
+              tintSoft={STORY_INSIGHTS.replySoft}
+            />
+          </View>
+        ) : null}
+
+        <InsightSectionHeader title="Etkileşim" subtitle="Detay için sekmelere geçin" />
+        <View style={styles.shortcutRow}>
+          <EngagementShortcut
+            icon="eye-outline"
+            label="İzleyenler"
+            count={viewers.length}
+            tint={STORY_INSIGHTS.accent}
+            tintSoft={STORY_INSIGHTS.accentSoft}
+            onPress={() => setActiveTab('viewers')}
+          />
+          <EngagementShortcut
+            icon="heart"
+            label="Beğeniler"
+            count={engagement?.reactions.length ?? 0}
+            tint={STORY_INSIGHTS.like}
+            tintSoft={STORY_INSIGHTS.likeSoft}
+            onPress={() => setActiveTab('reactions')}
+          />
+          <EngagementShortcut
+            icon="chatbubble-ellipses-outline"
+            label="Yanıtlar"
+            count={engagement?.replies.length ?? 0}
+            tint={STORY_INSIGHTS.reply}
+            tintSoft={STORY_INSIGHTS.replySoft}
+            onPress={() => setActiveTab('replies')}
+          />
+        </View>
+
+        <InsightSectionHeader
+          title="İzleme davranışı"
+          subtitle="İzleyicilerin hikâyeyle nasıl etkileştiği"
+        />
+        <BehaviorGrid rows={behaviorRows} />
+      </View>
+    );
+  };
+
+  const renderTabBody = () => {
+    if (tabLoading) {
+      return (
+        <View style={styles.loadingBox}>
+          <ActivityIndicator color={STORY_INSIGHTS.text} />
+          <Text variant="caption" style={styles.loadingText}>
+            Yükleniyor…
+          </Text>
+        </View>
+      );
+    }
+
+    switch (activeTab) {
+      case 'overview':
+        return renderOverview();
+      case 'viewers':
+        return (
+          <View style={styles.tabContent}>
+            <InsightSectionHeader
+              title={`${viewers.length} izleyen`}
+              subtitle="Kimlerin hikâyenizi izlediği"
+            />
+            <ViewerList viewers={viewers} onClose={onClose} />
+          </View>
+        );
+      case 'reactions':
+        return (
+          <View style={styles.tabContent}>
+            <InsightSectionHeader
+              title={`${engagement?.reactions.length ?? 0} beğeni`}
+              subtitle="Verilen tepkiler"
+            />
+            <ReactionList reactions={engagement?.reactions ?? []} />
+          </View>
+        );
+      case 'replies':
+        return (
+          <View style={styles.tabContent}>
+            <InsightSectionHeader
+              title={`${engagement?.replies.length ?? 0} yanıt`}
+              subtitle="Gelen mesajlar"
+            />
+            <ReplyList replies={engagement?.replies ?? []} />
+          </View>
+        );
+      default:
+        return null;
+    }
   };
 
   return (
@@ -165,29 +291,17 @@ export function StoryInsightsSheet({
               İstatistikler
             </Text>
             <Pressable onPress={onClose} hitSlop={12} style={styles.headerSide}>
-              <Ionicons name="close" size={26} color={IG.text} />
+              <Ionicons name="close" size={26} color={STORY_INSIGHTS.text} />
             </Pressable>
           </View>
 
           {loading ? (
             <View style={styles.loadingBox}>
-              <ActivityIndicator color={IG.text} />
+              <ActivityIndicator color={STORY_INSIGHTS.text} />
             </View>
           ) : insights && selected ? (
             <>
-              <View style={styles.summaryRow}>
-                <SummaryStat
-                  icon="people-outline"
-                  value={formatCount(insights.uniqueViewers)}
-                  label="Ulaşılan hesaplar"
-                />
-                <View style={styles.summaryDivider} />
-                <SummaryStat
-                  icon="eye-outline"
-                  value={formatCount(insights.totalViews)}
-                  label="Görüntülenme"
-                />
-              </View>
+              <SummaryStrip uniqueViewers={insights.uniqueViewers} totalViews={insights.totalViews} />
 
               {items.length > 1 ? (
                 <FlatList
@@ -207,222 +321,35 @@ export function StoryInsightsSheet({
                 />
               ) : null}
 
-              <ScrollView style={styles.metricsScroll} showsVerticalScrollIndicator={false}>
-                <View style={styles.slideHeader}>
-                  <Text variant="caption" style={styles.slideLabel}>
-                    {items.length > 1 ? `Slayt ${selected.sortOrder + 1}` : 'Bu hikâye'}
-                  </Text>
-                  <Text variant="h3" style={styles.slideViews}>
-                    {formatCount(selected.itemViews)}
-                  </Text>
-                  <Text variant="caption" style={styles.slideViewsLabel}>
-                    görüntülenme
-                  </Text>
-                </View>
+              <InsightTabBar
+                active={activeTab}
+                counts={{
+                  viewers: viewers.length,
+                  reactions: engagement?.reactions.length ?? 0,
+                  replies: engagement?.replies.length ?? 0,
+                }}
+                onChange={setActiveTab}
+              />
 
-                {selected.mediaType === 'video' ? (
-                  <View style={styles.section}>
-                    <SectionTitle title="İzlenme" />
-                    <MetricRow
-                      icon="time-outline"
-                      label="Ortalama izlenme süresi"
-                      value={formatDuration(selected.avgWatchedSeconds)}
-                    />
-                    <MetricRow
-                      icon="pulse-outline"
-                      label="Tamamlama oranı"
-                      value={`${Math.round(selected.avgCompletion * 100)}%`}
-                    />
-                  </View>
-                ) : null}
-
-                <View style={styles.section}>
-                  <SectionTitle title="Navigasyon" />
-                  <MetricRow
-                    icon="chevron-forward"
-                    label="İleri dokunuşları"
-                    value={formatCount(selected.tapForwardCount)}
-                  />
-                  <MetricRow
-                    icon="chevron-back"
-                    label="Geri dokunuşları"
-                    value={formatCount(selected.tapBackCount)}
-                  />
-                  <MetricRow
-                    icon="arrow-forward-outline"
-                    label="Sonraki hikâye"
-                    value={formatCount(selected.swipeForwardCount)}
-                  />
-                  <MetricRow
-                    icon="arrow-back-outline"
-                    label="Önceki hikâye"
-                    value={formatCount(selected.swipeBackCount)}
-                  />
-                  <MetricRow
-                    icon="play-skip-forward-outline"
-                    label="Otomatik geçiş"
-                    value={formatCount(selected.autoForwardCount)}
-                  />
-                  <MetricRow
-                    icon="close-circle-outline"
-                    label="Erken çıkış"
-                    value={formatCount(selected.exitedEarlyCount)}
-                    isLast
-                  />
-                </View>
-
-                <View style={styles.section}>
-                  <SectionTitle title={`Görüntüleyenler (${viewers.length})`} />
-                  {viewersLoading ? (
-                    <ActivityIndicator color={IG.text} style={{ marginVertical: spacing.sm }} />
-                  ) : viewers.length ? (
-                    viewers.map((row) => (
-                      <Pressable
-                        key={`${row.userId}-${row.viewedAt}`}
-                        style={styles.personRow}
-                        onPress={() => {
-                          onClose();
-                          navigateToPublicProfile({ userId: row.userId });
-                        }}
-                      >
-                        <ProfileAvatar username={row.username} avatarUrl={row.avatarUrl} size={36} />
-                        <View style={{ flex: 1 }}>
-                          <Text variant="label" style={{ color: IG.text }}>
-                            {row.fullName?.trim() || row.username}
-                          </Text>
-                          <Text variant="caption" style={{ color: IG.muted }}>
-                            {formatDuration(row.watchedSeconds)}
-                            {row.watchCompletion > 0 ? ` · %${Math.round(row.watchCompletion * 100)}` : ''}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={IG.muted} />
-                      </Pressable>
-                    ))
-                  ) : (
-                    <Text variant="caption" style={styles.emptyRow}>
-                      Henüz görüntüleyen yok
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.section}>
-                  <SectionTitle title={`Beğeniler (${engagement?.reactions.length ?? 0})`} />
-                  {engagementLoading ? (
-                    <ActivityIndicator color={IG.text} style={{ marginVertical: spacing.sm }} />
-                  ) : engagement?.reactions.length ? (
-                    engagement.reactions.map((row) => (
-                      <View key={`${row.userId}-${row.createdAt}`} style={styles.personRow}>
-                        <ProfileAvatar username={row.username} avatarUrl={row.avatarUrl} size={36} />
-                        <View style={{ flex: 1 }}>
-                          <Text variant="label" style={{ color: IG.text }}>
-                            {row.fullName?.trim() || row.username}
-                          </Text>
-                          <Text variant="caption" style={{ color: IG.muted }}>
-                            {row.emoji}
-                          </Text>
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <Text variant="caption" style={styles.emptyRow}>
-                      Henüz beğeni yok
-                    </Text>
-                  )}
-                </View>
-
-                <View style={styles.section}>
-                  <SectionTitle title={`Yanıtlar (${engagement?.replies.length ?? 0})`} />
-                  {engagementLoading ? (
-                    <ActivityIndicator color={IG.text} style={{ marginVertical: spacing.sm }} />
-                  ) : engagement?.replies.length ? (
-                    engagement.replies.map((row) => (
-                      <View key={row.messageId} style={styles.replyRow}>
-                        <ProfileAvatar username={row.username} avatarUrl={row.avatarUrl} size={32} />
-                        <View style={styles.replyBubble}>
-                          <Text variant="caption" style={{ color: IG.muted }}>
-                            {row.fullName?.trim() || row.username}
-                          </Text>
-                          <Text variant="body" style={{ color: IG.text }}>
-                            {row.content}
-                          </Text>
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <Text variant="caption" style={styles.emptyRow}>
-                      Henüz yanıt yok
-                    </Text>
-                  )}
-                </View>
+              <ScrollView
+                style={styles.bodyScroll}
+                contentContainerStyle={styles.bodyScrollContent}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+              >
+                {renderTabBody()}
               </ScrollView>
             </>
           ) : (
-            <View style={styles.loadingBox}>
-              <Ionicons name="analytics-outline" size={36} color={IG.muted} />
-              <Text variant="body" style={styles.emptyText}>
-                İstatistik bulunamadı
-              </Text>
-            </View>
+            <InsightEmptyState
+              icon="analytics-outline"
+              title="İstatistik bulunamadı"
+              message="Bu hikâye için henüz veri toplanmamış olabilir."
+            />
           )}
         </View>
       </View>
     </Modal>
-  );
-}
-
-function SummaryStat({
-  icon,
-  value,
-  label,
-}: {
-  icon: IoniconName;
-  value: string;
-  label: string;
-}) {
-  return (
-    <View style={styles.summaryStat}>
-      <Ionicons name={icon} size={22} color={IG.text} />
-      <Text variant="h3" style={styles.summaryValue}>
-        {value}
-      </Text>
-      <Text variant="caption" style={styles.summaryLabel}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
-function SectionTitle({ title }: { title: string }) {
-  return (
-    <Text variant="caption" style={styles.sectionTitle}>
-      {title}
-    </Text>
-  );
-}
-
-function MetricRow({
-  icon,
-  label,
-  value,
-  isLast = false,
-}: {
-  icon: IoniconName;
-  label: string;
-  value: string;
-  isLast?: boolean;
-}) {
-  return (
-    <View style={[styles.metricRow, !isLast && styles.metricRowBorder]}>
-      <View style={styles.metricLeft}>
-        <Ionicons name={icon} size={20} color={IG.text} />
-        <Text variant="body" style={styles.metricLabel}>
-          {label}
-        </Text>
-      </View>
-      <Text variant="label" style={styles.metricValue}>
-        {value}
-      </Text>
-    </View>
   );
 }
 
@@ -433,13 +360,13 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   sheet: {
-    backgroundColor: IG.sheet,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: STORY_INSIGHTS.sheet,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: IG.sheetBorder,
-    maxHeight: '88%',
-    minHeight: 360,
+    borderColor: STORY_INSIGHTS.sheetBorder,
+    maxHeight: '92%',
+    minHeight: 420,
   },
   handle: {
     alignSelf: 'center',
@@ -464,38 +391,9 @@ const styles = StyleSheet.create({
   headerTitle: {
     flex: 1,
     textAlign: 'center',
-    color: IG.text,
+    color: STORY_INSIGHTS.text,
     fontWeight: '700',
     fontSize: 16,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.md,
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  summaryStat: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 4,
-  },
-  summaryValue: {
-    color: IG.text,
-    fontSize: 22,
-    fontWeight: '700',
-  },
-  summaryLabel: {
-    color: IG.muted,
-    textAlign: 'center',
-    fontSize: 12,
-  },
-  summaryDivider: {
-    width: StyleSheet.hairlineWidth,
-    alignSelf: 'stretch',
-    backgroundColor: IG.divider,
   },
   thumbList: {
     paddingHorizontal: spacing.md,
@@ -503,30 +401,40 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   thumbWrap: {
+    alignItems: 'center',
+    gap: 4,
     padding: 2,
   },
   thumbWrapActive: {
-    transform: [{ scale: 1.02 }],
+    transform: [{ scale: 1.03 }],
   },
   thumbFrame: {
-    width: IG.thumbSize.w,
-    height: IG.thumbSize.h,
-    borderRadius: 8,
+    width: STORY_INSIGHTS.thumbSize.w,
+    height: STORY_INSIGHTS.thumbSize.h,
+    borderRadius: radius.sm,
     overflow: 'hidden',
     backgroundColor: '#111',
   },
   thumbFrameActive: {
     borderWidth: 2,
-    borderColor: IG.thumbBorder,
+    borderColor: STORY_INSIGHTS.thumbBorder,
   },
   thumbFrameIdle: {
     borderWidth: 1,
-    borderColor: IG.thumbInactive,
-    opacity: 0.72,
+    borderColor: STORY_INSIGHTS.thumbInactive,
+    opacity: 0.75,
   },
   thumb: {
     width: '100%',
     height: '100%',
+  },
+  thumbIndex: {
+    color: STORY_INSIGHTS.muted,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  thumbIndexActive: {
+    color: STORY_INSIGHTS.text,
   },
   videoBadge: {
     position: 'absolute',
@@ -539,73 +447,47 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  metricsScroll: {
+  bodyScroll: {
     flexGrow: 0,
-    maxHeight: 340,
+    maxHeight: 380,
   },
-  slideHeader: {
+  bodyScrollContent: {
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.lg,
+  },
+  tabContent: {
+    gap: spacing.md,
+  },
+  slideHero: {
     alignItems: 'center',
-    paddingBottom: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IG.divider,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: STORY_INSIGHTS.card,
+    gap: 2,
   },
-  slideLabel: {
-    color: IG.muted,
-    marginBottom: 4,
+  slideHeroLabel: {
+    color: STORY_INSIGHTS.muted,
     textTransform: 'uppercase',
     letterSpacing: 0.6,
     fontSize: 11,
     fontWeight: '600',
   },
-  slideViews: {
-    color: IG.text,
-    fontSize: 28,
-    fontWeight: '700',
+  slideHeroValue: {
+    color: STORY_INSIGHTS.text,
+    fontSize: 34,
+    fontWeight: '800',
+    lineHeight: 40,
   },
-  slideViewsLabel: {
-    color: IG.muted,
-    marginTop: 2,
-  },
-  section: {
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-  },
-  sectionTitle: {
-    color: IG.muted,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    fontSize: 11,
-    marginBottom: spacing.xs,
-    marginTop: spacing.xs,
+  slideHeroSub: {
+    color: STORY_INSIGHTS.muted,
   },
   metricRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 13,
-  },
-  metricRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: IG.divider,
-  },
-  metricLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
     gap: spacing.sm,
-    flex: 1,
-    paddingRight: spacing.sm,
   },
-  metricLabel: {
-    color: IG.text,
-    fontSize: 15,
-  },
-  metricValue: {
-    color: IG.text,
-    fontWeight: '700',
-    fontSize: 15,
+  shortcutRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
   },
   loadingBox: {
     alignItems: 'center',
@@ -613,31 +495,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl,
     gap: spacing.sm,
   },
-  emptyText: {
-    color: IG.muted,
-  },
-  personRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  replyRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  replyBubble: {
-    flex: 1,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-    borderRadius: 12,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    gap: 2,
-  },
-  emptyRow: {
-    color: IG.muted,
-    paddingVertical: spacing.sm,
+  loadingText: {
+    color: STORY_INSIGHTS.muted,
   },
 });

@@ -12,6 +12,14 @@ export function resolveStoryMediaUrl(url: string | null | undefined): string | n
   if (!url?.trim()) return null;
   const trimmed = url.trim();
   if (trimmed.startsWith('file:') || trimmed.startsWith('data:')) return trimmed;
+  if (
+    trimmed.includes('stream.mux.com') ||
+    trimmed.includes('image.mux.com') ||
+    trimmed.includes('.m3u8') ||
+    isVideoUrl(trimmed)
+  ) {
+    return trimmed;
+  }
   if (trimmed.includes('/storage/v1/render/image/')) {
     return trimmed.replace('/storage/v1/render/image/public/', '/storage/v1/object/public/').split('?')[0] ?? trimmed;
   }
