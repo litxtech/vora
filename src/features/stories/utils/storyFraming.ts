@@ -27,13 +27,37 @@ export const DEFAULT_STORY_FRAMING: StoryFraming = {
 export const STORY_CARD_MEDIA_ASPECT = 9 / 16;
 
 export const STORY_FRAMING_BACKGROUNDS = [
+  '#000000',
   '#0a0a0a',
   '#1c1c1e',
   '#2c2c2e',
+  '#3a3a3c',
+  '#636366',
   '#ffffff',
   '#f2f2f7',
+  '#e5e5ea',
+  '#ff3b30',
+  '#ff2d55',
+  '#ff6b35',
+  '#ff9500',
+  '#ffcc00',
+  '#ffd60a',
+  '#34c759',
+  '#30d158',
+  '#00c7be',
+  '#5ac8fa',
+  '#007aff',
+  '#5856d6',
+  '#7c3aed',
+  '#af52de',
+  '#ff6b9d',
+  '#e91e8c',
+  '#8e6f53',
+  '#a2845e',
   '#1a2e1a',
   '#1a1a2e',
+  '#2e1a1a',
+  '#1a2e2e',
 ] as const;
 
 export function computeStoryFramingMetrics(

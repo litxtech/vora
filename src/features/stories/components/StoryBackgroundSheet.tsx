@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, StyleSheet } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { MediaEditorBottomSheet } from '@/features/compose/components/MediaEditorBottomSheet';
 import { STORY_FRAMING_BACKGROUNDS } from '@/features/stories/utils/storyFraming';
 import { spacing } from '@/constants/theme';
@@ -15,35 +15,44 @@ export function StoryBackgroundSheet({ visible, selected, onSelect, onClose }: S
   const { colors } = useTheme();
 
   return (
-    <MediaEditorBottomSheet visible={visible} onClose={onClose} title="Arka plan rengi">
+    <MediaEditorBottomSheet visible={visible} onClose={onClose} title="Arka plan rengi" heightFraction={0.36}>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.row}
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.grid}
+        keyboardShouldPersistTaps="handled"
       >
-        {STORY_FRAMING_BACKGROUNDS.map((color) => {
-          const active = selected === color;
-          return (
-            <Pressable
-              key={color}
-              onPress={() => onSelect(color)}
-              style={[
-                styles.swatch,
-                { backgroundColor: color },
-                active && { borderColor: colors.primary, borderWidth: 2 },
-              ]}
-            />
-          );
-        })}
+        <View style={styles.row}>
+          {STORY_FRAMING_BACKGROUNDS.map((color) => {
+            const active = selected.toLowerCase() === color.toLowerCase();
+            const isLight = color === '#ffffff' || color === '#f2f2f7' || color === '#e5e5ea' || color === '#ffcc00' || color === '#ffd60a';
+            return (
+              <Pressable
+                key={color}
+                onPress={() => onSelect(color)}
+                style={[
+                  styles.swatch,
+                  { backgroundColor: color },
+                  isLight && styles.swatchLight,
+                  active && { borderColor: colors.primary, borderWidth: 2.5 },
+                ]}
+              />
+            );
+          })}
+        </View>
       </ScrollView>
     </MediaEditorBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
-  row: {
-    gap: spacing.sm,
+  grid: {
     paddingBottom: spacing.md,
+  },
+  row: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    justifyContent: 'center',
   },
   swatch: {
     width: 44,
@@ -51,5 +60,8 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.2)',
+  },
+  swatchLight: {
+    borderColor: 'rgba(0,0,0,0.12)',
   },
 });

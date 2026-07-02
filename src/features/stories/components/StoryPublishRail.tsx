@@ -4,15 +4,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
 
-export type StoryPublishToolId = 'music' | 'sticker' | 'location' | 'background' | 'link';
+export type StoryPublishToolId = 'music' | 'sticker' | 'location' | 'background' | 'link' | 'audio';
 
 type ToolDef = {
   id: StoryPublishToolId;
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
+  videoOnly?: boolean;
 };
 
+/** Instagram tarzı — fotoğraf ve videoda ortak + türe özel araçlar */
 const TOOLS: ToolDef[] = [
+  { id: 'audio', icon: 'volume-high-outline', label: 'Ses', videoOnly: true },
   { id: 'music', icon: 'musical-notes-outline', label: 'Müzik' },
   { id: 'link', icon: 'link-outline', label: 'Link' },
   { id: 'sticker', icon: 'pricetag-outline', label: 'Etiket' },
@@ -21,23 +24,29 @@ const TOOLS: ToolDef[] = [
 ];
 
 type StoryPublishRailProps = {
+  isVideo: boolean;
   activeTool: StoryPublishToolId | null;
   hasMusic: boolean;
   hasSticker: boolean;
   hasLocation: boolean;
   hasLinks: boolean;
+  videoAudioMuted: boolean;
   onPress: (tool: StoryPublishToolId) => void;
 };
 
 export function StoryPublishRail({
+  isVideo,
   activeTool,
   hasMusic,
   hasSticker,
   hasLocation,
   hasLinks,
+  videoAudioMuted,
   onPress,
 }: StoryPublishRailProps) {
   const insets = useSafeAreaInsets();
+
+  const tools = TOOLS.filter((tool) => !tool.videoOnly || isVideo);
 
   return (
     <View
@@ -52,24 +61,36 @@ export function StoryPublishRail({
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
       >
-        {TOOLS.map((tool) => {
+        {tools.map((tool) => {
           const active = activeTool === tool.id;
           const badge =
             (tool.id === 'music' && hasMusic) ||
             (tool.id === 'link' && hasLinks) ||
             (tool.id === 'sticker' && hasSticker) ||
-            (tool.id === 'location' && hasLocation);
+            (tool.id === 'location' && hasLocation) ||
+            (tool.id === 'audio' && videoAudioMuted);
+
+          const iconName =
+            tool.id === 'audio' && videoAudioMuted ? 'volume-mute-outline' : tool.icon;
 
           return (
             <Pressable
               key={tool.id}
-              style={[styles.item, active && styles.itemActive]}
+              style={[
+                styles.item,
+                (active || (tool.id === 'audio' && videoAudioMuted)) && styles.itemActive,
+              ]}
               onPress={() => onPress(tool.id)}
               hitSlop={4}
             >
-              <View style={[styles.iconWrap, active && styles.iconWrapActive]}>
-                <Ionicons name={tool.icon} size={20} color="#fff" />
-                {badge ? <View style={styles.badge} /> : null}
+              <View
+                style={[
+                  styles.iconWrap,
+                  (active || (tool.id === 'audio' && videoAudioMuted)) && styles.iconWrapActive,
+                ]}
+              >
+                <Ionicons name={iconName} size={20} color="#fff" />
+                {badge && tool.id !== 'audio' ? <View style={styles.badge} /> : null}
               </View>
               <Text style={styles.label} numberOfLines={1}>
                 {tool.label}

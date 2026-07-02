@@ -71,7 +71,13 @@ export function MediaEditorBottomSheet({
   if (!visible) return null;
 
   return (
-    <View style={styles.host} pointerEvents="box-none">
+    <View style={styles.host}>
+      <Pressable
+        style={styles.backdrop}
+        onPress={onClose}
+        accessibilityRole="button"
+        accessibilityLabel="Kapat"
+      />
       <View
         style={[
           styles.sheet,
@@ -82,7 +88,6 @@ export function MediaEditorBottomSheet({
             bottom: keyboardHeight > 0 ? keyboardHeight - insets.bottom : 0,
           },
         ]}
-        pointerEvents="auto"
       >
         <Pressable onPress={onClose} style={styles.handleHit} hitSlop={12}>
           <View style={[styles.handle, { backgroundColor: surface.handle }]} />
@@ -106,6 +111,9 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
     zIndex: 20,
+  },
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
   },
   sheet: {
     borderTopLeftRadius: radius.xl,

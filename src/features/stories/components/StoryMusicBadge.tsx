@@ -55,7 +55,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: spacing.md,
     bottom: spacing.lg,
-    zIndex: 7,
+    zIndex: 10,
     maxWidth: '78%',
   },
   wrapStacked: {

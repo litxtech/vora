@@ -24,6 +24,8 @@ import Animated, {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StickyKeyboardFooter } from '@/components/keyboard';
+import { StoryMusicBadge } from '@/features/stories/components/StoryMusicBadge';
+import { StoryMusicInfoSheet } from '@/features/stories/components/StoryMusicInfoSheet';
 import { StoryInsightsSheet } from '@/features/stories/components/StoryInsightsSheet';
 import { StoryLinkOverlay } from '@/features/stories/components/StoryLinkOverlay';
 import { StoryProgressBars } from '@/features/stories/components/StoryProgressBars';
@@ -97,6 +99,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const [reacted, setReacted] = useState(false);
   const [replyBarHeight, setReplyBarHeight] = useState(56);
   const [inputFocused, setInputFocused] = useState(false);
+  const [musicInfoOpen, setMusicInfoOpen] = useState(false);
   const videoProgressRef = useRef({ sec: 0, dur: null as number | null });
 
   const replyInputRef = useRef<TextInput>(null);
@@ -148,6 +151,10 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         : null,
     [bundle],
   );
+
+  useEffect(() => {
+    setMusicInfoOpen(false);
+  }, [activeItem?.id]);
 
   useEffect(() => {
     useFeedVideoPlaybackStore.getState().clear();
@@ -795,7 +802,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                       item={activeItem}
                       isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
                       isPaused={isPaused || insightsVisible}
-                      musicAuthor={storyMusicAuthor}
                       onVideoPosition={handleVideoPosition}
                       onVideoEnd={handleVideoEnd}
                     />
@@ -812,6 +818,20 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                   links={activeItem.links ?? []}
                   onLinkPress={handleLinkPress}
                   singleLinkMode={isOwnStory ? 'button' : 'swipe_up'}
+                />
+              </View>
+            ) : null}
+
+            {activeItem?.music && storyMusicAuthor ? (
+              <View style={styles.musicOverlayHost} pointerEvents="box-none">
+                <StoryMusicBadge
+                  title={activeItem.music.displayTitle}
+                  artist={activeItem.music.artist}
+                  stacked={Boolean(activeItem.location?.label)}
+                  onPress={() => {
+                    setIsPaused(true);
+                    setMusicInfoOpen(true);
+                  }}
                 />
               </View>
             ) : null}
@@ -902,6 +922,18 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
           setIsPaused(false);
         }}
       />
+
+      {activeItem?.music && storyMusicAuthor ? (
+        <StoryMusicInfoSheet
+          visible={musicInfoOpen}
+          music={activeItem.music}
+          addedBy={storyMusicAuthor}
+          onClose={() => {
+            setMusicInfoOpen(false);
+            setIsPaused(false);
+          }}
+        />
+      ) : null}
     </View>
   );
 }
@@ -969,6 +1001,10 @@ const styles = StyleSheet.create({
   linkOverlayHost: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 8,
+  },
+  musicOverlayHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9,
   },
   tapLeft: {
     position: 'absolute',

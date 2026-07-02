@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -116,16 +116,17 @@ export function StoryPublishScreen({
     : videoMuted;
 
   const musicManifest = musicSelection ? musicSelectionToManifest(musicSelection) : null;
-  const musicAddedBy =
-    user && profile
-      ? {
-          userId: user.id,
-          username: profile.username,
-          fullName: profile.full_name,
-          avatarUrl: profile.avatar_url,
-          isVerified: profile.is_verified,
-        }
-      : null;
+  const musicAddedBy = useMemo(() => {
+    if (!user) return null;
+    const meta = user.user_metadata as { username?: string; full_name?: string } | undefined;
+    return {
+      userId: user.id,
+      username: profile?.username ?? meta?.username ?? 'kullanici',
+      fullName: profile?.full_name ?? meta?.full_name ?? null,
+      avatarUrl: profile?.avatar_url ?? null,
+      isVerified: profile?.is_verified ?? false,
+    };
+  }, [profile, user]);
 
   useEffect(() => {
     useMusicSelectionStore.getState().clearSelection();
@@ -206,13 +207,15 @@ export function StoryPublishScreen({
     void stabilizeStoryVideoUri(mediaUri)
       .then((stable) => {
         if (cancelled) return;
-        setPublishUri(stable);
-        useStoryPublishStore.getState().setDraft({
-          mediaUri: stable,
-          mediaType: 'video',
-          durationSec: normalizedDurationSec,
-          trimmedInStudio,
-        });
+        if (stable !== mediaUri) {
+          setPublishUri(stable);
+          useStoryPublishStore.getState().setDraft({
+            mediaUri: stable,
+            mediaType: 'video',
+            durationSec: normalizedDurationSec,
+            trimmedInStudio,
+          });
+        }
       })
       .catch((err) => {
         if (cancelled) return;
@@ -240,8 +243,25 @@ export function StoryPublishScreen({
     setActiveTool(null);
   }, []);
 
+  const handleToggleVideoAudio = useCallback(() => {
+    if (musicSelection) {
+      const nextMuted = musicSelection.originalAudioVolume > 0.001;
+      setMusicSelection({
+        ...musicSelection,
+        originalAudioVolume: nextMuted ? 0 : 1,
+      });
+      return;
+    }
+    setVideoMuted((muted) => !muted);
+  }, [musicSelection, setMusicSelection]);
+
   const handleToolPress = useCallback(
     (tool: StoryPublishToolId) => {
+      if (tool === 'audio') {
+        handleToggleVideoAudio();
+        return;
+      }
+
       if (tool === 'music') {
         if (musicSelection) {
           setMusicEditing(true);
@@ -276,7 +296,7 @@ export function StoryPublishScreen({
         setActiveTool(activeTool === 'background' ? null : 'background');
       }
     },
-    [activeTool, closeOtherTools, musicSelection],
+    [activeTool, closeOtherTools, handleToggleVideoAudio, musicSelection],
   );
 
   const handleMusicSelect = useCallback(
@@ -330,18 +350,6 @@ export function StoryPublishScreen({
     },
     [mediaType, musicClipDurationSec, musicSelection, setMusicSelection],
   );
-
-  const handleToggleVideoAudio = useCallback(() => {
-    if (musicSelection) {
-      const nextMuted = musicSelection.originalAudioVolume > 0.001;
-      setMusicSelection({
-        ...musicSelection,
-        originalAudioVolume: nextMuted ? 0 : 1,
-      });
-      return;
-    }
-    setVideoMuted((muted) => !muted);
-  }, [musicSelection, setMusicSelection]);
 
   const handleHeaderBack = useCallback(() => {
     if (musicEditing) {
@@ -474,115 +482,104 @@ export function StoryPublishScreen({
         <View style={{ width: 26 }} />
       </View>
 
-      <View
-        ref={captureRef}
-        collapsable={false}
-        style={[storyCardFrameStyle.frame, styles.previewWrap]}
-      >
-        {canEditFraming ? (
-          <StoryFramingEditor
-            framing={framing}
-            onFramingChange={handleFramingChange}
-            mediaWidth={mediaSize.width}
-            mediaHeight={mediaSize.height}
-            enabled={framingEnabled}
-          >
-            {mediaType === 'image' ? (
-              <Image source={{ uri: publishUri }} style={styles.mediaFill} contentFit="cover" />
-            ) : (
-              <CapturedVideoPreview
-                uri={publishUri}
-                style={styles.mediaFill}
-                contentFit="cover"
-                music={musicPlaysOnStory ? musicSelection : null}
-                videoMuted={videoOriginalMuted}
-              />
-            )}
-          </StoryFramingEditor>
-        ) : (
-          <View style={styles.previewLoading}>
-            <ActivityIndicator color={colors.primary} size="large" />
-          </View>
-        )}
+      <View style={styles.previewStage}>
+        <View
+          ref={captureRef}
+          collapsable={false}
+          style={[storyCardFrameStyle.frame, styles.previewWrap]}
+        >
+          {canEditFraming ? (
+            <StoryFramingEditor
+              framing={framing}
+              onFramingChange={handleFramingChange}
+              mediaWidth={mediaSize.width}
+              mediaHeight={mediaSize.height}
+              enabled={framingEnabled}
+            >
+              {mediaType === 'image' ? (
+                <Image source={{ uri: publishUri }} style={styles.mediaFill} contentFit="cover" />
+              ) : (
+                <CapturedVideoPreview
+                  uri={publishUri}
+                  style={styles.mediaFill}
+                  contentFit="cover"
+                  music={musicPlaysOnStory ? musicSelection : null}
+                  videoMuted={videoOriginalMuted}
+                  muted={videoOriginalMuted}
+                />
+              )}
+            </StoryFramingEditor>
+          ) : (
+            <View style={styles.previewLoading}>
+              <ActivityIndicator color={colors.primary} size="large" />
+            </View>
+          )}
 
-        {musicSelection && !musicEditing ? (
-          <StoryMusicBadge
-            title={musicSelection.displayTitle}
-            artist={musicSelection.artist}
-            stacked={Boolean(selectedLocation)}
-            onPress={() => setMusicInfoOpen(true)}
-          />
-        ) : null}
-
-        {selectedLocation ? (
-          <View style={styles.locationPreview}>
-            <Ionicons name="location" size={13} color="#fff" />
-            <Text variant="caption" style={styles.locationPreviewText} numberOfLines={1}>
-              {selectedLocation.label}
-            </Text>
-          </View>
-        ) : null}
-
-        {mediaType === 'video' && canEditFraming ? (
-          <Pressable
-            style={styles.audioToggleBtn}
-            onPress={handleToggleVideoAudio}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={videoOriginalMuted ? 'Videoyu sesli oynat' : 'Video sesini kapat'}
-          >
-            <Ionicons
-              name={videoOriginalMuted ? 'volume-mute' : 'volume-high'}
-              size={20}
-              color="#fff"
+          {musicSelection && !musicEditing ? (
+            <StoryMusicBadge
+              title={musicSelection.displayTitle}
+              artist={musicSelection.artist}
+              stacked={Boolean(selectedLocation)}
+              onPress={() => setMusicInfoOpen(true)}
             />
-          </Pressable>
-        ) : null}
+          ) : null}
 
-        {mediaType === 'video' && normalizedDurationSec && !musicEditing ? (
-          <View style={styles.durationBadge}>
-            <Ionicons name="videocam" size={12} color="#fff" />
-            <Text variant="caption" style={styles.durationText}>
-              {Math.round(normalizedDurationSec)} sn
-            </Text>
-          </View>
-        ) : null}
+          {selectedLocation ? (
+            <View style={styles.locationPreview}>
+              <Ionicons name="location" size={13} color="#fff" />
+              <Text variant="caption" style={styles.locationPreviewText} numberOfLines={1}>
+                {selectedLocation.label}
+              </Text>
+            </View>
+          ) : null}
 
-        {stabilizing ? (
-          <View style={styles.stabilizeBadge}>
-            <ActivityIndicator color="#fff" size="small" />
-          </View>
-        ) : null}
+          {mediaType === 'video' && normalizedDurationSec && !musicEditing ? (
+            <View style={styles.durationBadge}>
+              <Ionicons name="videocam" size={12} color="#fff" />
+              <Text variant="caption" style={styles.durationText}>
+                {Math.round(normalizedDurationSec)} sn
+              </Text>
+            </View>
+          ) : null}
 
-        <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={framingEnabled} />
+          {stabilizing ? (
+            <View style={styles.stabilizeBadge}>
+              <ActivityIndicator color="#fff" size="small" />
+            </View>
+          ) : null}
 
-        {musicSelection && musicEditing ? (
-          <StoryMusicTrimCard
-            music={musicSelection}
-            mediaType={mediaType}
-            clipDurationSec={musicClipDurationSec}
-            onStartChange={handleMusicStartChange}
-            onRangeChange={handleMusicRangeChange}
-            onChangeTrack={() => {
-              setMusicEditing(false);
-              setMusicOpen(true);
-            }}
-            onRemove={() => {
-              setMusicSelection(null);
-              setMusicEditing(false);
-            }}
-            onDone={() => setMusicEditing(false)}
-          />
-        ) : null}
+          <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={framingEnabled} />
+
+          {musicSelection && musicEditing ? (
+            <StoryMusicTrimCard
+              music={musicSelection}
+              mediaType={mediaType}
+              clipDurationSec={musicClipDurationSec}
+              onStartChange={handleMusicStartChange}
+              onRangeChange={handleMusicRangeChange}
+              onChangeTrack={() => {
+                setMusicEditing(false);
+                setMusicOpen(true);
+              }}
+              onRemove={() => {
+                setMusicSelection(null);
+                setMusicEditing(false);
+              }}
+              onDone={() => setMusicEditing(false)}
+            />
+          ) : null}
+        </View>
       </View>
 
       {!musicEditing ? (
         <StoryPublishRail
+          isVideo={mediaType === 'video'}
           activeTool={activeTool}
           hasMusic={Boolean(musicSelection)}
           hasSticker={Boolean(stickerCategory)}
           hasLocation={Boolean(selectedLocation)}
           hasLinks={links.length > 0}
+          videoAudioMuted={videoOriginalMuted}
           onPress={handleToolPress}
         />
       ) : null}
@@ -681,10 +678,13 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: '#fff',
   },
-  previewWrap: {
+  previewStage: {
     flex: 1,
     marginHorizontal: STORY_CARD_HORIZONTAL_INSET,
     marginBottom: spacing.sm,
+  },
+  previewWrap: {
+    flex: 1,
   },
   mediaFill: {
     width: '100%',
@@ -712,18 +712,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 11,
-  },
-  audioToggleBtn: {
-    position: 'absolute',
-    right: spacing.sm,
-    top: '42%',
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 8,
   },
   stabilizeBadge: {
     position: 'absolute',
