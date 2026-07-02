@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
 
-export type StoryPublishToolId = 'music' | 'sticker' | 'location' | 'background';
+export type StoryPublishToolId = 'music' | 'sticker' | 'location' | 'background' | 'link';
 
 type ToolDef = {
   id: StoryPublishToolId;
@@ -14,6 +14,7 @@ type ToolDef = {
 
 const TOOLS: ToolDef[] = [
   { id: 'music', icon: 'musical-notes-outline', label: 'Müzik' },
+  { id: 'link', icon: 'link-outline', label: 'Link' },
   { id: 'sticker', icon: 'pricetag-outline', label: 'Etiket' },
   { id: 'location', icon: 'location-outline', label: 'Konum' },
   { id: 'background', icon: 'color-palette-outline', label: 'Arka plan' },
@@ -24,6 +25,7 @@ type StoryPublishRailProps = {
   hasMusic: boolean;
   hasSticker: boolean;
   hasLocation: boolean;
+  hasLinks: boolean;
   onPress: (tool: StoryPublishToolId) => void;
 };
 
@@ -32,6 +34,7 @@ export function StoryPublishRail({
   hasMusic,
   hasSticker,
   hasLocation,
+  hasLinks,
   onPress,
 }: StoryPublishRailProps) {
   const insets = useSafeAreaInsets();
@@ -53,6 +56,7 @@ export function StoryPublishRail({
           const active = activeTool === tool.id;
           const badge =
             (tool.id === 'music' && hasMusic) ||
+            (tool.id === 'link' && hasLinks) ||
             (tool.id === 'sticker' && hasSticker) ||
             (tool.id === 'location' && hasLocation);
 

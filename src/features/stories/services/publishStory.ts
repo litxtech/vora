@@ -7,6 +7,7 @@ import {
   type StoryLocationManifest,
   type StoryMusicManifest,
 } from '@/features/stories/utils/storyManifest';
+import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import {
   finishStoryVideoUpload,
   prepareStoryVideoUpload,
@@ -36,6 +37,7 @@ export type PublishStoryInput = {
   framing?: StoryFraming | null;
   music?: MusicSelection | null;
   location?: SelectedLocation | null;
+  links?: StoryLinkManifest[];
   /** Studio'da kırpıldıysa dosya süresi yerine bu değer kullanılır. */
   trimmedInStudio?: boolean;
   onUploadProgress?: (progress: UploadStoryMediaProgress) => void;
@@ -203,6 +205,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     framing: input.framing ?? null,
     music: musicManifest,
     location: locationManifest,
+    links: input.links ?? [],
   });
 
   const { data: item, error: itemError } = await supabase

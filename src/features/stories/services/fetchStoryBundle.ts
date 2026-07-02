@@ -59,6 +59,7 @@ export async function fetchStoryBundle(
       framing: manifest.framing,
       music: manifest.music,
       location: manifest.location,
+      links: manifest.links,
       createdAt: row.created_at,
       hasReacted: row.has_reacted ?? false,
     };

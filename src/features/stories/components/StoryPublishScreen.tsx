@@ -23,6 +23,8 @@ import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { StoryBackgroundSheet } from '@/features/stories/components/StoryBackgroundSheet';
 import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
+import { StoryLinkEditor } from '@/features/stories/components/StoryLinkEditor';
+import { StoryLinkSheet } from '@/features/stories/components/StoryLinkSheet';
 import {
   StoryPublishRail,
   type StoryPublishToolId,
@@ -44,6 +46,7 @@ import {
   probeVideoSize,
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
+import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { resolveMarketplaceRegionId } from '@/constants/regions';
 import { spacing } from '@/constants/theme';
@@ -85,6 +88,7 @@ export function StoryPublishScreen({
   const [musicPreviewPlaying, setMusicPreviewPlaying] = useState(false);
   const [stickerCategory, setStickerCategory] = useState<StoryStickerCategoryId | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [links, setLinks] = useState<StoryLinkManifest[]>([]);
 
   useEffect(() => {
     return () => {
@@ -211,6 +215,11 @@ export function StoryPublishScreen({
         return;
       }
 
+      if (tool === 'link') {
+        setActiveTool(activeTool === 'link' ? null : 'link');
+        return;
+      }
+
       if (tool === 'location') {
         setActiveTool(activeTool === 'location' ? null : 'location');
         return;
@@ -283,6 +292,7 @@ export function StoryPublishScreen({
       framing: uploadFraming,
       music: musicSelection,
       location: selectedLocation,
+      links,
       trimmedInStudio,
       onUploadProgress: (progress: UploadStoryMediaProgress) => {
         setUploadMessage(progress.message);
@@ -314,6 +324,7 @@ export function StoryPublishScreen({
     publishing,
     regionId,
     selectedLocation,
+    links,
     setRings,
     stabilizing,
     stickerCategory,
@@ -400,6 +411,8 @@ export function StoryPublishScreen({
             <ActivityIndicator color="#fff" size="small" />
           </View>
         ) : null}
+
+        <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={!publishing} />
       </View>
 
       <StoryPublishRail
@@ -407,6 +420,7 @@ export function StoryPublishScreen({
         hasMusic={Boolean(musicSelection)}
         hasSticker={Boolean(stickerCategory)}
         hasLocation={Boolean(selectedLocation)}
+        hasLinks={links.length > 0}
         onPress={handleToolPress}
       />
 
@@ -486,6 +500,13 @@ export function StoryPublishScreen({
         regionId={resolveMarketplaceRegionId(regionId)}
         value={selectedLocation}
         onChange={setSelectedLocation}
+        onClose={() => setActiveTool(null)}
+      />
+
+      <StoryLinkSheet
+        visible={activeTool === 'link'}
+        links={links}
+        onChange={setLinks}
         onClose={() => setActiveTool(null)}
       />
     </View>

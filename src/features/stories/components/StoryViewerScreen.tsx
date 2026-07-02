@@ -23,9 +23,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { StickyKeyboardFooter } from '@/components/keyboard';
 import { StoryInsightsSheet } from '@/features/stories/components/StoryInsightsSheet';
+import { StoryLinkOverlay } from '@/features/stories/components/StoryLinkOverlay';
 import { StoryProgressBars } from '@/features/stories/components/StoryProgressBars';
 import { StoryReplyBar } from '@/features/stories/components/StoryReplyBar';
-import { StorySlide } from '@/features/stories/components/StorySlide';
+import { StoryPeekPreview, StorySlide } from '@/features/stories/components/StorySlide';
 import {
   STORY_CARD_BOTTOM_GAP,
   STORY_CARD_HORIZONTAL_INSET,
@@ -42,6 +43,7 @@ import { fetchStoryBundle } from '@/features/stories/services/fetchStoryBundle';
 import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
 import { formatStoryTime } from '@/features/stories/utils/formatStoryTime';
 import { fetchStoryInsights } from '@/features/stories/services/fetchStoryInsights';
+import { recordStoryLinkAction } from '@/features/stories/services/recordStoryLinkAction';
 import { recordStoryView } from '@/features/stories/services/recordStoryView';
 import { markStoryUserSeen } from '@/features/stories/services/storySeenCache';
 import { sendStoryReply } from '@/features/stories/services/sendStoryReply';
@@ -49,12 +51,14 @@ import { toggleStoryReaction } from '@/features/stories/services/storyReactions'
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { useStoryViewerStore } from '@/features/stories/store/storyViewerStore';
 import type { StoryBundle, StoryInsights, StoryItem, StoryNavigation } from '@/features/stories/types';
+import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import { navigateToPublicProfile } from '@/features/profile/services/profileNavigation';
 import { Text } from '@/components/ui/Text';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
 import { prefetchStoryBundleMedia } from '@/features/stories/services/prefetchStoryMedia';
 import { spacing } from '@/constants/theme';
+import { openUrl } from '@/lib/linking/openUrl';
 import { useAuth } from '@/providers/AuthProvider';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -91,6 +95,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const [reacted, setReacted] = useState(false);
   const [replyBarHeight, setReplyBarHeight] = useState(56);
   const [inputFocused, setInputFocused] = useState(false);
+  const [showHorizontalPeek, setShowHorizontalPeek] = useState(false);
   const videoProgressRef = useRef({ sec: 0, dur: null as number | null });
 
   const replyInputRef = useRef<TextInput>(null);
@@ -99,6 +104,10 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   useEffect(() => {
     inputFocusedRef.current = inputFocused;
   }, [inputFocused]);
+
+  const setHorizontalPeekVisible = useCallback((visible: boolean) => {
+    setShowHorizontalPeek(visible);
+  }, []);
 
   const dismissReplyKeyboard = useCallback(() => {
     replyInputRef.current?.blur();
@@ -121,6 +130,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const dismissY = useSharedValue(0);
   const insightsOpen = useSharedValue(0);
   const isOwnStorySv = useSharedValue(0);
+  const hasSingleLinkSv = useSharedValue(0);
   const canGoPrevUserSv = useSharedValue(0);
   const canGoNextUserSv = useSharedValue(0);
 
@@ -147,7 +157,9 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const loadBundle = useCallback(
     async (authorId: string) => {
       const data = await fetchStoryBundle(user?.id ?? null, authorId);
-      setBundle(authorId, data);
+      if (data) {
+        setBundle(authorId, data);
+      }
       return data;
     },
     [setBundle, user?.id],
@@ -155,20 +167,26 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
+    const hasCachedBundle = Boolean(useStoryViewerStore.getState().bundles[activeUserId]);
+    if (!hasCachedBundle) {
+      setLoading(true);
+    }
+
     void (async () => {
       const data = await loadBundle(activeUserId);
       if (cancelled) return;
       setLoading(false);
       if (!data || data.items.length === 0) {
-        if (currentUserIndex < ringUserIds.length - 1) {
-          setCurrentUserIndex(currentUserIndex + 1);
+        const userIndex = useStoryViewerStore.getState().currentUserIndex;
+        if (userIndex < ringUserIds.length - 1) {
+          setCurrentUserIndex(userIndex + 1);
         } else {
           router.back();
         }
         return;
       }
-      const prefetchIds = [ringUserIds[currentUserIndex - 1], ringUserIds[currentUserIndex + 1]].filter(
+      const userIndex = useStoryViewerStore.getState().currentUserIndex;
+      const prefetchIds = [ringUserIds[userIndex - 1], ringUserIds[userIndex + 1]].filter(
         Boolean,
       ) as string[];
       for (const id of prefetchIds) {
@@ -178,7 +196,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     return () => {
       cancelled = true;
     };
-  }, [activeUserId, currentUserIndex, loadBundle, ringUserIds, setCurrentUserIndex]);
+  }, [activeUserId, loadBundle, ringUserIds, setCurrentUserIndex]);
 
   useEffect(() => {
     if (!items.length) return;
@@ -194,13 +212,23 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   }, [isOwnStory, isOwnStorySv]);
 
   useEffect(() => {
+    const hasSingle = !isOwnStory && activeItem?.links?.length === 1;
+    hasSingleLinkSv.value = hasSingle ? 1 : 0;
+  }, [activeItem?.links?.length, hasSingleLinkSv, isOwnStory]);
+
+  useEffect(() => {
     canGoPrevUserSv.value = currentUserIndex > 0 ? 1 : 0;
     canGoNextUserSv.value = currentUserIndex < ringUserIds.length - 1 ? 1 : 0;
   }, [canGoNextUserSv, canGoPrevUserSv, currentUserIndex, ringUserIds.length]);
 
   useEffect(() => {
     dismissY.value = 0;
-  }, [activeItem?.id, dismissY]);
+    panX.value = 0;
+    transitionX.value = 0;
+    deckScale.value = 1;
+    deckOpacity.value = 1;
+    setShowHorizontalPeek(false);
+  }, [activeItem?.id, activeUserId, deckOpacity, deckScale, dismissY, panX, transitionX]);
 
   useEffect(() => {
     setProgress(0);
@@ -388,7 +416,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   useStoryAutoAdvance({
     item: activeItem,
-    isActive: !loading && !!activeItem && !insightsVisible,
+    isActive: Boolean(activeItem) && !insightsVisible,
     isPaused,
     onComplete: () => goNextItem('auto_forward'),
     onProgress: setProgress,
@@ -407,6 +435,38 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     }
   }, [bundle, user?.id]);
 
+  const openStoryLink = useCallback(
+    async (link: StoryLinkManifest, action: 'tap' | 'swipe_up') => {
+      if (!user?.id || !activeItem || isOwnStory) return;
+      void recordStoryLinkAction({
+        viewerId: user.id,
+        storyItemId: activeItem.id,
+        linkId: link.id,
+        action,
+      });
+      setIsPaused(true);
+      try {
+        await openUrl(link.url);
+      } finally {
+        if (!insightsVisible) setIsPaused(false);
+      }
+    },
+    [activeItem, insightsVisible, isOwnStory, user?.id],
+  );
+
+  const openSingleStoryLink = useCallback(() => {
+    const link = activeItem?.links?.[0];
+    if (!link) return;
+    void openStoryLink(link, 'swipe_up');
+  }, [activeItem?.links, openStoryLink]);
+
+  const handleLinkPress = useCallback(
+    (link: StoryLinkManifest) => {
+      void openStoryLink(link, 'tap');
+    },
+    [openStoryLink],
+  );
+
   const nextUserId = ringUserIds[currentUserIndex + 1];
   const prevUserId = ringUserIds[currentUserIndex - 1];
   const nextPeekItem = nextUserId ? (bundles[nextUserId]?.items[0] ?? null) : null;
@@ -416,20 +476,24 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   const deckStyle = useAnimatedStyle(() => {
     const dragProgress = Math.min(1, Math.max(0, dismissY.value) / 240);
-    const hDrag = Math.min(1, Math.abs(panX.value) / CARD_WIDTH);
-    const horizontalScale = 1 - hDrag * 0.045;
     return {
       transform: [
         { translateY: dismissY.value },
-        { scale: deckScale.value * (1 - dragProgress * 0.06) * horizontalScale },
+        { scale: deckScale.value * (1 - dragProgress * 0.06) },
       ],
       opacity: deckOpacity.value * (1 - dragProgress * 0.45),
     };
   });
 
-  const slideLayerStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: transitionX.value + panX.value }],
-  }));
+  const slideLayerStyle = useAnimatedStyle(() => {
+    const offset = transitionX.value + panX.value;
+    if (Math.abs(offset) < 0.5) {
+      return {};
+    }
+    return {
+      transform: [{ translateX: offset }],
+    };
+  });
 
   const nextPeekStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: CARD_WIDTH + transitionX.value + panX.value }],
@@ -494,6 +558,9 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         if (canGoNextUserSv.value === 0 && tx < 0) tx *= 0.22;
         if (canGoPrevUserSv.value === 0 && tx > 0) tx *= 0.22;
         panX.value = tx;
+        if (Math.abs(tx) > 8) {
+          runOnJS(setHorizontalPeekVisible)(true);
+        }
       }
     })
     .onEnd((e) => {
@@ -511,6 +578,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
           if (finished) runOnJS(closeViewer)();
         });
         deckOpacity.value = withTiming(0, { duration: 260 });
+        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
@@ -521,6 +589,19 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       if (isOwnStorySv.value === 1 && e.translationY <= -SWIPE_UP_THRESHOLD && absY > absX) {
         runOnJS(openInsights)();
         panX.value = withSpring(0, STORY_SPRING);
+        runOnJS(setHorizontalPeekVisible)(false);
+        return;
+      }
+
+      if (
+        isOwnStorySv.value === 0 &&
+        hasSingleLinkSv.value === 1 &&
+        e.translationY <= -SWIPE_UP_THRESHOLD &&
+        absY > absX
+      ) {
+        runOnJS(openSingleStoryLink)();
+        panX.value = withSpring(0, STORY_SPRING);
+        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
@@ -533,6 +614,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               if (finished) runOnJS(finishPanNextUser)();
             },
           );
+          runOnJS(setHorizontalPeekVisible)(false);
           return;
         }
         if (e.translationX >= SWIPE_THRESHOLD && canGoPrevUserSv.value === 1) {
@@ -543,13 +625,16 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               if (finished) runOnJS(finishPanPrevUser)();
             },
           );
+          runOnJS(setHorizontalPeekVisible)(false);
           return;
         }
         panX.value = withSpring(0, STORY_SPRING);
+        runOnJS(setHorizontalPeekVisible)(false);
         return;
       }
 
       panX.value = withSpring(0, STORY_SPRING);
+      runOnJS(setHorizontalPeekVisible)(false);
     });
 
   const longPressGesture = Gesture.LongPress()
@@ -689,29 +774,45 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               deckStyle,
             ]}
           >
-            {prevPeekItem ? (
-              <Animated.View style={[styles.slideLayer, prevPeekStyle]} pointerEvents="none">
-                <StorySlide item={prevPeekItem} isActive={false} isPaused />
-              </Animated.View>
-            ) : null}
-            {nextPeekItem ? (
-              <Animated.View style={[styles.slideLayer, nextPeekStyle]} pointerEvents="none">
-                <StorySlide item={nextPeekItem} isActive={false} isPaused />
-              </Animated.View>
-            ) : null}
-
-            <Animated.View style={[styles.slideLayer, styles.slideLayerActive, slideLayerStyle]}>
-              {activeItem ? (
-                <StorySlide
-                  key={activeItem.id}
-                  item={activeItem}
-                  isActive={!loading && !isPaused && !insightsVisible}
-                  isPaused={isPaused || insightsVisible}
-                  onVideoPosition={handleVideoPosition}
-                  onVideoEnd={handleVideoEnd}
-                />
+            <Animated.View
+              style={[styles.slideHost, slideLayerStyle]}
+              pointerEvents="box-none"
+              collapsable={false}
+            >
+              {showHorizontalPeek && prevPeekItem ? (
+                <Animated.View style={[styles.slideLayer, prevPeekStyle]} pointerEvents="none">
+                  <StoryPeekPreview item={prevPeekItem} />
+                </Animated.View>
               ) : null}
+              {showHorizontalPeek && nextPeekItem ? (
+                <Animated.View style={[styles.slideLayer, nextPeekStyle]} pointerEvents="none">
+                  <StoryPeekPreview item={nextPeekItem} />
+                </Animated.View>
+              ) : null}
+
+              <View style={[styles.slideLayer, styles.slideLayerActive]} collapsable={false}>
+                {activeItem ? (
+                  <StorySlide
+                    key={activeItem.id}
+                    item={activeItem}
+                    isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
+                    isPaused={isPaused || insightsVisible}
+                    onVideoPosition={handleVideoPosition}
+                    onVideoEnd={handleVideoEnd}
+                  />
+                ) : null}
+              </View>
             </Animated.View>
+
+            {!isOwnStory && activeItem && (activeItem.links?.length ?? 0) > 0 ? (
+              <View style={styles.linkOverlayHost} pointerEvents="box-none">
+                <StoryLinkOverlay
+                  links={activeItem.links ?? []}
+                  onLinkPress={handleLinkPress}
+                  singleLinkMode="swipe_up"
+                />
+              </View>
+            ) : null}
 
             <View style={styles.cardChrome} pointerEvents="box-none">
               <StoryProgressBars total={items.length} activeIndex={currentItemIndex} progress={progress} />
@@ -792,6 +893,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
         insights={insights}
         loading={insightsLoading}
         authorId={bundle?.authorId ?? null}
+        storyItems={items}
         initialItemIndex={currentItemIndex}
         onClose={() => {
           setInsightsVisible(false);
@@ -823,6 +925,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#111',
   },
+  slideHost: {
+    flex: 1,
+    width: '100%',
+  },
   slideLayer: {
     ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
@@ -844,6 +950,10 @@ const styles = StyleSheet.create({
     zIndex: 6,
     gap: spacing.sm,
     paddingTop: spacing.xs,
+  },
+  linkOverlayHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 8,
   },
   tapLeft: {
     position: 'absolute',

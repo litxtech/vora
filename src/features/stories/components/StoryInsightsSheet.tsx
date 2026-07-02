@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
-import type { StoryInsights, StoryItemInsight } from '@/features/stories/types';
+import type { StoryInsights, StoryItem, StoryItemInsight } from '@/features/stories/types';
 import {
   fetchStoryItemEngagement,
   type StoryItemEngagement,
@@ -44,6 +44,7 @@ type StoryInsightsSheetProps = {
   insights: StoryInsights | null;
   loading?: boolean;
   authorId?: string | null;
+  storyItems?: StoryItem[];
   initialItemIndex?: number;
   onClose: () => void;
 };
@@ -53,6 +54,7 @@ export function StoryInsightsSheet({
   insights,
   loading = false,
   authorId = null,
+  storyItems = [],
   initialItemIndex = 0,
   onClose,
 }: StoryInsightsSheetProps) {
@@ -145,6 +147,19 @@ export function StoryInsightsSheet({
   const renderOverview = () => {
     if (!insights || !selected) return null;
 
+    const selectedStoryItem = storyItems.find((item) => item.id === selected.itemId);
+    const linkRows = (selected.linkStats ?? []).map((stat) => {
+      const manifestLink = selectedStoryItem?.links?.find((link) => link.id === stat.linkId);
+      const parts: string[] = [];
+      if (stat.tapCount > 0) parts.push(`${formatInsightCount(stat.tapCount)} dokunma`);
+      if (stat.swipeUpCount > 0) parts.push(`${formatInsightCount(stat.swipeUpCount)} kaydırma`);
+      return {
+        icon: 'link-outline' as const,
+        label: `${manifestLink?.label ?? 'Bağlantı'}${parts.length ? ` · ${parts.join(' · ')}` : ''}`,
+        value: formatInsightCount(stat.tapCount + stat.swipeUpCount),
+      };
+    });
+
     const behaviorRows = [
       { icon: 'chevron-forward' as const, label: 'İleri', value: formatInsightCount(selected.tapForwardCount) },
       { icon: 'chevron-back' as const, label: 'Geri', value: formatInsightCount(selected.tapBackCount) },
@@ -218,6 +233,32 @@ export function StoryInsightsSheet({
           subtitle="İzleyicilerin hikâyeyle nasıl etkileştiği"
         />
         <BehaviorGrid rows={behaviorRows} />
+
+        {selected.linkTapCount + selected.linkSwipeUpCount > 0 ? (
+          <>
+            <InsightSectionHeader
+              title="Link etkileşimleri"
+              subtitle={`${formatInsightCount(selected.linkTapCount + selected.linkSwipeUpCount)} toplam işlem`}
+            />
+            <View style={styles.linkSummaryRow}>
+              <MetricTile
+                icon="hand-left-outline"
+                label="Dokunma"
+                value={formatInsightCount(selected.linkTapCount)}
+                tint={STORY_INSIGHTS.accent}
+                tintSoft={STORY_INSIGHTS.accentSoft}
+              />
+              <MetricTile
+                icon="chevron-up-outline"
+                label="Yukarı kaydır"
+                value={formatInsightCount(selected.linkSwipeUpCount)}
+                tint={STORY_INSIGHTS.reply}
+                tintSoft={STORY_INSIGHTS.replySoft}
+              />
+            </View>
+            {linkRows.length > 0 ? <BehaviorGrid rows={linkRows} /> : null}
+          </>
+        ) : null}
       </View>
     );
   };
@@ -486,6 +527,10 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   shortcutRow: {
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  linkSummaryRow: {
     flexDirection: 'row',
     gap: spacing.sm,
   },

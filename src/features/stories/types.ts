@@ -1,6 +1,10 @@
 import type { StoryStickerCategoryId } from '@/features/stories/constants';
 import type { StoryFraming } from '@/features/stories/utils/storyFraming';
-import type { StoryLocationManifest, StoryMusicManifest } from '@/features/stories/utils/storyManifest';
+import type {
+  StoryLinkManifest,
+  StoryLocationManifest,
+  StoryMusicManifest,
+} from '@/features/stories/utils/storyManifest';
 
 export type StoryNavigation =
   | 'auto_forward'
@@ -37,8 +41,17 @@ export type StoryItem = {
   framing: StoryFraming | null;
   music: StoryMusicManifest | null;
   location: StoryLocationManifest | null;
+  links: StoryLinkManifest[];
   createdAt: string;
   hasReacted: boolean;
+};
+
+export type StoryLinkAction = 'tap' | 'swipe_up';
+
+export type StoryLinkStat = {
+  linkId: string;
+  tapCount: number;
+  swipeUpCount: number;
 };
 
 export type StoryBundle = {
@@ -65,6 +78,9 @@ export type StoryItemInsight = {
   swipeBackCount: number;
   autoForwardCount: number;
   exitedEarlyCount: number;
+  linkTapCount: number;
+  linkSwipeUpCount: number;
+  linkStats: StoryLinkStat[];
 };
 
 export type StoryInsights = {

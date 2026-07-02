@@ -1,6 +1,13 @@
 import type { MusicSelection } from '@/features/music/types';
 import type { StoryFraming } from '@/features/stories/utils/storyFraming';
 import { parseStoryFraming } from '@/features/stories/utils/storyFraming';
+import {
+  parseStoryLinks,
+  serializeStoryLinks,
+  type StoryLinkManifest,
+} from '@/features/stories/utils/storyLinks';
+
+export type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 
 export type StoryLocationManifest = {
   label: string;
@@ -21,12 +28,14 @@ export type StoryManifest = {
   framing: StoryFraming | null;
   music: StoryMusicManifest | null;
   location: StoryLocationManifest | null;
+  links: StoryLinkManifest[];
 };
 
 export const EMPTY_STORY_MANIFEST: StoryManifest = {
   framing: null,
   music: null,
   location: null,
+  links: [],
 };
 
 export function musicSelectionToManifest(music: MusicSelection | null): StoryMusicManifest | null {
@@ -84,7 +93,9 @@ export function parseStoryManifest(raw: unknown): StoryManifest {
     }
   }
 
-  return { framing, music, location };
+  const links = parseStoryLinks(obj.links);
+
+  return { framing, music, location, links };
 }
 
 export function serializeStoryManifest(manifest: StoryManifest): Record<string, unknown> {
@@ -92,5 +103,6 @@ export function serializeStoryManifest(manifest: StoryManifest): Record<string, 
   if (manifest.framing) out.framing = manifest.framing;
   if (manifest.music) out.music = manifest.music;
   if (manifest.location) out.location = manifest.location;
+  if (manifest.links.length > 0) out.links = serializeStoryLinks(manifest.links);
   return out;
 }

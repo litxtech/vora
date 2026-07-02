@@ -89,6 +89,7 @@ export async function fetchStoryBundleFallback(
       framing: manifest.framing,
       music: manifest.music,
       location: manifest.location,
+      links: manifest.links,
       createdAt: row.created_at,
       hasReacted: reactedIds.has(row.id),
     };
