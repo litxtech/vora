@@ -61,6 +61,7 @@ import { navigateToPublicProfile } from '@/features/profile/services/profileNavi
 import { Text } from '@/components/ui/Text';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
 import { prefetchStoryBundleMedia } from '@/features/stories/services/prefetchStoryMedia';
+import { ensureReelFeedAudioMode } from '@/features/music/services/audioPreview';
 import { spacing } from '@/constants/theme';
 import { openUrl } from '@/lib/linking/openUrl';
 import { useAuth } from '@/providers/AuthProvider';
@@ -212,6 +213,10 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       cancelled = true;
     };
   }, [activeUserId, loadBundle, ringUserIds, setCurrentUserIndex]);
+
+  useEffect(() => {
+    void ensureReelFeedAudioMode();
+  }, []);
 
   useEffect(() => {
     if (!items.length) return;

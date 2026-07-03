@@ -1,11 +1,18 @@
 import { Image } from 'expo-image';
 import { kickstartMuxSync } from '@/services/video/muxPoll';
+import { prefetchReelMusic } from '@/features/music/services/reelMusicSync';
 import { parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
+import { mapStoryMusicPlayback } from '@/features/stories/services/mapStoryMusic';
 import { isStoryImageItem, resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
 
-/** Hikâye slaytı medyasını önceden ısıtır (kapak + Mux sync). */
+/** Hikâye slaytı medyasını önceden ısıtır (kapak + Mux sync + müzik). */
 export function prefetchStoryItemMedia(item: StoryItem): void {
+  const musicConfig = mapStoryMusicPlayback(item.music);
+  if (musicConfig?.audioUrl) {
+    prefetchReelMusic(musicConfig);
+  }
+
   const thumb = resolveStoryThumbUrl(item.thumbUrl, item.mediaUrl);
   if (thumb) {
     void Image.prefetch(thumb);

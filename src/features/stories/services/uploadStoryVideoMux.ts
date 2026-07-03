@@ -13,6 +13,7 @@ import { toUserFacingError } from '@/lib/errors';
 export type StoryVideoUploadProgress = {
   stage: 'preparing' | 'compressing' | 'uploading' | 'thumbnail';
   message: string;
+  progress?: number;
 };
 
 export type StoryVideoReservation = MuxVideoReservation & {
@@ -76,7 +77,7 @@ export async function uploadReservedStoryVideo(
     const preparedUri = await prepareLocalVideoUri(reservation.localUri);
     const fileSize = getLocalFileSize(preparedUri);
     const skipCompression =
-      reservation.skipCompression || shouldSkipVideoCompression(fileSize, 'post');
+      reservation.skipCompression || shouldSkipVideoCompression(fileSize, 'story');
 
     await uploadVideoFileToMux(
       reservation,
@@ -88,9 +89,10 @@ export async function uploadReservedStoryVideo(
             state.stage === 'compressing'
               ? VIDEO_PROGRESS.compressing
               : VIDEO_PROGRESS.uploading,
+          progress: state.progress,
         });
       },
-      { profile: 'post', skipCompression },
+      { profile: 'story', skipCompression },
     );
 
     return { error: null };

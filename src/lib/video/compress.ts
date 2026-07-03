@@ -1,7 +1,7 @@
 import { Video, cancelCompression, getVideoMetaData } from 'react-native-compressor';
 import { throwIfAborted } from '@/services/video/uploadCancelled';
 
-export type VideoCompressionProfile = 'fast' | 'quality' | 'messaging' | 'post';
+export type VideoCompressionProfile = 'fast' | 'quality' | 'messaging' | 'post' | 'story';
 
 export type VideoCompressionOptions = {
   profile?: VideoCompressionProfile;
@@ -29,6 +29,15 @@ const PROFILES: Record<
   fast: {
     maxSize: 720,
     minimumFileSizeForCompress: 32 * 1024 * 1024,
+  },
+  /**
+   * Hikâye: kısa klip, düşük bant genişliğinde hızlı yükleme.
+   * 720p + ~1.1 Mbps; 4 MB üzeri dosyalarda sıkıştırılır.
+   */
+  story: {
+    maxSize: 720,
+    minimumFileSizeForCompress: 4 * 1024 * 1024,
+    bitrate: 1_100_000,
   },
   /** Sohbet: kısa videolarda sıkıştırma atlanır */
   messaging: {

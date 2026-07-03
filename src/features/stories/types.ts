@@ -42,6 +42,8 @@ export type StoryItem = {
   music: StoryMusicManifest | null;
   location: StoryLocationManifest | null;
   links: StoryLinkManifest[];
+  /** Video orijinal ses seviyesi — müzik yokken kullanılır (0 = sessiz). */
+  originalAudioVolume: number;
   createdAt: string;
   hasReacted: boolean;
 };

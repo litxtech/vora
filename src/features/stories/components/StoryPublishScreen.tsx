@@ -8,7 +8,7 @@ import {
   type View as RNView,
 } from 'react-native';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
@@ -38,13 +38,12 @@ import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFrame
 import { STORY_MAX_VIDEO_SEC, type StoryStickerCategoryId } from '@/features/stories/constants';
 import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/stories/services/routeStoryVideo';
-import { publishStory } from '@/features/stories/services/publishStory';
+import { useStoryUploadStore } from '@/features/stories/store/storyUploadStore';
+import { documentDirectory } from 'expo-file-system/legacy';
+import { getLocalFileSize, normalizeLocalFileUri } from '@/lib/files/readLocalFile';
 import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
-import type { UploadStoryMediaProgress } from '@/features/stories/services/uploadStoryMedia';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
-import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
-import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import {
   DEFAULT_STORY_FRAMING,
   probeImageSize,
@@ -78,7 +77,10 @@ export function StoryPublishScreen({
   const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const regionId = useFeedStore((s) => s.regionId);
-  const setRings = useStoryRingStore((s) => s.setRings);
+  const startStoryPublish = useStoryUploadStore((s) => s.startPublish);
+  const storyUploadBusy = useStoryUploadStore(
+    (s) => s.status === 'uploading' || (s.status === 'success' && s.videoUploadActive),
+  );
   const captureRef = useRef<RNView>(null);
 
   const musicSelection = useMusicSelectionStore((s) => s.selection);
@@ -200,6 +202,17 @@ export function StoryPublishScreen({
 
   useEffect(() => {
     if (mediaType !== 'video') return;
+
+    const normalized = normalizeLocalFileUri(mediaUri);
+    const alreadyStable =
+      Boolean(documentDirectory) &&
+      normalized.includes(documentDirectory!) &&
+      getLocalFileSize(normalized) > 0;
+
+    if (alreadyStable) {
+      setPublishUri(normalized);
+      return;
+    }
 
     let cancelled = false;
     setStabilizing(true);
@@ -374,9 +387,13 @@ export function StoryPublishScreen({
   const handlePublish = useCallback(async () => {
     if (!user?.id || publishing || !mediaSize) return;
     if (mediaType === 'video' && stabilizing) return;
+    if (storyUploadBusy) {
+      Alert.alert('Yükleniyor', 'Önceki hikâye yüklemesi bitene kadar bekleyin.');
+      return;
+    }
 
     setPublishing(true);
-    setUploadMessage(mediaType === 'video' ? 'Video yükleniyor…' : 'Görsel hazırlanıyor…');
+    setUploadMessage(mediaType === 'image' ? 'Görsel hazırlanıyor…' : null);
 
     let uploadUri = publishUri;
     let uploadFraming: StoryFraming | null = null;
@@ -401,38 +418,36 @@ export function StoryPublishScreen({
       };
     }
 
-    const result = await publishStory({
-      authorId: user.id,
-      localUri: uploadUri,
-      mediaType,
-      durationSec: normalizedDurationSec,
-      regionId: regionId ?? null,
-      stickerCategory,
-      framing: uploadFraming,
-      music: musicSelection,
-      location: selectedLocation,
-      links,
-      trimmedInStudio,
-      onUploadProgress: (progress: UploadStoryMediaProgress) => {
-        setUploadMessage(progress.message);
+    startStoryPublish(
+      {
+        authorId: user.id,
+        localUri: uploadUri,
+        mediaType,
+        durationSec: normalizedDurationSec,
+        regionId: regionId ?? null,
+        stickerCategory,
+        framing: uploadFraming,
+        music: musicSelection,
+        location: selectedLocation,
+        links,
+        trimmedInStudio,
+        videoOriginalAudioVolume:
+          mediaType === 'video'
+            ? musicSelection
+              ? musicSelection.originalAudioVolume
+              : videoMuted
+                ? 0
+                : 1
+            : undefined,
       },
-    });
-
-    setPublishing(false);
-    setUploadMessage(null);
-
-    if (result.error) {
-      Alert.alert('Hikaye paylaşılamadı', result.error);
-      return;
-    }
+      uploadUri,
+    );
 
     useStoryPublishStore.getState().clearDraft();
     useMusicSelectionStore.getState().clearSelection();
-
-    const refreshed = await fetchStoryRings({ viewerId: user.id });
-    setRings(refreshed.rings);
-
-    router.replace('/(tabs)');
+    setPublishing(false);
+    setUploadMessage(null);
+    router.dismissTo('/(tabs)' as Href);
   }, [
     normalizedDurationSec,
     framing,
@@ -444,11 +459,13 @@ export function StoryPublishScreen({
     regionId,
     selectedLocation,
     links,
-    setRings,
     stabilizing,
     stickerCategory,
+    startStoryPublish,
+    storyUploadBusy,
     trimmedInStudio,
     user,
+    videoMuted,
   ]);
 
   const canEditFraming = mediaSize != null;

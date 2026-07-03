@@ -9,17 +9,12 @@ import {
 } from '@/features/stories/utils/storyManifest';
 import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import {
-  finishStoryVideoUpload,
   prepareStoryVideoUpload,
+  runDeferredStoryVideoUpload,
   uploadStoryMedia,
   type UploadStoryMediaProgress,
 } from '@/features/stories/services/uploadStoryMedia';
 import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
-import {
-  setCachedMuxPlaybackUrl,
-} from '@/features/stories/services/storyMuxPlaybackCache';
-import { parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
-import { kickstartMuxSync, pollMuxUntilReady } from '@/services/video/muxPoll';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 import type { MusicSelection } from '@/features/music/types';
@@ -40,7 +35,18 @@ export type PublishStoryInput = {
   links?: StoryLinkManifest[];
   /** Studio'da kırpıldıysa dosya süresi yerine bu değer kullanılır. */
   trimmedInStudio?: boolean;
+  /** Müzik yokken video orijinal ses seviyesi (0 = sessiz). */
+  videoOriginalAudioVolume?: number;
   onUploadProgress?: (progress: UploadStoryMediaProgress) => void;
+};
+
+export type PublishStoryOptions = {
+  /**
+   * Video hikâyelerde DB kaydı tamamlanınca çağrılır — dosya yüklemesi arka planda sürer.
+   * UI anında başarı gösterebilir.
+   */
+  onPublished?: (result: { storyId: string; itemId: string; videoProcessing: boolean }) => void;
+  onBackgroundComplete?: (result: { error: string | null }) => void;
 };
 
 export type PublishStoryResult = {
@@ -48,6 +54,8 @@ export type PublishStoryResult = {
   itemId: string | null;
   mediaUrl: string | null;
   error: string | null;
+  /** Video arka planda yükleniyorsa true */
+  videoProcessing?: boolean;
 };
 
 async function getOrCreateActiveStory(
@@ -86,110 +94,31 @@ async function getOrCreateActiveStory(
   return { storyId: data.id as string, error: null };
 }
 
-export async function publishStory(input: PublishStoryInput): Promise<PublishStoryResult> {
-  const isVideo = input.mediaType === 'video';
+type InsertStoryItemInput = {
+  storyId: string;
+  authorId: string;
+  mediaType: 'image' | 'video';
+  mediaUrl: string;
+  thumbUrl: string | null;
+  durationSec: number | null;
+  stickerCategory?: StoryStickerCategoryId | null;
+  framing?: StoryFraming | null;
+  music?: MusicSelection | null;
+  location?: SelectedLocation | null;
+  links?: StoryLinkManifest[];
+  regionId?: string | null;
+  videoOriginalAudioVolume?: number;
+};
 
-  if (!input.localUri?.trim()) {
-    return { storyId: null, itemId: null, mediaUrl: null, error: 'Medya dosyası bulunamadı.' };
-  }
-
-  if (isVideo && (input.durationSec ?? 0) > STORY_MAX_VIDEO_SEC) {
-    return {
-      storyId: null,
-      itemId: null,
-      mediaUrl: null,
-      error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir. Uzun videolarda paylaşmadan önce 30 saniyelik bölüm seçin.`,
-    };
-  }
-
-  if (
-    isVideo &&
-    !input.trimmedInStudio &&
-    (input.durationSec == null || input.durationSec <= 0)
-  ) {
-    const probed = await probeVideoDuration(input.localUri);
-    if (probed > STORY_MAX_VIDEO_SEC) {
-      return {
-        storyId: null,
-        itemId: null,
-        mediaUrl: null,
-        error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir. Uzun videolarda paylaşmadan önce 30 saniyelik bölüm seçin.`,
-      };
-    }
-  }
-
-  const { storyId, error: storyError } = await getOrCreateActiveStory(
-    input.authorId,
-    input.regionId ?? null,
-  );
-  if (storyError || !storyId) {
-    return { storyId: null, itemId: null, mediaUrl: null, error: storyError ?? 'Hikaye oluşturulamadı' };
-  }
-
-  let mediaUrl: string | null = null;
-  let thumbUrl: string | null = null;
-  let videoReservation: Awaited<ReturnType<typeof prepareStoryVideoUpload>>['reservation'];
-
-  if (isVideo) {
-    input.onUploadProgress?.({ stage: 'preparing', message: 'Video hazırlanıyor…' });
-    const prepared = await prepareStoryVideoUpload(
-      input.authorId,
-      input.localUri,
-      input.regionId,
-      input.onUploadProgress,
-    );
-    if (prepared.error || !prepared.mediaUrl) {
-      return { storyId, itemId: null, mediaUrl: null, error: prepared.error ?? 'Video hazırlanamadı' };
-    }
-    mediaUrl = prepared.mediaUrl;
-    thumbUrl = prepared.thumbUrl;
-    videoReservation = prepared.reservation;
-
-    if (videoReservation) {
-      input.onUploadProgress?.({ stage: 'uploading', message: 'Video yükleniyor…' });
-      const uploaded = await finishStoryVideoUpload(videoReservation, input.onUploadProgress);
-      if (uploaded.error) {
-        return { storyId, itemId: null, mediaUrl: null, error: uploaded.error };
-      }
-
-      const videoId = parseProcessingVideoId(mediaUrl);
-      if (videoId) {
-        kickstartMuxSync(videoId);
-        input.onUploadProgress?.({ stage: 'saving', message: 'Video işleniyor…' });
-        const muxReady = await pollMuxUntilReady(videoId, { maxWaitMs: 25_000 });
-        if (muxReady.status === 'ready' && muxReady.playbackId) {
-          mediaUrl = setCachedMuxPlaybackUrl(videoId, muxReady.playbackId);
-        }
-      }
-    }
-  } else {
-    const upload = await uploadStoryMedia(input.authorId, input.localUri, 'image', {
-      regionId: input.regionId,
-      onProgress: input.onUploadProgress,
-    });
-    if (upload.error || !upload.mediaUrl) {
-      return { storyId, itemId: null, mediaUrl: null, error: upload.error ?? 'Medya yüklenemedi' };
-    }
-    mediaUrl = resolveStoryMediaUrl(upload.mediaUrl) ?? upload.mediaUrl;
-    thumbUrl = resolveStoryThumbUrl(upload.thumbUrl, upload.mediaUrl);
-  }
-
-  const resolvedMediaUrl = resolveStoryMediaUrl(mediaUrl) ?? mediaUrl;
-  const resolvedThumbUrl = resolveStoryThumbUrl(thumbUrl, mediaUrl);
-  const mediaType: 'image' | 'video' = isVideo ? 'video' : 'image';
-
-  let durationSec = input.durationSec ?? null;
-  if (mediaType === 'video' && (durationSec == null || durationSec <= 0) && !input.trimmedInStudio) {
-    const probed = await probeVideoDuration(input.localUri);
-    if (probed > 0) durationSec = probed;
-  }
-
+async function insertStoryItemRecord(
+  input: InsertStoryItemInput,
+): Promise<{ itemId: string | null; error: string | null }> {
   const expiresAt = new Date(Date.now() + STORY_TTL_HOURS * 60 * 60 * 1000).toISOString();
 
   const { data: orderRow } = await supabase
     .from('story_items')
     .select('sort_order')
-    .eq('story_id', storyId)
+    .eq('story_id', input.storyId)
     .order('sort_order', { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -206,18 +135,25 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     music: musicManifest,
     location: locationManifest,
     links: input.links ?? [],
+    originalAudioVolume:
+      input.mediaType === 'video' && !musicManifest
+        ? (input.videoOriginalAudioVolume ?? 1)
+        : undefined,
   });
+
+  const resolvedMediaUrl = resolveStoryMediaUrl(input.mediaUrl) ?? input.mediaUrl;
+  const resolvedThumbUrl = resolveStoryThumbUrl(input.thumbUrl, input.mediaUrl);
 
   const { data: item, error: itemError } = await supabase
     .from('story_items')
     .insert({
-      story_id: storyId,
+      story_id: input.storyId,
       author_id: input.authorId,
       sort_order: nextOrder,
-      media_type: mediaType,
+      media_type: input.mediaType,
       media_url: resolvedMediaUrl,
       thumb_url: resolvedThumbUrl,
-      duration_sec: mediaType === 'video' ? durationSec : null,
+      duration_sec: input.mediaType === 'video' ? input.durationSec : null,
       sticker_category: input.stickerCategory ?? null,
       stickers_json: stickersJson,
       status: 'published',
@@ -227,12 +163,7 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
     .single();
 
   if (itemError) {
-    return {
-      storyId,
-      itemId: null,
-      mediaUrl,
-      error: supabaseErrorMessage(itemError)!,
-    };
+    return { itemId: null, error: supabaseErrorMessage(itemError)! };
   }
 
   await supabase
@@ -245,16 +176,150 @@ export async function publishStory(input: PublishStoryInput): Promise<PublishSto
       latest_item_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
-    .eq('id', storyId);
+    .eq('id', input.storyId);
 
   if (input.music) {
-    await recordAudioUsage(input.music, { storyItemId: item.id as string });
+    void recordAudioUsage(input.music, { storyItemId: item.id as string });
   }
+
+  return { itemId: item.id as string, error: null };
+}
+
+export async function publishStory(
+  input: PublishStoryInput,
+  options: PublishStoryOptions = {},
+): Promise<PublishStoryResult> {
+  const isVideo = input.mediaType === 'video';
+
+  if (!input.localUri?.trim()) {
+    return { storyId: null, itemId: null, mediaUrl: null, error: 'Medya dosyası bulunamadı.' };
+  }
+
+  let durationSec = input.durationSec ?? null;
+
+  if (isVideo && (durationSec ?? 0) > STORY_MAX_VIDEO_SEC) {
+    return {
+      storyId: null,
+      itemId: null,
+      mediaUrl: null,
+      error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir. Uzun videolarda paylaşmadan önce 30 saniyelik bölüm seçin.`,
+    };
+  }
+
+  if (isVideo && !input.trimmedInStudio && (durationSec == null || durationSec <= 0)) {
+    const probed = await probeVideoDuration(input.localUri);
+    if (probed > STORY_MAX_VIDEO_SEC) {
+      return {
+        storyId: null,
+        itemId: null,
+        mediaUrl: null,
+        error: `Hikaye videosu en fazla ${STORY_MAX_VIDEO_SEC} saniye olabilir. Uzun videolarda paylaşmadan önce 30 saniyelik bölüm seçin.`,
+      };
+    }
+    if (probed > 0) durationSec = probed;
+  }
+
+  const { storyId, error: storyError } = await getOrCreateActiveStory(
+    input.authorId,
+    input.regionId ?? null,
+  );
+  if (storyError || !storyId) {
+    return { storyId: null, itemId: null, mediaUrl: null, error: storyError ?? 'Hikaye oluşturulamadı' };
+  }
+
+  if (isVideo) {
+    input.onUploadProgress?.({ stage: 'preparing', message: 'Hikaye paylaşılıyor…' });
+
+    const prepared = await prepareStoryVideoUpload(
+      input.authorId,
+      input.localUri,
+      input.regionId,
+      input.onUploadProgress,
+    );
+    if (prepared.error || !prepared.mediaUrl || !prepared.reservation) {
+      return { storyId, itemId: null, mediaUrl: null, error: prepared.error ?? 'Video hazırlanamadı' };
+    }
+
+    const mediaUrl = resolveStoryMediaUrl(prepared.mediaUrl) ?? prepared.mediaUrl;
+
+    const { itemId, error: insertError } = await insertStoryItemRecord({
+      storyId,
+      authorId: input.authorId,
+      mediaType: 'video',
+      mediaUrl,
+      thumbUrl: prepared.thumbUrl,
+      durationSec,
+      stickerCategory: input.stickerCategory,
+      framing: input.framing,
+      music: input.music,
+      location: input.location,
+      links: input.links,
+      regionId: input.regionId,
+      videoOriginalAudioVolume: input.videoOriginalAudioVolume,
+    });
+
+    if (insertError || !itemId) {
+      return { storyId, itemId: null, mediaUrl, error: insertError ?? 'Hikaye kaydedilemedi' };
+    }
+
+    options.onPublished?.({ storyId, itemId, videoProcessing: true });
+
+    void runDeferredStoryVideoUpload({
+      reservation: prepared.reservation,
+      authorId: input.authorId,
+      storyId,
+      itemId,
+      localUri: input.localUri,
+      onProgress: input.onUploadProgress,
+      onComplete: options.onBackgroundComplete,
+    });
+
+    return {
+      storyId,
+      itemId,
+      mediaUrl,
+      error: null,
+      videoProcessing: true,
+    };
+  }
+
+  const upload = await uploadStoryMedia(input.authorId, input.localUri, 'image', {
+    regionId: input.regionId,
+    onProgress: input.onUploadProgress,
+  });
+  if (upload.error || !upload.mediaUrl) {
+    return { storyId, itemId: null, mediaUrl: null, error: upload.error ?? 'Medya yüklenemedi' };
+  }
+
+  const mediaUrl = resolveStoryMediaUrl(upload.mediaUrl) ?? upload.mediaUrl;
+  const thumbUrl = resolveStoryThumbUrl(upload.thumbUrl, upload.mediaUrl);
+
+  const { itemId, error: insertError } = await insertStoryItemRecord({
+    storyId,
+    authorId: input.authorId,
+    mediaType: 'image',
+    mediaUrl,
+    thumbUrl,
+    durationSec: null,
+    stickerCategory: input.stickerCategory,
+    framing: input.framing,
+    music: input.music,
+    location: input.location,
+    links: input.links,
+    regionId: input.regionId,
+  });
+
+  if (insertError || !itemId) {
+    return { storyId, itemId: null, mediaUrl, error: insertError ?? 'Hikaye kaydedilemedi' };
+  }
+
+  options.onPublished?.({ storyId, itemId, videoProcessing: false });
 
   return {
     storyId,
-    itemId: item.id as string,
-    mediaUrl: resolvedMediaUrl,
+    itemId,
+    mediaUrl,
     error: null,
+    videoProcessing: false,
   };
 }

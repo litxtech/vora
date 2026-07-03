@@ -297,6 +297,14 @@ export function prepareReelMusicInPool(config: MusicPlaybackConfig): void {
   prefetchReelMusic(config);
 }
 
+/** Havuzdan müzik oynatıcısı alır (hikâye fotoğraf slaytları vb.). */
+export async function acquireReelMusicPlayer(
+  audioUrl: string,
+  volume: number,
+): Promise<AudioPlayer> {
+  return getPooledPlayer(audioUrl, volume);
+}
+
 export function clearReelMusicPool(): void {
   for (const player of pooledPlayers.values()) {
     releaseAudioPlayer(player);

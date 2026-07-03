@@ -9,13 +9,17 @@ import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
 import { useStoryMuxPlaybackUrl } from '@/features/stories/hooks/useStoryMuxPlaybackUrl';
 import { mapStoryMusicPlayback } from '@/features/stories/services/mapStoryMusic';
 import {
+  isStoryVideoOriginalMuted,
+  resolveStoryVideoOriginalVolume,
+} from '@/features/stories/services/resolveStoryVideoVolume';
+import {
   isStoryImageItem,
   resolveStoryMediaUrl,
   resolveStoryThumbUrl,
 } from '@/features/stories/services/storyMediaUrl';
 import type { StoryItem } from '@/features/stories/types';
-import { usePublishedMusicPlayer } from '@/features/music/hooks/usePublishedMusicPlayer';
-import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
+import { useStoryImageMusicPlayer } from '@/features/stories/hooks/useStoryImageMusicPlayer';
+import { useStoryVideoMusicPlayer } from '@/features/stories/hooks/useStoryVideoMusicPlayer';
 import { Text } from '@/components/ui/Text';
 import { isPlayableVideoUrl, toVideoSource } from '@/lib/media/videoSource';
 import { spacing } from '@/constants/theme';
@@ -60,10 +64,10 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
   const uri = resolveStoryMediaUrl(item.mediaUrl);
   const musicConfig = useMemo(() => mapStoryMusicPlayback(item.music), [item.music]);
 
-  useStandaloneMusicPlayer({
+  useStoryImageMusicPlayer({
+    itemId: item.id,
     config: musicConfig,
-    scopeActive: isActive && !isPaused,
-    playing: isActive && !isPaused,
+    active: isActive && !isPaused,
   });
 
   const imageFit = item.framing ? 'cover' : 'contain';
@@ -107,7 +111,8 @@ function StoryVideoSlide({
   const resolvedUrl = resolveStoryMediaUrl(item.mediaUrl);
   const posterUri = resolveStoryThumbUrl(item.thumbUrl, item.mediaUrl);
   const musicConfig = useMemo(() => mapStoryMusicPlayback(item.music), [item.music]);
-  const muteOriginal = Boolean(musicConfig && musicConfig.originalAudioVolume <= 0.001);
+  const originalVolume = useMemo(() => resolveStoryVideoOriginalVolume(item), [item]);
+  const muteOriginal = isStoryVideoOriginalMuted(item);
   const { playbackUrl } = useStoryMuxPlaybackUrl(resolvedUrl);
 
   const source = useMemo(() => {
@@ -118,11 +123,12 @@ function StoryVideoSlide({
   const player = useVideoPlayer(source, (p) => {
     p.loop = false;
     p.muted = muteOriginal;
-    p.volume = muteOriginal ? 0 : musicConfig?.originalAudioVolume ?? 1;
+    p.volume = muteOriginal ? 0 : originalVolume;
     p.timeUpdateEventInterval = 0.1;
   });
 
-  usePublishedMusicPlayer({
+  useStoryVideoMusicPlayer({
+    itemId: item.id,
     videoPlayer: player,
     config: musicConfig,
     active: isActive && !isPaused && Boolean(source),
@@ -143,9 +149,10 @@ function StoryVideoSlide({
   }, [item.id, source]);
 
   useEffect(() => {
+    if (musicConfig?.audioUrl) return;
     player.muted = muteOriginal;
-    player.volume = muteOriginal ? 0 : musicConfig?.originalAudioVolume ?? 1;
-  }, [muteOriginal, musicConfig, player]);
+    player.volume = muteOriginal ? 0 : originalVolume;
+  }, [musicConfig?.audioUrl, muteOriginal, originalVolume, player]);
 
   useEffect(() => {
     if (!source) return;

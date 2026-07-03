@@ -29,6 +29,8 @@ export type StoryManifest = {
   music: StoryMusicManifest | null;
   location: StoryLocationManifest | null;
   links: StoryLinkManifest[];
+  /** Video orijinal sesi — müzik yokken geçerli (0 = sessiz, yoksa 1). */
+  originalAudioVolume?: number;
 };
 
 export const EMPTY_STORY_MANIFEST: StoryManifest = {
@@ -95,7 +97,10 @@ export function parseStoryManifest(raw: unknown): StoryManifest {
 
   const links = parseStoryLinks(obj.links);
 
-  return { framing, music, location, links };
+  const originalAudioVolume =
+    typeof obj.originalAudioVolume === 'number' ? obj.originalAudioVolume : 1;
+
+  return { framing, music, location, links, originalAudioVolume };
 }
 
 export function serializeStoryManifest(manifest: StoryManifest): Record<string, unknown> {
@@ -104,5 +109,12 @@ export function serializeStoryManifest(manifest: StoryManifest): Record<string, 
   if (manifest.music) out.music = manifest.music;
   if (manifest.location) out.location = manifest.location;
   if (manifest.links.length > 0) out.links = serializeStoryLinks(manifest.links);
+  if (
+    manifest.originalAudioVolume != null &&
+    manifest.originalAudioVolume <= 0.001 &&
+    !manifest.music
+  ) {
+    out.originalAudioVolume = 0;
+  }
   return out;
 }

@@ -60,6 +60,7 @@ export async function fetchStoryBundle(
       music: manifest.music,
       location: manifest.location,
       links: manifest.links,
+      originalAudioVolume: manifest.originalAudioVolume,
       createdAt: row.created_at,
       hasReacted: row.has_reacted ?? false,
     };
