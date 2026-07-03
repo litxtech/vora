@@ -21,6 +21,7 @@ import type { MusicSelection } from '@/features/music/types';
 import { recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
+import { isUploadCancelledError, throwIfAborted } from '@/services/video/uploadCancelled';
 
 export type PublishStoryInput = {
   authorId: string;
@@ -41,12 +42,13 @@ export type PublishStoryInput = {
 };
 
 export type PublishStoryOptions = {
+  signal?: AbortSignal;
   /**
    * Video hikâyelerde DB kaydı tamamlanınca çağrılır — dosya yüklemesi arka planda sürer.
    * UI anında başarı gösterebilir.
    */
   onPublished?: (result: { storyId: string; itemId: string; videoProcessing: boolean }) => void;
-  onBackgroundComplete?: (result: { error: string | null }) => void;
+  onBackgroundComplete?: (result: { error: string | null; cancelled?: boolean }) => void;
 };
 
 export type PublishStoryResult = {
@@ -54,6 +56,7 @@ export type PublishStoryResult = {
   itemId: string | null;
   mediaUrl: string | null;
   error: string | null;
+  cancelled?: boolean;
   /** Video arka planda yükleniyorsa true */
   videoProcessing?: boolean;
 };
@@ -189,7 +192,26 @@ export async function publishStory(
   input: PublishStoryInput,
   options: PublishStoryOptions = {},
 ): Promise<PublishStoryResult> {
+  const { signal } = options;
+
+  try {
+    return await publishStoryInner(input, options);
+  } catch (err) {
+    if (isUploadCancelledError(err)) {
+      return { storyId: null, itemId: null, mediaUrl: null, error: null, cancelled: true };
+    }
+    throw err;
+  }
+}
+
+async function publishStoryInner(
+  input: PublishStoryInput,
+  options: PublishStoryOptions = {},
+): Promise<PublishStoryResult> {
+  const { signal } = options;
   const isVideo = input.mediaType === 'video';
+
+  throwIfAborted(signal);
 
   if (!input.localUri?.trim()) {
     return { storyId: null, itemId: null, mediaUrl: null, error: 'Medya dosyası bulunamadı.' };
@@ -207,6 +229,7 @@ export async function publishStory(
   }
 
   if (isVideo && !input.trimmedInStudio && (durationSec == null || durationSec <= 0)) {
+    throwIfAborted(signal);
     const probed = await probeVideoDuration(input.localUri);
     if (probed > STORY_MAX_VIDEO_SEC) {
       return {
@@ -218,6 +241,8 @@ export async function publishStory(
     }
     if (probed > 0) durationSec = probed;
   }
+
+  throwIfAborted(signal);
 
   const { storyId, error: storyError } = await getOrCreateActiveStory(
     input.authorId,
@@ -235,6 +260,7 @@ export async function publishStory(
       input.localUri,
       input.regionId,
       input.onUploadProgress,
+      signal,
     );
     if (prepared.error || !prepared.mediaUrl || !prepared.reservation) {
       return { storyId, itemId: null, mediaUrl: null, error: prepared.error ?? 'Video hazırlanamadı' };
@@ -270,6 +296,7 @@ export async function publishStory(
       storyId,
       itemId,
       localUri: input.localUri,
+      signal,
       onProgress: input.onUploadProgress,
       onComplete: options.onBackgroundComplete,
     });
@@ -283,9 +310,12 @@ export async function publishStory(
     };
   }
 
+  throwIfAborted(signal);
+
   const upload = await uploadStoryMedia(input.authorId, input.localUri, 'image', {
     regionId: input.regionId,
     onProgress: input.onUploadProgress,
+    signal,
   });
   if (upload.error || !upload.mediaUrl) {
     return { storyId, itemId: null, mediaUrl: null, error: upload.error ?? 'Medya yüklenemedi' };

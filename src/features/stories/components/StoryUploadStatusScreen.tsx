@@ -1,6 +1,5 @@
 import { useCallback, useEffect } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, StyleSheet, View } from 'react-native';
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientBackground } from '@/components/ui/GradientBackground';
@@ -8,6 +7,7 @@ import { Text } from '@/components/ui/Text';
 import { STORY_RING_ACTIVE_GRADIENT } from '@/features/stories/constants';
 import { StoryUploadProgressRing } from '@/features/stories/components/StoryUploadProgressRing';
 import { useStoryUploadStore } from '@/features/stories/store/storyUploadStore';
+import { safeRouterBack } from '@/lib/navigation/safeRouterBack';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -34,13 +34,13 @@ export function StoryUploadStatusScreen() {
 
   useEffect(() => {
     if (status === 'idle') {
-      router.back();
+      safeRouterBack();
     }
   }, [status]);
 
   const handleBack = useCallback(() => {
     showBanner();
-    router.back();
+    safeRouterBack();
   }, [showBanner]);
 
   const handleCancel = useCallback(() => {
@@ -52,7 +52,7 @@ export function StoryUploadStatusScreen() {
 
   const handleDismiss = useCallback(() => {
     dismiss();
-    router.back();
+    safeRouterBack();
   }, [dismiss]);
 
   const pct = Math.round(Math.min(Math.max(progress, 0), 1) * 100);

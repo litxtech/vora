@@ -62,7 +62,7 @@ const config: ExpoConfig = {
   name: APP_NAME,
   slug: APP_SLUG,
   owner: 'voralive',
-  version: '2.4.0',
+  version: '2.4.2',
   orientation: 'default',
   icon: './assets/icon-ios.png',
   scheme: APP_SCHEME,
@@ -73,7 +73,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     bundleIdentifier: APP_BUNDLE_ID,
     appleTeamId: APPLE_TEAM_ID,
-    buildNumber: '16',
+    buildNumber: '17',
     associatedDomains: [`applinks:${APP_DOMAIN}`],
     entitlements: {
       'aps-environment': apnsEnvironment,
@@ -99,10 +99,12 @@ const config: ExpoConfig = {
     ...(fs.existsSync(googleServicesFile) ? { googleServicesFile: './google-services.json' } : {}),
     icon: './assets/icon-android.png',
     package: APP_BUNDLE_ID,
-    versionCode: 13,
+    versionCode: 15,
     backgroundColor: '#F1F5F9',
     softwareKeyboardLayoutMode: 'resize',
     blockedPermissions: [
+      // expo-sensors manifest'e ekler; Pedometer kullanmıyoruz — Play Sağlık politikası tetiklenmesin.
+      'android.permission.ACTIVITY_RECOGNITION',
       // full-screen-sharing-special kaldırıldı; yedek olarak manifest'ten de silinir.
       'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
       'android.permission.CAPTURE_VIDEO_OUTPUT',

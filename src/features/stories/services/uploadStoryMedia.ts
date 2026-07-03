@@ -12,6 +12,7 @@ import { kickstartMuxSync, pollMuxUntilReady } from '@/services/video/muxPoll';
 import { setCachedMuxPlaybackUrl } from '@/features/stories/services/storyMuxPlaybackCache';
 import { resolveStoryThumbUrl } from '@/features/stories/services/storyMediaUrl';
 import { supabase } from '@/lib/supabase/client';
+import { isUploadCancelledError, throwIfAborted } from '@/services/video/uploadCancelled';
 
 export type UploadStoryMediaProgress = {
   stage: 'preparing' | 'compressing' | 'uploading' | 'thumbnail' | 'saving';
@@ -35,10 +36,13 @@ export async function prepareStoryVideoUpload(
   localUri: string,
   regionId?: string | null,
   onProgress?: (progress: UploadStoryMediaProgress) => void,
+  signal?: AbortSignal,
 ): Promise<UploadStoryMediaResult> {
+  throwIfAborted(signal);
   onProgress?.({ stage: 'preparing', message: 'Video hazırlanıyor…' });
 
   const reserved = await reserveStoryVideo(userId, regionId as RegionId | null, localUri);
+  throwIfAborted(signal);
   if ('error' in reserved) {
     return { mediaUrl: null, thumbUrl: null, error: reserved.error };
   }
@@ -55,14 +59,22 @@ export async function prepareStoryVideoUpload(
 export async function finishStoryVideoUpload(
   reservation: StoryVideoReservation,
   onProgress?: (progress: UploadStoryMediaProgress) => void,
-): Promise<{ error: string | null }> {
-  return uploadReservedStoryVideo(reservation, (state) => {
-    onProgress?.({
-      stage: state.stage,
-      message: state.message,
-      progress: state.progress,
-    });
-  });
+  signal?: AbortSignal,
+): Promise<{ error: string | null; cancelled?: boolean }> {
+  try {
+    return await uploadReservedStoryVideo(reservation, (state) => {
+      onProgress?.({
+        stage: state.stage,
+        message: state.message,
+        progress: state.progress,
+      });
+    }, signal);
+  } catch (err) {
+    if (isUploadCancelledError(err)) {
+      return { error: null, cancelled: true };
+    }
+    throw err;
+  }
 }
 
 export type DeferredStoryVideoUploadInput = {
@@ -71,29 +83,40 @@ export type DeferredStoryVideoUploadInput = {
   storyId: string;
   itemId: string;
   localUri: string;
+  signal?: AbortSignal;
   onProgress?: (progress: UploadStoryMediaProgress) => void;
-  onComplete?: (result: { error: string | null }) => void;
+  onComplete?: (result: { error: string | null; cancelled?: boolean }) => void;
 };
 
 /** Video + önizleme arka planda yüklenir; başarısızlıkta slayt kaldırılır. */
 export async function runDeferredStoryVideoUpload(
   input: DeferredStoryVideoUploadInput,
 ): Promise<void> {
-  const { reservation, authorId, storyId, itemId, localUri, onProgress, onComplete } = input;
+  const { reservation, authorId, storyId, itemId, localUri, onProgress, onComplete, signal } = input;
 
-  const [uploaded, thumbUrl] = await Promise.all([
-    finishStoryVideoUpload(reservation, onProgress),
-    (async () => {
-      onProgress?.({ stage: 'thumbnail', message: 'Önizleme oluşturuluyor…' });
-      return uploadStoryVideoThumb(authorId, localUri);
-    })(),
-  ]);
+  try {
+    throwIfAborted(signal);
 
-  if (uploaded.error) {
-    await supabase.from('story_items').update({ status: 'removed' }).eq('id', itemId);
-    onComplete?.({ error: uploaded.error });
-    return;
-  }
+    const [uploaded, thumbUrl] = await Promise.all([
+      finishStoryVideoUpload(reservation, onProgress, signal),
+      (async () => {
+        throwIfAborted(signal);
+        onProgress?.({ stage: 'thumbnail', message: 'Önizleme oluşturuluyor…' });
+        return uploadStoryVideoThumb(authorId, localUri);
+      })(),
+    ]);
+
+    if (uploaded.cancelled) {
+      await supabase.from('story_items').update({ status: 'removed' }).eq('id', itemId);
+      onComplete?.({ error: null, cancelled: true });
+      return;
+    }
+
+    if (uploaded.error) {
+      await supabase.from('story_items').update({ status: 'removed' }).eq('id', itemId);
+      onComplete?.({ error: uploaded.error });
+      return;
+    }
 
   const resolvedThumb = resolveStoryThumbUrl(thumbUrl, storyReservationMediaUrl(reservation));
   if (resolvedThumb) {
@@ -114,6 +137,16 @@ export async function runDeferredStoryVideoUpload(
   }
 
   onComplete?.({ error: null });
+  } catch (err) {
+    if (isUploadCancelledError(err)) {
+      await supabase.from('story_items').update({ status: 'removed' }).eq('id', itemId);
+      onComplete?.({ error: null, cancelled: true });
+      return;
+    }
+    const message = err instanceof Error ? err.message : 'Video yüklenemedi.';
+    await supabase.from('story_items').update({ status: 'removed' }).eq('id', itemId);
+    onComplete?.({ error: message });
+  }
 }
 
 /** Görsel: doğrudan yükle. Video: prepare + finish birlikte (geri uyumluluk). */
@@ -124,6 +157,7 @@ export async function uploadStoryMedia(
   options?: {
     regionId?: string | null;
     onProgress?: (progress: UploadStoryMediaProgress) => void;
+    signal?: AbortSignal;
   },
 ): Promise<UploadStoryMediaResult> {
   if (!localUri?.trim()) {
@@ -131,7 +165,9 @@ export async function uploadStoryMedia(
   }
 
   if (mediaType === 'image') {
+    throwIfAborted(options?.signal);
     const upload = await uploadStoryImage(userId, localUri);
+    throwIfAborted(options?.signal);
     return {
       mediaUrl: upload.mediaUrl,
       thumbUrl: upload.thumbUrl,
@@ -144,12 +180,22 @@ export async function uploadStoryMedia(
     localUri,
     options?.regionId ?? DEFAULT_REGION_ID,
     options?.onProgress,
+    options?.signal,
   );
   if (prepared.error || !prepared.reservation) {
     return prepared;
   }
 
-  const finished = await finishStoryVideoUpload(prepared.reservation, options?.onProgress);
+  const finished = await finishStoryVideoUpload(prepared.reservation, options?.onProgress, options?.signal);
+  if (finished.cancelled) {
+    return {
+      mediaUrl: prepared.mediaUrl,
+      thumbUrl: prepared.thumbUrl,
+      error: null,
+      processing: true,
+      reservation: prepared.reservation,
+    };
+  }
   if (finished.error) {
     return {
       mediaUrl: prepared.mediaUrl,

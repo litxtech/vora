@@ -169,7 +169,6 @@ export function PostUploadBanner() {
 
 const styles = StyleSheet.create({
   uploadCard: {
-    marginHorizontal: spacing.md,
     marginBottom: spacing.sm,
     borderRadius: radius.lg,
     borderWidth: StyleSheet.hairlineWidth,

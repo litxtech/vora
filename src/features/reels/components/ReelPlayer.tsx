@@ -98,7 +98,7 @@ function ReelPlayerPlaceholder({
         <SensitiveContentOverlay onReveal={onReveal} blurred={prefs.blur_sensitive_content} />
       ) : null}
       {posterUrl && !hideSensitive ? (
-        <Image source={{ uri: posterUrl }} style={[styles.mediaFill, { width, height }]} resizeMode="cover" />
+        <Image source={{ uri: posterUrl }} style={[styles.mediaFill, { width, height }]} contentFit="cover" />
       ) : !hideSensitive ? (
         <SafeLinearGradient colors={['#0A1628', '#1A3A5C', '#0D2137']} style={[styles.media, { width, height }]}>
           <Text style={styles.demoText}>🎬</Text>
@@ -485,7 +485,7 @@ function ReelPlayerVideo({
             styles.poster,
             showPoster ? styles.posterVisible : styles.posterHidden,
           ]}
-          resizeMode="cover"
+          contentFit="cover"
         />
       ) : null}
 

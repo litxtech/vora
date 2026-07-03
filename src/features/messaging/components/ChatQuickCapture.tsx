@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  InteractionManager,
   Linking,
   Modal,
   Platform,
@@ -19,6 +18,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
+import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import { capturePictureOptions, finalizeCapturedPhoto } from '@/features/compose/services/cameraCapture';
 import { useTheme } from '@/providers/ThemeProvider';
 import { CHAT_EPHEMERAL_DEFAULT_DURATION_SEC } from '../constants';
@@ -76,7 +76,7 @@ export function ChatQuickCapture({
     }
 
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = deferAfterInteractions(() => {
       requestAnimationFrame(() => {
         if (!cancelled) setCameraLive(true);
       });

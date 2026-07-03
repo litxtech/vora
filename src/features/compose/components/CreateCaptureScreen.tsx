@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  InteractionManager,
   Linking,
   Platform,
   Pressable,
@@ -37,6 +36,7 @@ import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import { routeStoryVideo } from '@/features/stories/services/routeStoryVideo';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
+import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import { useTheme } from '@/providers/ThemeProvider';
 
 const MAX_VIDEO_DURATION_SEC = 90;
@@ -171,7 +171,7 @@ export function CreateCaptureScreen() {
     }
 
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = deferAfterInteractions(() => {
       requestAnimationFrame(() => {
         if (!cancelled) setCameraLive(true);
       });
@@ -190,7 +190,7 @@ export function CreateCaptureScreen() {
     if (!cameraPermission?.granted || !cameraReady) return;
 
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = deferAfterInteractions(() => {
       void (async () => {
         try {
           const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -489,7 +489,7 @@ export function CreateCaptureScreen() {
       mediaTypes: mediaType === 'videos' ? ['videos'] : ['images'],
       allowsMultipleSelection: shareMode === 'story' ? false : mediaType === 'images',
       selectionLimit: shareMode === 'story' ? 1 : mediaType === 'images' ? 4 : 1,
-      allowsEditing: shareMode === 'story' && mediaType === 'images',
+      allowsEditing: false,
       ...(shareMode === 'story' && mediaType === 'videos'
         ? {}
         : { videoMaxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC }),

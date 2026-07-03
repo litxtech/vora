@@ -1,4 +1,4 @@
-import { InteractionManager } from 'react-native';
+import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import type { NotificationEventType } from '@/constants/notifications';
 import {
   getNotificationBootFlushMs,
@@ -87,7 +87,7 @@ export async function flushPendingNotificationNavigation(): Promise<void> {
 
     const fallback = setTimeout(done, 250);
 
-    InteractionManager.runAfterInteractions(() => {
+    deferAfterInteractions(() => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           clearTimeout(fallback);

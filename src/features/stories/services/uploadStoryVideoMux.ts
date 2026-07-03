@@ -9,6 +9,7 @@ import { VIDEO_PROGRESS } from '@/services/video/progressMessages';
 import { reserveMuxVideo, type MuxVideoReservation } from '@/services/video/reserveMuxVideo';
 import { uploadVideoFileToMux } from '@/services/video/uploadVideoFile';
 import { toUserFacingError } from '@/lib/errors';
+import { isUploadCancelledError, throwIfAborted } from '@/services/video/uploadCancelled';
 
 export type StoryVideoUploadProgress = {
   stage: 'preparing' | 'compressing' | 'uploading' | 'thumbnail';
@@ -70,11 +71,14 @@ export async function uploadStoryVideoThumb(
 export async function uploadReservedStoryVideo(
   reservation: StoryVideoReservation,
   onProgress?: (progress: StoryVideoUploadProgress) => void,
-): Promise<{ error: string | null }> {
+  signal?: AbortSignal,
+): Promise<{ error: string | null; cancelled?: boolean }> {
   try {
+    throwIfAborted(signal);
     onProgress?.({ stage: 'preparing', message: VIDEO_PROGRESS.preparing });
 
     const preparedUri = await prepareLocalVideoUri(reservation.localUri);
+    throwIfAborted(signal);
     const fileSize = getLocalFileSize(preparedUri);
     const skipCompression =
       reservation.skipCompression || shouldSkipVideoCompression(fileSize, 'story');
@@ -92,11 +96,14 @@ export async function uploadReservedStoryVideo(
           progress: state.progress,
         });
       },
-      { profile: 'story', skipCompression },
+      { profile: 'story', skipCompression, signal },
     );
 
     return { error: null };
   } catch (err) {
+    if (isUploadCancelledError(err)) {
+      return { error: null, cancelled: true };
+    }
     return {
       error: toUserFacingError(err instanceof Error ? err.message : String(err), {
         fallback: 'Video yüklenemedi.',

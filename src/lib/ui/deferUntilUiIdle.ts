@@ -41,3 +41,8 @@ export function deferUntilUiIdle(task: () => void): { cancel: () => void } {
     },
   };
 }
+
+/** @deprecated InteractionManager yerine — animasyon sonrası tek seferlik iş. */
+export function deferAfterInteractions(task: () => void): { cancel: () => void } {
+  return deferUntilUiIdle(task);
+}
