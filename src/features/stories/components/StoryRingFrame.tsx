@@ -48,6 +48,9 @@ export function StoryRingFrame({
           source={{ uri: avatarUrl }}
           style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2 }}
           contentFit="cover"
+          cachePolicy="memory-disk"
+          recyclingKey={avatarUrl}
+          transition={180}
         />
       ) : (
         <View style={[styles.placeholder, { backgroundColor: `${colors.primary}18` }]}>
@@ -84,6 +87,9 @@ export function StoryRingFrame({
             source={{ uri: avatarUrl }}
             style={{ width: size, height: size, borderRadius: size / 2 }}
             contentFit="cover"
+            cachePolicy="memory-disk"
+            recyclingKey={avatarUrl}
+            transition={180}
           />
         ) : (
           <View

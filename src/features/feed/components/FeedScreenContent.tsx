@@ -10,9 +10,11 @@ import { fetchFeaturedProfiles } from '@/features/profile/services/featuredProfi
 import type { FeaturedProfileCard } from '@/features/profile/services/featuredProfiles';
 import { FeedHeader } from '@/features/feed/components/FeedHeader';
 import { PostUploadBanner } from '@/features/compose/components/PostUploadBanner';
+import { StoryUploadFeedBanner } from '@/features/stories/components/StoryUploadFeedBanner';
 import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
 import { StoryRingBar } from '@/features/stories/components/StoryRingBar';
-import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
+import { STORIES_FEATURE } from '@/features/stories/featureFlags';
+import { prefetchStoryRings } from '@/features/stories/services/storyRingSession';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { FeedList } from '@/features/feed/components/FeedList';
 import { NewPostsBanner } from '@/features/feed/components/NewPostsBanner';
@@ -55,7 +57,9 @@ export function FeedScreenContent() {
   const { user } = useAuth();
   const { isVisible } = useFeatureFlags();
   const featuredProfilesVisible = isVisible('featured-profiles');
-  const storiesVisible = isVisible('stories');
+  const storiesVisible = isVisible(STORIES_FEATURE.root);
+  const storyRingBarVisible = isVisible(STORIES_FEATURE.ringBar);
+  const storyRingBootstrapVisible = isVisible(STORIES_FEATURE.ringBootstrap);
   const resetNewPosts = useFeedStore((s) => s.resetNewPosts);
   const category = useFeedStore((s) => s.category);
   const regionId = useFeedStore((s) => s.regionId);
@@ -63,6 +67,9 @@ export function FeedScreenContent() {
   const [headerLostItems, setHeaderLostItems] = useState<LostListing[]>([]);
   const [featuredProfiles, setFeaturedProfiles] = useState<FeaturedProfileCard[]>([]);
   const [richHeaderReady, setRichHeaderReady] = useState(!shouldDeferFeedRichHeader());
+  const hasCachedStoryRings = useStoryRingStore((s) => s.rings.length > 0);
+  const showStoryRingBar =
+    (richHeaderReady || hasCachedStoryRings) && category === 'all' && storiesVisible && storyRingBarVisible;
 
   const { items, loading, refreshing, loadingMore, error, refresh, loadMore, updateItem, removeItem } = useFeed();
 
@@ -150,8 +157,8 @@ export function FeedScreenContent() {
           <NewPostsBanner onRefresh={handleBannerRefresh} />
         </View>
         <FeedHeader />
-        {richHeaderReady && category === 'all' && storiesVisible ? (
-          <FeatureGate featureId="stories">
+        {showStoryRingBar ? (
+          <FeatureGate featureId={STORIES_FEATURE.ringBar}>
             <StoryRingBar />
           </FeatureGate>
         ) : null}
@@ -171,6 +178,8 @@ export function FeedScreenContent() {
       featuredProfiles,
       featuredProfilesVisible,
       storiesVisible,
+      storyRingBarVisible,
+      showStoryRingBar,
       regionId,
       richHeaderReady,
       handleBannerRefresh,
@@ -189,18 +198,19 @@ export function FeedScreenContent() {
   const handleRefresh = useCallback(() => {
     resetNewPosts();
     refresh();
-    if (storiesVisible && user?.id) {
-      void fetchStoryRings({ viewerId: user.id }).then((result) => {
-        useStoryRingStore.getState().setRings(result.rings);
-      });
+    if (storiesVisible && storyRingBootstrapVisible) {
+      void prefetchStoryRings(user?.id ?? null, { background: true, animate: true, force: true, useCache: true });
     }
-  }, [refresh, resetNewPosts, storiesVisible, user?.id]);
+  }, [refresh, resetNewPosts, storiesVisible, storyRingBootstrapVisible, user?.id]);
 
   return (
     <FeedSideDrawerShell>
       <GradientBackground>
         <View style={[styles.screen, { paddingTop: insets.top }]}>
-          <PostUploadBanner />
+          <View style={styles.uploadBanners}>
+            <StoryUploadFeedBanner />
+            <PostUploadBanner />
+          </View>
           <FeedList
             items={items}
             loading={loading}
@@ -223,6 +233,11 @@ export function FeedScreenContent() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, position: 'relative' },
+  uploadBanners: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+    zIndex: 20,
+  },
   headerWrap: {
     gap: spacing.sm,
     paddingHorizontal: spacing.md,

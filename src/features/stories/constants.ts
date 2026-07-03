@@ -6,6 +6,9 @@ export const STORY_TTL_HOURS = 24;
 
 export const STORY_RING_PAGE_SIZE = 40;
 
+/** İlk halka isteği — daha hızlı ilk boyama için daha küçük sayfa. */
+export const STORY_RING_INITIAL_PAGE_SIZE = 24;
+
 export const STORY_RING_AVATAR_SIZE = 68;
 
 /** İzlenmemiş / aktif hikâye — uygulama mavisi + Karadeniz yeşili */

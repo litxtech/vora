@@ -10,6 +10,7 @@ export type OpenChatOptions = {
   unreadCount?: number;
   userId?: string;
   from?: 'izdivac';
+  messageId?: string;
 };
 
 /**
@@ -37,11 +38,15 @@ export function openChat(conversationId: string, options?: OpenChatOptions) {
     void refreshMessagingUnreadFromServer(userId);
   })();
 
-  const href = (
-    options?.from === 'izdivac'
-      ? `/chat/${conversationId}?from=izdivac`
-      : `/chat/${conversationId}`
-  ) as Href;
+  const href = (() => {
+    const base =
+      options?.from === 'izdivac'
+        ? `/chat/${conversationId}?from=izdivac`
+        : `/chat/${conversationId}`;
+    if (!options?.messageId) return base;
+    const join = base.includes('?') ? '&' : '?';
+    return `${base}${join}messageId=${encodeURIComponent(options.messageId)}`;
+  })() as Href;
   if (options?.replace) {
     router.replace(href);
     return;

@@ -5,7 +5,9 @@ const SEEN_AT_KEY = '@stories/seen_at_v1';
 
 type SeenMap = Record<string, number>;
 
-async function readSeenMap(): Promise<SeenMap> {
+let seenMapMemory: SeenMap | null = null;
+
+async function readSeenMapFromDisk(): Promise<SeenMap> {
   try {
     const raw = await AsyncStorage.getItem(SEEN_AT_KEY);
     if (!raw) return {};
@@ -20,13 +22,20 @@ async function writeSeenMap(map: SeenMap): Promise<void> {
 }
 
 export async function markStoryUserSeen(userId: string): Promise<void> {
-  const map = await readSeenMap();
+  const map = seenMapMemory ?? (await readSeenMapFromDisk());
   map[userId] = Date.now();
-  await writeSeenMap(map);
+  seenMapMemory = map;
+  void writeSeenMap(map);
 }
 
 export async function getStorySeenMap(): Promise<SeenMap> {
-  return readSeenMap();
+  if (seenMapMemory) return seenMapMemory;
+  seenMapMemory = await readSeenMapFromDisk();
+  return seenMapMemory;
+}
+
+export function invalidateStorySeenCache(): void {
+  seenMapMemory = null;
 }
 
 export function sortStoryRings(

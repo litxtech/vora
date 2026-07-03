@@ -14,7 +14,7 @@ import { FeatureRouteEnforcer } from '@/features/feature-flags/components/Featur
 import { AuthProvider } from '@/providers/AuthProvider';
 import { GuestProfileGateProvider } from '@/features/auth/providers/GuestProfileGateProvider';
 import { ShakeToComposeListener } from '@/features/compose/components/ShakeToComposeListener';
-import { StoryUploadBanner } from '@/features/stories/components/StoryUploadBanner';
+import { StoryRingsBootstrap } from '@/features/stories/components/StoryRingsBootstrap';
 import { ProximityMatchProvider } from '@/features/proximity-match/components/ProximityMatchProvider';
 import { SystemGateOverlay } from '@/features/system-gate';
 import { hydrateFeedCacheFromDisk } from '@/features/feed/services/feedCache';
@@ -82,7 +82,7 @@ function ThemedAppShell() {
       <ProximityMatchProvider>
         <FeatureRouteEnforcer />
         <RootNavigator />
-        <StoryUploadBanner />
+        <StoryRingsBootstrap />
         <ShakeToComposeListener />
         <BootOrchestrator />
         <SystemGateOverlay />

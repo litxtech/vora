@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   ScrollView,
@@ -7,10 +7,14 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
+import Animated, { FadeInRight } from 'react-native-reanimated';
 import { router, useIsFocused, type Href } from 'expo-router';
 import { StoryRingAvatar } from '@/features/stories/components/StoryRingAvatar';
 import { StoryRingSkeleton } from '@/features/stories/components/StoryRingSkeleton';
 import { useStoryRings } from '@/features/stories/hooks/useStoryRings';
+import { prefetchStoryBundle } from '@/features/stories/services/prefetchStoryBundle';
+import { STORIES_FEATURE } from '@/features/stories/featureFlags';
+import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { useStoryViewerStore } from '@/features/stories/store/storyViewerStore';
 import type { StoryRing } from '@/features/stories/types';
@@ -28,16 +32,54 @@ function ringKey(item: RingListItem, index: number): string {
   return item.userId || `ring-${index}`;
 }
 
+type AnimatedRingItemProps = {
+  index: number;
+  isEntering: boolean;
+  children: ReactNode;
+};
+
+function AnimatedRingItem({ index, isEntering, children }: AnimatedRingItemProps) {
+  if (!isEntering) {
+    return <View>{children}</View>;
+  }
+
+  return (
+    <Animated.View
+      entering={FadeInRight.delay(Math.min(index * 35, 220))
+        .springify()
+        .damping(18)
+        .stiffness(240)}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
 export function StoryRingBar() {
   const { colors } = useTheme();
   const isFocused = useIsFocused();
   const { user, profile } = useAuth();
+  const bundlePrefetchEnabled = useFeatureVisible(STORIES_FEATURE.ringBundlePrefetch);
+  const ringBootstrapEnabled = useFeatureVisible(STORIES_FEATURE.ringBootstrap);
+  const cachedRingCount = useStoryRingStore((s) => s.rings.length);
+  const enteringUserIds = useStoryRingStore((s) => s.enteringUserIds);
+  const clearEnteringUserIds = useStoryRingStore((s) => s.clearEnteringUserIds);
   const markUserSeen = useStoryRingStore((s) => s.markUserSeen);
-  const [mounted, setMounted] = useState(!shouldDeferStoryRingBar());
+  const [mounted, setMounted] = useState(() => cachedRingCount > 0 || !shouldDeferStoryRingBar());
 
   useEffect(() => {
-    const delayMs = getStoryRingMountDelayMs();
-    if (!shouldDeferStoryRingBar() && delayMs === 0) return;
+    if (mounted || cachedRingCount === 0) return;
+    setMounted(true);
+  }, [cachedRingCount, mounted]);
+
+  useEffect(() => {
+    if (mounted) return;
+
+    const delayMs = cachedRingCount > 0 ? 0 : getStoryRingMountDelayMs();
+    if (!shouldDeferStoryRingBar() && delayMs === 0) {
+      setMounted(true);
+      return;
+    }
 
     let cancelled = false;
     const mount = () => {
@@ -57,28 +99,42 @@ export function StoryRingBar() {
       cancelled = true;
       task.cancel();
     };
-  }, []);
-
-  const { rings, loading, refresh, loadMore } = useStoryRings({
-    enabled: mounted && isFocused,
-    viewerId: user?.id ?? null,
-  });
+  }, [cachedRingCount, mounted]);
 
   useEffect(() => {
-    if (!mounted || !isFocused) return;
-    void refresh();
-  }, [isFocused, mounted, refresh]);
+    if (enteringUserIds.length === 0) return;
+    const timer = setTimeout(() => clearEnteringUserIds(), 700);
+    return () => clearTimeout(timer);
+  }, [clearEnteringUserIds, enteringUserIds]);
+
+  const { rings, loading, loadMore } = useStoryRings({
+    enabled: mounted && isFocused,
+    viewerId: user?.id ?? null,
+    useCache: ringBootstrapEnabled,
+  });
 
   const ownAvatar = sanitizeAvatarUrl(profile?.avatar_url ?? null, profile?.account_status ?? 'active');
+  const enteringSet = useMemo(() => new Set(enteringUserIds), [enteringUserIds]);
 
   const openViewer = useCallback(
     (startUserId: string) => {
       const ringUserIds = rings.map((r) => r.userId).filter(Boolean);
       if (!ringUserIds.includes(startUserId)) ringUserIds.unshift(startUserId);
+
+      const viewerId = user?.id ?? null;
+      if (bundlePrefetchEnabled) {
+        prefetchStoryBundle(viewerId, startUserId);
+        const startIndex = ringUserIds.indexOf(startUserId);
+        if (startIndex > 0) prefetchStoryBundle(viewerId, ringUserIds[startIndex - 1]!);
+        if (startIndex >= 0 && startIndex < ringUserIds.length - 1) {
+          prefetchStoryBundle(viewerId, ringUserIds[startIndex + 1]!);
+        }
+      }
+
       useStoryViewerStore.getState().openSession({ ringUserIds, startUserId });
       router.push(`/stories/${startUserId}` as Href);
     },
-    [rings],
+    [bundlePrefetchEnabled, rings, user?.id],
   );
 
   const handlePress = useCallback(
@@ -141,35 +197,38 @@ export function StoryRingBar() {
           >
             {data.map((item, index) => {
               const key = ringKey(item, index);
+              const isEntering = item !== 'own' && enteringSet.has(item.userId);
 
               if (item === 'own') {
                 const own = rings.find((r) => r.userId === user?.id);
                 return (
-                  <StoryRingAvatar
-                    key={key}
-                    label="Hikayen"
-                    avatarUrl={ownAvatar}
-                    hasStory={!!own}
-                    hasUnseen={!!own}
-                    isOwn
-                    onPress={handleOwnPress}
-                    onAddPress={handleOwnAdd}
-                  />
+                  <AnimatedRingItem key={key} index={index} isEntering={false}>
+                    <StoryRingAvatar
+                      label="Hikayen"
+                      avatarUrl={ownAvatar}
+                      hasStory={!!own}
+                      hasUnseen={!!own}
+                      isOwn
+                      onPress={handleOwnPress}
+                      onAddPress={handleOwnAdd}
+                    />
+                  </AnimatedRingItem>
                 );
               }
 
               return (
-                <StoryRingAvatar
-                  key={key}
-                  label={item.fullName?.trim() || item.username || 'Kullanıcı'}
-                  avatarUrl={item.avatarUrl}
-                  hasStory
-                  hasUnseen={item.hasUnseen}
-                  onPress={() => {
-                    if (item.hasUnseen) markUserSeen(item.userId);
-                    handlePress(item);
-                  }}
-                />
+                <AnimatedRingItem key={key} index={index} isEntering={isEntering}>
+                  <StoryRingAvatar
+                    label={item.fullName?.trim() || item.username || 'Kullanıcı'}
+                    avatarUrl={item.avatarUrl}
+                    hasStory
+                    hasUnseen={item.hasUnseen}
+                    onPress={() => {
+                      if (item.hasUnseen) markUserSeen(item.userId);
+                      handlePress(item);
+                    }}
+                  />
+                </AnimatedRingItem>
               );
             })}
           </ScrollView>

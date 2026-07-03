@@ -28,3 +28,5 @@ export { SUB_FEATURES as insights } from '@/features/insights/featureFlags';
 export { SUB_FEATURES as auth } from '@/features/auth/featureFlags';
 export { SUB_FEATURES as announcements } from '@/features/announcements/featureFlags';
 export { SUB_FEATURES as userSounds } from '@/features/sounds/featureFlags';
+export { SUB_FEATURES as stories } from '@/features/stories/featureFlags';
+export { SUB_FEATURES as dateCenter } from '@/features/date/featureFlags';

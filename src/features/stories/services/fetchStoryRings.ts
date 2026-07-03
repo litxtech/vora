@@ -41,6 +41,7 @@ export async function fetchStoryRings(options: {
   limit?: number;
 }): Promise<{ rings: StoryRing[]; nextCursor: string | null }> {
   const { viewerId, cursor, limit = STORY_RING_PAGE_SIZE } = options;
+  const seenAtPromise = getStorySeenMap();
 
   const { data, error } = await supabase.rpc('get_story_rings', {
     p_viewer_id: viewerId,
@@ -49,10 +50,11 @@ export async function fetchStoryRings(options: {
     p_region_id: null,
   });
 
+  const seenAt = await seenAtPromise;
+
   if (error) {
     console.warn('[stories] fetchStoryRings failed:', error.message);
     const fallback = await fetchStoryRingsFallback({ viewerId, cursor, limit });
-    const seenAt = await getStorySeenMap();
     return { rings: sortStoryRings(fallback.rings, seenAt, viewerId), nextCursor: fallback.nextCursor };
   }
 
@@ -60,11 +62,10 @@ export async function fetchStoryRings(options: {
   if (rows.length === 0) {
     const fallback = await fetchStoryRingsFallback({ viewerId, cursor, limit });
     if (fallback.rings.length === 0) return { rings: [], nextCursor: null };
-    const seenAt = await getStorySeenMap();
     return { rings: sortStoryRings(fallback.rings, seenAt, viewerId), nextCursor: fallback.nextCursor };
   }
+
   const rings = rows.map(mapRing);
-  const seenAt = await getStorySeenMap();
   const sorted = sortStoryRings(rings, seenAt, viewerId);
 
   const nextCursor =

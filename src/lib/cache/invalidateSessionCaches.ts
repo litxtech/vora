@@ -9,6 +9,8 @@ import { invalidateNotificationsCache } from '@/features/notifications/services/
 import { invalidateConversationListCache } from '@/features/messaging/services/conversationListCache';
 import { invalidateProfileSessionCache } from '@/features/profile/services/profileSessionCache';
 import { invalidateReelsFeedCache } from '@/features/reels/services/reelsFeedCache';
+import { invalidateStoryRingCache } from '@/features/stories/services/storyRingSession';
+import { invalidateStorySeenCache } from '@/features/stories/services/storySeenCache';
 
 /** Oturum kapanınca bellek önbelleklerini temizle. */
 export function invalidateAllSessionCaches(userId?: string): void {
@@ -23,4 +25,6 @@ export function invalidateAllSessionCaches(userId?: string): void {
   invalidateNotificationsCache(userId);
   invalidateConversationListCache(userId);
   invalidateReelsFeedCache();
+  invalidateStoryRingCache();
+  invalidateStorySeenCache();
 }
