@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
 import { VideoProcessingOverlay } from '@/components/media/VideoProcessingOverlay';
 import { StoryFramedMediaView } from '@/features/stories/components/StoryFramedMediaView';
+import { StoryTextOverlayView } from '@/features/stories/components/StoryTextOverlayView';
 import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
 import { useStoryMuxPlaybackUrl } from '@/features/stories/hooks/useStoryMuxPlaybackUrl';
 import { mapStoryMusicPlayback } from '@/features/stories/services/mapStoryMusic';
@@ -70,7 +71,7 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
     active: isActive && !isPaused,
   });
 
-  const imageFit = item.framing ? 'cover' : 'contain';
+  const imageFit = 'cover';
 
   const mediaNode = uri ? (
     <OptimizedImage
@@ -95,6 +96,7 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
       <StorySlideOverlays
         sticker={sticker}
         locationLabel={item.location?.label ?? null}
+        textOverlays={[]}
       />
     </View>
   );
@@ -206,7 +208,7 @@ function StoryVideoSlide({
   const waitingForSource = !source;
   const showProcessingOverlay = waitingForSource && !posterUri;
 
-  const videoFit = item.framing ? 'cover' : 'contain';
+  const videoFit = 'cover';
 
   const mediaContent = (
     <View style={StyleSheet.absoluteFill}>
@@ -244,6 +246,7 @@ function StoryVideoSlide({
       <StorySlideOverlays
         sticker={sticker}
         locationLabel={item.location?.label ?? null}
+        textOverlays={item.textOverlays}
       />
     </View>
   );
@@ -252,12 +255,15 @@ function StoryVideoSlide({
 function StorySlideOverlays({
   sticker,
   locationLabel,
+  textOverlays,
 }: {
   sticker: (typeof STORY_STICKER_CATEGORIES)[number] | undefined;
   locationLabel: string | null;
+  textOverlays: StoryItem['textOverlays'];
 }) {
   return (
     <>
+      {textOverlays.length > 0 ? <StoryTextOverlayView overlays={textOverlays} /> : null}
       {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
       {locationLabel ? <StoryLocationBadge label={locationLabel} /> : null}
     </>
@@ -305,7 +311,8 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     height: '100%',
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#000',
+    overflow: 'hidden',
   },
   mediaFill: {
     flex: 1,

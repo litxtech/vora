@@ -1,4 +1,5 @@
 import type { MusicSelection } from '@/features/music/types';
+import type { StudioTextOverlay } from '@/features/vora-studio/types';
 import type { StoryFraming } from '@/features/stories/utils/storyFraming';
 import { parseStoryFraming } from '@/features/stories/utils/storyFraming';
 import {
@@ -6,6 +7,10 @@ import {
   serializeStoryLinks,
   type StoryLinkManifest,
 } from '@/features/stories/utils/storyLinks';
+import {
+  parseStoryTextOverlays,
+  serializeStoryTextOverlays,
+} from '@/features/stories/utils/storyTextOverlays';
 
 export type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 
@@ -29,6 +34,7 @@ export type StoryManifest = {
   music: StoryMusicManifest | null;
   location: StoryLocationManifest | null;
   links: StoryLinkManifest[];
+  textOverlays: StudioTextOverlay[];
   /** Video orijinal sesi — müzik yokken geçerli (0 = sessiz, yoksa 1). */
   originalAudioVolume?: number;
 };
@@ -38,6 +44,7 @@ export const EMPTY_STORY_MANIFEST: StoryManifest = {
   music: null,
   location: null,
   links: [],
+  textOverlays: [],
 };
 
 export function musicSelectionToManifest(music: MusicSelection | null): StoryMusicManifest | null {
@@ -96,11 +103,12 @@ export function parseStoryManifest(raw: unknown): StoryManifest {
   }
 
   const links = parseStoryLinks(obj.links);
+  const textOverlays = parseStoryTextOverlays(obj.textOverlays);
 
   const originalAudioVolume =
     typeof obj.originalAudioVolume === 'number' ? obj.originalAudioVolume : 1;
 
-  return { framing, music, location, links, originalAudioVolume };
+  return { framing, music, location, links, textOverlays, originalAudioVolume };
 }
 
 export function serializeStoryManifest(manifest: StoryManifest): Record<string, unknown> {
@@ -109,6 +117,8 @@ export function serializeStoryManifest(manifest: StoryManifest): Record<string, 
   if (manifest.music) out.music = manifest.music;
   if (manifest.location) out.location = manifest.location;
   if (manifest.links.length > 0) out.links = serializeStoryLinks(manifest.links);
+  const textOverlays = serializeStoryTextOverlays(manifest.textOverlays);
+  if (textOverlays) out.textOverlays = textOverlays;
   if (
     manifest.originalAudioVolume != null &&
     manifest.originalAudioVolume <= 0.001 &&

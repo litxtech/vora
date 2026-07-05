@@ -7,6 +7,7 @@ import {
   View,
   type View as RNView,
 } from 'react-native';
+import * as Haptics from 'expo-haptics';
 import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +23,6 @@ import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { musicSelectionToManifest } from '@/features/stories/utils/storyManifest';
 import { PHOTO_POST_MUSIC_DURATION_SEC } from '@/features/music/constants';
-import { StoryBackgroundSheet } from '@/features/stories/components/StoryBackgroundSheet';
 import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
 import { StoryLinkEditor } from '@/features/stories/components/StoryLinkEditor';
 import { StoryLinkSheet } from '@/features/stories/components/StoryLinkSheet';
@@ -33,9 +33,16 @@ import {
   StoryPublishRail,
   type StoryPublishToolId,
 } from '@/features/stories/components/StoryPublishRail';
-import { StoryStickerSheet } from '@/features/stories/components/StoryStickerSheet';
+import { MediaEditorTrashZone } from '@/features/compose/components/MediaEditorTrashZone';
+import {
+  createOverlayDragDeleteHandlers,
+} from '@/features/compose/store/mediaEditorDragStore';
+import { StoryTextOverlayLayer } from '@/features/stories/components/StoryTextOverlayLayer';
+import { StoryTextPanel } from '@/features/stories/components/StoryTextPanel';
+import { createStoryTextOverlay } from '@/features/stories/utils/storyTextOverlays';
+import type { StudioTextOverlay } from '@/features/vora-studio/types';
 import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFramedImage';
-import { STORY_MAX_VIDEO_SEC, type StoryStickerCategoryId } from '@/features/stories/constants';
+import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
 import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/stories/services/routeStoryVideo';
 import { useStoryUploadStore } from '@/features/stories/store/storyUploadStore';
@@ -97,9 +104,11 @@ export function StoryPublishScreen({
   const [musicEditing, setMusicEditing] = useState(false);
   const [musicInfoOpen, setMusicInfoOpen] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
-  const [stickerCategory, setStickerCategory] = useState<StoryStickerCategoryId | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [links, setLinks] = useState<StoryLinkManifest[]>([]);
+  const [textOverlays, setTextOverlays] = useState<StudioTextOverlay[]>([]);
+  const [textEditing, setTextEditing] = useState(false);
+  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
 
   const storyVideoClipSec =
     normalizedDurationSec != null && normalizedDurationSec > 0
@@ -254,6 +263,8 @@ export function StoryPublishScreen({
     setMusicOpen(false);
     setMusicEditing(false);
     setActiveTool(null);
+    setTextEditing(false);
+    setSelectedTextId(null);
   }, []);
 
   const handleToggleVideoAudio = useCallback(() => {
@@ -268,8 +279,86 @@ export function StoryPublishScreen({
     setVideoMuted((muted) => !muted);
   }, [musicSelection, setMusicSelection]);
 
+  const overlayDragDelete = useMemo(() => createOverlayDragDeleteHandlers(), []);
+
+  const addTextOverlay = useCallback(() => {
+    const overlay = createStoryTextOverlay(undefined, textOverlays.length);
+    setTextOverlays((prev) => [...prev, overlay]);
+    setSelectedTextId(overlay.id);
+    setTextEditing(true);
+    setActiveTool('text');
+  }, [textOverlays.length]);
+
+  const updateTextOverlay = useCallback((id: string, patch: Partial<StudioTextOverlay>) => {
+    setTextOverlays((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+  }, []);
+
+  const removeTextOverlay = useCallback(
+    (id: string) => {
+      setTextOverlays((prev) => {
+        const next = prev.filter((item) => item.id !== id);
+        if (next.length === 0) {
+          setTextEditing(false);
+          setActiveTool(null);
+          setSelectedTextId(null);
+        }
+        return next;
+      });
+      setSelectedTextId((current) => (current === id ? null : current));
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    },
+    [],
+  );
+
+  const handleDeleteTextOverlay = useCallback(
+    (id: string) => {
+      removeTextOverlay(id);
+      if (textEditing && textOverlays.length <= 1) {
+        setTextEditing(false);
+        setActiveTool(null);
+      }
+    },
+    [removeTextOverlay, textEditing, textOverlays.length],
+  );
+
+  const handleSelectTextOverlay = useCallback((id: string) => {
+    setSelectedTextId(id);
+    setTextEditing(true);
+    setActiveTool('text');
+    setMusicOpen(false);
+    setMusicEditing(false);
+  }, []);
+
   const handleToolPress = useCallback(
     (tool: StoryPublishToolId) => {
+      if (tool === 'text') {
+        setMusicOpen(false);
+        setMusicEditing(false);
+        if (activeTool === 'text' && textEditing) {
+          setTextOverlays((prev) => {
+            const trimmed = prev.filter((item) => item.text.trim());
+            setSelectedTextId((current) => {
+              if (current && trimmed.some((item) => item.id === current)) return current;
+              return trimmed.at(-1)?.id ?? null;
+            });
+            return trimmed;
+          });
+          setTextEditing(false);
+          setActiveTool(null);
+          return;
+        }
+        setActiveTool('text');
+        if (textOverlays.length === 0) {
+          addTextOverlay();
+          return;
+        }
+        setTextEditing(true);
+        if (!selectedTextId) {
+          setSelectedTextId(textOverlays[textOverlays.length - 1].id);
+        }
+        return;
+      }
+
       if (tool === 'audio') {
         handleToggleVideoAudio();
         return;
@@ -289,11 +378,8 @@ export function StoryPublishScreen({
 
       setMusicOpen(false);
       setMusicEditing(false);
-
-      if (tool === 'sticker') {
-        setActiveTool(activeTool === 'sticker' ? null : 'sticker');
-        return;
-      }
+      setTextEditing(false);
+      setSelectedTextId(null);
 
       if (tool === 'link') {
         setActiveTool(activeTool === 'link' ? null : 'link');
@@ -302,14 +388,9 @@ export function StoryPublishScreen({
 
       if (tool === 'location') {
         setActiveTool(activeTool === 'location' ? null : 'location');
-        return;
-      }
-
-      if (tool === 'background') {
-        setActiveTool(activeTool === 'background' ? null : 'background');
       }
     },
-    [activeTool, closeOtherTools, handleToggleVideoAudio, musicSelection],
+    [activeTool, addTextOverlay, closeOtherTools, handleToggleVideoAudio, musicSelection, selectedTextId, textEditing, textOverlays],
   );
 
   const handleMusicSelect = useCallback(
@@ -365,6 +446,23 @@ export function StoryPublishScreen({
   );
 
   const handleHeaderBack = useCallback(() => {
+    if (textEditing) {
+      setTextOverlays((prev) => {
+        const trimmed = prev.filter((item) => item.text.trim());
+        setSelectedTextId((current) => {
+          if (current && trimmed.some((item) => item.id === current)) return current;
+          return trimmed.at(-1)?.id ?? null;
+        });
+        return trimmed;
+      });
+      setTextEditing(false);
+      setActiveTool(null);
+      return;
+    }
+    if (selectedTextId) {
+      setSelectedTextId(null);
+      return;
+    }
     if (musicEditing) {
       setMusicEditing(false);
       return;
@@ -382,7 +480,7 @@ export function StoryPublishScreen({
       return;
     }
     router.back();
-  }, [activeTool, musicEditing, musicInfoOpen, musicOpen]);
+  }, [activeTool, musicEditing, musicInfoOpen, musicOpen, selectedTextId, textEditing]);
 
   const handlePublish = useCallback(async () => {
     if (!user?.id || publishing || !mediaSize) return;
@@ -425,11 +523,11 @@ export function StoryPublishScreen({
         mediaType,
         durationSec: normalizedDurationSec,
         regionId: regionId ?? null,
-        stickerCategory,
         framing: uploadFraming,
         music: musicSelection,
         location: selectedLocation,
         links,
+        textOverlays: mediaType === 'video' ? textOverlays.filter((item) => item.text.trim()) : undefined,
         trimmedInStudio,
         videoOriginalAudioVolume:
           mediaType === 'video'
@@ -459,8 +557,8 @@ export function StoryPublishScreen({
     regionId,
     selectedLocation,
     links,
+    textOverlays,
     stabilizing,
-    stickerCategory,
     startStoryPublish,
     storyUploadBusy,
     trimmedInStudio,
@@ -485,7 +583,8 @@ export function StoryPublishScreen({
     playing: mediaType === 'image' && musicPlaysOnStory,
   });
 
-  const framingEnabled = !publishing && !musicEditing;
+  const framingEnabled = !publishing && !musicEditing && !textEditing;
+  const hasText = textOverlays.some((item) => item.text.trim());
 
   return (
     <View style={[styles.root, { backgroundColor: '#000', paddingTop: insets.top }]}>
@@ -494,7 +593,7 @@ export function StoryPublishScreen({
           <Ionicons name="chevron-back" size={26} color="#fff" />
         </Pressable>
         <Text variant="h3" style={styles.headerTitle}>
-          {musicEditing ? 'Müzik' : 'Hikaye paylaş'}
+          {musicEditing ? 'Müzik' : textEditing ? 'Metin' : 'Hikaye paylaş'}
         </Text>
         <View style={{ width: 26 }} />
       </View>
@@ -512,18 +611,26 @@ export function StoryPublishScreen({
               mediaWidth={mediaSize.width}
               mediaHeight={mediaSize.height}
               enabled={framingEnabled}
+              interactive
             >
               {mediaType === 'image' ? (
-                <Image source={{ uri: publishUri }} style={styles.mediaFill} contentFit="cover" />
-              ) : (
-                <CapturedVideoPreview
-                  uri={publishUri}
+                <Image
+                  source={{ uri: publishUri }}
                   style={styles.mediaFill}
                   contentFit="cover"
-                  music={musicPlaysOnStory ? musicSelection : null}
-                  videoMuted={videoOriginalMuted}
-                  muted={videoOriginalMuted}
+                  pointerEvents="none"
                 />
+              ) : (
+                <View style={styles.mediaFill} pointerEvents="none">
+                  <CapturedVideoPreview
+                    uri={publishUri}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    music={musicPlaysOnStory ? musicSelection : null}
+                    videoMuted={videoOriginalMuted}
+                    muted={videoOriginalMuted}
+                  />
+                </View>
               )}
             </StoryFramingEditor>
           ) : (
@@ -567,6 +674,16 @@ export function StoryPublishScreen({
 
           <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={framingEnabled} />
 
+          <StoryTextOverlayLayer
+            overlays={textOverlays}
+            selectedId={selectedTextId}
+            editable={!publishing && !musicEditing}
+            onUpdate={updateTextOverlay}
+            onSelect={handleSelectTextOverlay}
+            onDelete={handleDeleteTextOverlay}
+            dragDelete={overlayDragDelete}
+          />
+
           {musicSelection && musicEditing ? (
             <StoryMusicTrimCard
               music={musicSelection}
@@ -588,18 +705,42 @@ export function StoryPublishScreen({
         </View>
       </View>
 
-      {!musicEditing ? (
+      {!musicEditing && !textEditing ? (
         <StoryPublishRail
           isVideo={mediaType === 'video'}
           activeTool={activeTool}
           hasMusic={Boolean(musicSelection)}
-          hasSticker={Boolean(stickerCategory)}
           hasLocation={Boolean(selectedLocation)}
           hasLinks={links.length > 0}
+          hasText={hasText}
           videoAudioMuted={videoOriginalMuted}
           onPress={handleToolPress}
         />
       ) : null}
+
+      <MediaEditorTrashZone elevated={textEditing || musicEditing} />
+
+      <StoryTextPanel
+        visible={textEditing}
+        overlays={textOverlays}
+        selectedId={selectedTextId}
+        onSelect={setSelectedTextId}
+        onUpdate={updateTextOverlay}
+        onAdd={addTextOverlay}
+        onRemove={removeTextOverlay}
+        onClose={() => {
+          setTextOverlays((prev) => {
+            const trimmed = prev.filter((item) => item.text.trim());
+            setSelectedTextId((current) => {
+              if (current && trimmed.some((item) => item.id === current)) return current;
+              return trimmed.at(-1)?.id ?? null;
+            });
+            return trimmed;
+          });
+          setTextEditing(false);
+          setActiveTool(null);
+        }}
+      />
 
       {uploadMessage ? (
         <Text variant="caption" style={styles.uploadHint}>
@@ -612,11 +753,11 @@ export function StoryPublishScreen({
           styles.publishBtn,
           {
             backgroundColor: colors.primary,
-            opacity: publishing || !mediaSize || stabilizing || musicEditing ? 0.5 : 1,
+            opacity: publishing || !mediaSize || stabilizing || musicEditing || textEditing ? 0.5 : 1,
           },
         ]}
         onPress={() => void handlePublish()}
-        disabled={publishing || !mediaSize || stabilizing || musicEditing}
+        disabled={publishing || !mediaSize || stabilizing || musicEditing || textEditing}
       >
           {publishing ? (
             <View style={styles.publishingRow}>
@@ -635,25 +776,10 @@ export function StoryPublishScreen({
       <AudioPickerSheet
         visible={musicOpen}
         selectedTrackId={musicSelection?.trackId ?? null}
-        initialMode="music"
         selectionMode
         tapToSelect
         onClose={() => setMusicOpen(false)}
         onSelect={handleMusicSelect}
-      />
-
-      <StoryStickerSheet
-        visible={activeTool === 'sticker'}
-        selected={stickerCategory}
-        onSelect={setStickerCategory}
-        onClose={() => setActiveTool(null)}
-      />
-
-      <StoryBackgroundSheet
-        visible={activeTool === 'background'}
-        selected={framing.backgroundColor}
-        onSelect={(color) => setFraming((prev) => ({ ...prev, backgroundColor: color }))}
-        onClose={() => setActiveTool(null)}
       />
 
       <MediaEditorLocationSheet

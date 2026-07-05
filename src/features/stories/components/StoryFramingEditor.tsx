@@ -12,6 +12,7 @@ import {
   clampStoryFraming,
   computeStoryFramingMetrics,
   DEFAULT_STORY_FRAMING,
+  STORY_AUTO_FRAME_ZOOM,
   storyFramingToPixels,
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
@@ -23,6 +24,8 @@ type StoryFramingEditorProps = {
   mediaWidth: number;
   mediaHeight: number;
   enabled?: boolean;
+  /** false = otomatik cover; pinch/pan yok */
+  interactive?: boolean;
 };
 
 export function StoryFramingEditor({
@@ -32,6 +35,7 @@ export function StoryFramingEditor({
   mediaWidth,
   mediaHeight,
   enabled = true,
+  interactive = true,
 }: StoryFramingEditorProps) {
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const autoFitMediaKeyRef = useRef('');
@@ -110,7 +114,7 @@ export function StoryFramingEditor({
     const next = clampStoryFraming(
       {
         ...framing,
-        zoom: metrics.minZoom,
+        zoom: STORY_AUTO_FRAME_ZOOM,
         translateXNorm: 0,
         translateYNorm: 0,
         mediaWidth,
@@ -213,14 +217,44 @@ export function StoryFramingEditor({
     ],
   }));
 
-  return (
-    <View
-      style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
-      onLayout={onLayout}
-    >
-      {layout.width > 0 ? (
-        <GestureDetector gesture={composed}>
+  if (!interactive) {
+    const zoom = Math.max(0.05, pixels.zoom);
+    return (
+      <View
+        style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
+        onLayout={onLayout}
+        collapsable={false}
+      >
+        {layout.width > 0 ? (
           <View style={styles.stage}>
+            <View
+              style={{
+                width: metrics.baseWidth,
+                height: metrics.baseHeight,
+                transform: [
+                  { translateX: pixels.translateX },
+                  { translateY: pixels.translateY },
+                  { scale: zoom },
+                ],
+              }}
+            >
+              {children}
+            </View>
+          </View>
+        ) : null}
+      </View>
+    );
+  }
+
+  return (
+    <GestureDetector gesture={composed}>
+      <View
+        style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
+        onLayout={onLayout}
+        collapsable={false}
+      >
+        {layout.width > 0 ? (
+          <View style={styles.stage} pointerEvents="box-none">
             <Animated.View
               style={[
                 {
@@ -229,13 +263,14 @@ export function StoryFramingEditor({
                 },
                 mediaStyle,
               ]}
+              pointerEvents="none"
             >
               {children}
             </Animated.View>
           </View>
-        </GestureDetector>
-      ) : null}
-    </View>
+        ) : null}
+      </View>
+    </GestureDetector>
   );
 }
 

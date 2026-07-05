@@ -18,6 +18,7 @@ import { resolveStoryMediaUrl, resolveStoryThumbUrl } from '@/features/stories/s
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 import type { MusicSelection } from '@/features/music/types';
+import type { StudioTextOverlay } from '@/features/vora-studio/types';
 import { recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
@@ -34,6 +35,7 @@ export type PublishStoryInput = {
   music?: MusicSelection | null;
   location?: SelectedLocation | null;
   links?: StoryLinkManifest[];
+  textOverlays?: StudioTextOverlay[];
   /** Studio'da kırpıldıysa dosya süresi yerine bu değer kullanılır. */
   trimmedInStudio?: boolean;
   /** Müzik yokken video orijinal ses seviyesi (0 = sessiz). */
@@ -109,6 +111,7 @@ type InsertStoryItemInput = {
   music?: MusicSelection | null;
   location?: SelectedLocation | null;
   links?: StoryLinkManifest[];
+  textOverlays?: StudioTextOverlay[];
   regionId?: string | null;
   videoOriginalAudioVolume?: number;
 };
@@ -138,6 +141,7 @@ async function insertStoryItemRecord(
     music: musicManifest,
     location: locationManifest,
     links: input.links ?? [],
+    textOverlays: input.mediaType === 'video' ? (input.textOverlays ?? []) : [],
     originalAudioVolume:
       input.mediaType === 'video' && !musicManifest
         ? (input.videoOriginalAudioVolume ?? 1)
@@ -280,6 +284,7 @@ async function publishStoryInner(
       music: input.music,
       location: input.location,
       links: input.links,
+      textOverlays: input.textOverlays,
       regionId: input.regionId,
       videoOriginalAudioVolume: input.videoOriginalAudioVolume,
     });

@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
 
-export type StoryPublishToolId = 'music' | 'sticker' | 'location' | 'background' | 'link' | 'audio';
+export type StoryPublishToolId = 'music' | 'location' | 'link' | 'audio' | 'text';
 
 type ToolDef = {
   id: StoryPublishToolId;
@@ -15,21 +15,20 @@ type ToolDef = {
 
 /** Instagram tarzı — fotoğraf ve videoda ortak + türe özel araçlar */
 const TOOLS: ToolDef[] = [
+  { id: 'text', icon: 'text-outline', label: 'Metin' },
   { id: 'audio', icon: 'volume-high-outline', label: 'Ses', videoOnly: true },
   { id: 'music', icon: 'musical-notes-outline', label: 'Müzik' },
   { id: 'link', icon: 'link-outline', label: 'Link' },
-  { id: 'sticker', icon: 'pricetag-outline', label: 'Etiket' },
   { id: 'location', icon: 'location-outline', label: 'Konum' },
-  { id: 'background', icon: 'color-palette-outline', label: 'Arka plan' },
 ];
 
 type StoryPublishRailProps = {
   isVideo: boolean;
   activeTool: StoryPublishToolId | null;
   hasMusic: boolean;
-  hasSticker: boolean;
   hasLocation: boolean;
   hasLinks: boolean;
+  hasText: boolean;
   videoAudioMuted: boolean;
   onPress: (tool: StoryPublishToolId) => void;
 };
@@ -38,9 +37,9 @@ export function StoryPublishRail({
   isVideo,
   activeTool,
   hasMusic,
-  hasSticker,
   hasLocation,
   hasLinks,
+  hasText,
   videoAudioMuted,
   onPress,
 }: StoryPublishRailProps) {
@@ -66,8 +65,8 @@ export function StoryPublishRail({
           const badge =
             (tool.id === 'music' && hasMusic) ||
             (tool.id === 'link' && hasLinks) ||
-            (tool.id === 'sticker' && hasSticker) ||
             (tool.id === 'location' && hasLocation) ||
+            (tool.id === 'text' && hasText) ||
             (tool.id === 'audio' && videoAudioMuted);
 
           const iconName =

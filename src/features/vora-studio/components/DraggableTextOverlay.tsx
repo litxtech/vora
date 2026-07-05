@@ -1,6 +1,11 @@
+import { useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, {
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import type { StudioTextOverlay } from '@/features/vora-studio/types';
@@ -25,10 +30,16 @@ type DraggableTextOverlayProps = {
   };
   onUpdate?: (id: string, patch: Partial<StudioTextOverlay>) => void;
   onSelect?: (id: string) => void;
+  /** minimal/story: sürükleme ve pinch yalnızca seçiliyken */
+  gesturesWhenSelectedOnly?: boolean;
+  /** false = pinch kapalı */
+  pinchEnabled?: boolean;
+  /** Görünmez dokunma/pinch genişletmesi (story) */
+  hitPadding?: number;
 };
 
 const MIN_FONT = 14;
-const MAX_FONT = 44;
+const MAX_FONT = 72;
 
 export function DraggableTextOverlay({
   overlay,
@@ -41,6 +52,9 @@ export function DraggableTextOverlay({
   dragDelete,
   onUpdate,
   onSelect,
+  gesturesWhenSelectedOnly = false,
+  pinchEnabled = true,
+  hitPadding = 0,
 }: DraggableTextOverlayProps) {
   const showChrome = chrome === 'studio';
   const studioUpdate = useStudioEditorStore((s) => s.updateTextOverlay);
@@ -50,6 +64,11 @@ export function DraggableTextOverlay({
 
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const pinchBaseFont = useSharedValue(overlay.fontSize);
+  const pinchScale = useSharedValue(1);
+
+  const canTransform = editable && (!gesturesWhenSelectedOnly || selected);
+  const canPinch = canTransform && pinchEnabled;
 
   const commitPosition = (dx: number, dy: number) => {
     if (containerWidth <= 0 || containerHeight <= 0) return;
@@ -63,6 +82,11 @@ export function DraggableTextOverlay({
     updateTextOverlay(overlay.id, { fontSize: next });
   };
 
+  const commitPinchFontSize = (scale: number, baseFont: number) => {
+    const next = Math.round(clampTime(baseFont * scale, MIN_FONT, MAX_FONT));
+    updateTextOverlay(overlay.id, { fontSize: next });
+  };
+
   const finishPan = (translationX: number, translationY: number, absoluteX: number, absoluteY: number) => {
     if (dragDelete?.shouldDeleteOnDrop(absoluteX, absoluteY)) {
       dragDelete.onDelete();
@@ -72,49 +96,99 @@ export function DraggableTextOverlay({
     dragDelete?.onDragEnd();
   };
 
-  const panGesture = Gesture.Pan()
-    .enabled(editable)
-    .minDistance(8)
-    .onStart(() => {
-      if (dragDelete) runOnJS(dragDelete.onDragStart)();
-    })
-    .onUpdate((e) => {
-      translateX.value = e.translationX;
-      translateY.value = e.translationY;
-      if (dragDelete) runOnJS(dragDelete.onDragMove)(e.absoluteX, e.absoluteY);
-    })
-    .onEnd((e) => {
-      runOnJS(finishPan)(e.translationX, e.translationY, e.absoluteX, e.absoluteY);
-      translateX.value = 0;
-      translateY.value = 0;
-    });
+  const composed = useMemo(() => {
+    const panGesture = Gesture.Pan()
+      .enabled(canTransform)
+      .maxPointers(1)
+      .minPointers(1)
+      .minDistance(6)
+      .onStart(() => {
+        if (dragDelete) runOnJS(dragDelete.onDragStart)();
+      })
+      .onUpdate((e) => {
+        translateX.value = e.translationX;
+        translateY.value = e.translationY;
+        if (dragDelete) runOnJS(dragDelete.onDragMove)(e.absoluteX, e.absoluteY);
+      })
+      .onEnd((e) => {
+        runOnJS(finishPan)(e.translationX, e.translationY, e.absoluteX, e.absoluteY);
+        translateX.value = 0;
+        translateY.value = 0;
+      });
 
-  const resizeGesture = Gesture.Pan()
-    .enabled(editable && selected)
-    .onUpdate(() => {})
-    .onEnd((e) => {
-      runOnJS(commitFontSize)(e.translationX + e.translationY);
-    });
+    const pinchGesture = Gesture.Pinch()
+      .enabled(canPinch)
+      .onBegin(() => {
+        pinchBaseFont.value = overlay.fontSize;
+        pinchScale.value = 1;
+      })
+      .onUpdate((e) => {
+        pinchScale.value = e.scale;
+      })
+      .onEnd((e) => {
+        runOnJS(commitPinchFontSize)(e.scale, pinchBaseFont.value);
+        pinchScale.value = 1;
+      });
 
-  const tapGesture = Gesture.Tap()
-    .enabled(editable)
-    .onEnd(() => {
-      runOnJS(setSelectedTextOverlay)(overlay.id);
-    });
+    const tapGesture = Gesture.Tap()
+      .enabled(editable)
+      .maxDuration(220)
+      .onEnd(() => {
+        runOnJS(setSelectedTextOverlay)(overlay.id);
+      });
 
-  const composed = Gesture.Simultaneous(panGesture, tapGesture);
+    const transformGestures = Gesture.Simultaneous(pinchGesture, panGesture);
+    return Gesture.Exclusive(transformGestures, tapGesture);
+  }, [
+    canPinch,
+    canTransform,
+    dragDelete,
+    editable,
+    overlay.fontSize,
+    overlay.id,
+    pinchBaseFont,
+    pinchScale,
+    setSelectedTextOverlay,
+    translateX,
+    translateY,
+  ]);
+
+  const resizeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(editable && selected)
+        .onEnd((e) => {
+          runOnJS(commitFontSize)(e.translationX + e.translationY);
+        }),
+    [editable, overlay.fontSize, overlay.id, selected],
+  );
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: translateX.value }, { translateY: translateY.value }],
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: canPinch ? pinchScale.value : 1 },
+    ],
   }));
 
   if (!visible) return null;
 
+  const hitPadY = hitPadding > 0 ? hitPadding * 0.65 : 0;
+
   return (
     <GestureDetector gesture={composed}>
       <Animated.View
+        collapsable={false}
         style={[
-          styles.wrap,
+          showChrome ? styles.wrap : styles.wrapMinimal,
+          hitPadding > 0
+            ? {
+                paddingHorizontal: hitPadding,
+                paddingVertical: hitPadY,
+                marginLeft: -hitPadding,
+                marginTop: -hitPadY,
+              }
+            : null,
           {
             left: overlay.x * containerWidth,
             top: overlay.y * containerHeight,
@@ -157,6 +231,10 @@ const styles = StyleSheet.create({
     maxWidth: '88%',
     paddingHorizontal: 2,
     paddingVertical: 4,
+  },
+  wrapMinimal: {
+    position: 'absolute',
+    maxWidth: '88%',
   },
   selected: {
     borderWidth: 1.5,

@@ -90,6 +90,7 @@ export async function fetchStoryBundleFallback(
       music: manifest.music,
       location: manifest.location,
       links: manifest.links,
+      textOverlays: manifest.textOverlays,
       originalAudioVolume: manifest.originalAudioVolume,
       createdAt: row.created_at,
       hasReacted: reactedIds.has(row.id),

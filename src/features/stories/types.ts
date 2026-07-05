@@ -5,6 +5,7 @@ import type {
   StoryLocationManifest,
   StoryMusicManifest,
 } from '@/features/stories/utils/storyManifest';
+import type { StudioTextOverlay } from '@/features/vora-studio/types';
 
 export type StoryNavigation =
   | 'auto_forward'
@@ -42,6 +43,7 @@ export type StoryItem = {
   music: StoryMusicManifest | null;
   location: StoryLocationManifest | null;
   links: StoryLinkManifest[];
+  textOverlays: StudioTextOverlay[];
   /** Video orijinal ses seviyesi — müzik yokken kullanılır (0 = sessiz). */
   originalAudioVolume: number;
   createdAt: string;
