@@ -76,4 +76,4 @@ export type UpdateSoundInput = {
   coverLocalUri?: string | null;
 };
 
-export type SoundListTabId = 'trending' | 'new' | 'following' | 'saved' | 'mine';
+export type SoundListTabId = 'recent' | 'saved' | 'mine' | 'trending' | 'new' | 'following';

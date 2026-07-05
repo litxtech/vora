@@ -1,10 +1,10 @@
 export const MUSIC_LIBRARY_BUCKET = 'music-library';
 
 export const MUSIC_LIST_TABS = [
-  { id: 'recent', label: 'Son Kullandıklarım' },
-  { id: 'trending', label: 'Trend' },
-  { id: 'featured', label: 'En İyiler' },
-  { id: 'new', label: 'Yeni' },
+  { id: 'popular', label: 'Popüler' },
+  { id: 'recent', label: 'Son' },
+  { id: 'saved', label: 'Kaydedilen' },
+  { id: 'all', label: 'Tümü' },
 ] as const;
 
 export type MusicListTabId = (typeof MUSIC_LIST_TABS)[number]['id'];

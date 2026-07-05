@@ -1,9 +1,5 @@
-import { useEffect, useState } from 'react';
 import { MusicPickerSheet } from '@/features/music/components/MusicPickerSheet';
-import { SoundPickerSheet } from '@/features/sounds/components/SoundPickerSheet';
-import type { MusicSelection, MusicTrack } from '@/features/music/types';
-
-type AudioPickerMode = 'music' | 'sound';
+import type { MusicSelection } from '@/features/music/types';
 
 type AudioPickerSheetProps = {
   visible: boolean;
@@ -11,72 +7,35 @@ type AudioPickerSheetProps = {
   onClose: () => void;
   onSelect: (selection: MusicSelection) => void;
   pauseVideo?: () => void;
-  /** Hangi kütüphane önce açılsın — gönderi/hikâye düzenlemede müzik keşfi */
-  initialMode?: AudioPickerMode;
+  /** Geriye dönük uyumluluk — tek birleşik liste kullanılır */
+  initialMode?: 'music' | 'sound';
   /** true: satıra tıklayınca detay sayfasına gitme, yalnızca seçim/önizleme */
   selectionMode?: boolean;
-  /** Hikâye: satıra dokununca hemen seç */
+  /** Satıra dokununca hemen seç (hikâye ve gönderi aynı) */
   tapToSelect?: boolean;
 };
 
+/** Hikâye ve gönderi paylaşımında ortak müzik seçici. */
 export function AudioPickerSheet({
   visible,
   selectedTrackId,
   onClose,
   onSelect,
   pauseVideo,
-  initialMode = 'music',
   selectionMode = true,
-  tapToSelect = false,
+  tapToSelect = true,
 }: AudioPickerSheetProps) {
-  const [mode, setMode] = useState<AudioPickerMode>(initialMode);
-
-  useEffect(() => {
-    if (visible) setMode(initialMode);
-  }, [visible, initialMode]);
-
   if (!visible) return null;
 
-  if (mode === 'music') {
-    return (
-      <MusicPickerSheet
-        visible
-        selectedTrackId={selectedTrackId ?? null}
-        onClose={onClose}
-        selectionMode={selectionMode}
-        tapToSelect={tapToSelect}
-        onSelect={(track: MusicTrack) => {
-          onSelect({
-            source: 'music',
-            trackId: track.id,
-            displayTitle: track.displayTitle,
-            artist: track.artist,
-            audioUrl: track.audioUrl,
-            durationSec: track.durationSec,
-            musicStartSec: 0,
-            musicEndSec: track.durationSec,
-            musicVolume: 0.8,
-            originalAudioVolume: 1,
-          });
-        }}
-        pauseVideo={pauseVideo}
-        alternateModeLabel="Sesler"
-        onAlternateMode={() => setMode('sound')}
-      />
-    );
-  }
-
   return (
-    <SoundPickerSheet
+    <MusicPickerSheet
       visible
-      selectedSoundId={selectedTrackId ?? null}
+      selectedTrackId={selectedTrackId ?? null}
       onClose={onClose}
-      selectionMode={selectionMode}
-      tapToSelect={tapToSelect}
       onSelect={onSelect}
       pauseVideo={pauseVideo}
-      alternateModeLabel="Müzik"
-      onAlternateMode={() => setMode('music')}
+      selectionMode={selectionMode}
+      tapToSelect={tapToSelect}
     />
   );
 }

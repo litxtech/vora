@@ -12,30 +12,37 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { formatMusicDuration } from '@/features/music/utils/formatMusicTime';
 import { isMusicTrackPlayable } from '@/features/music/constants';
-import type { MusicTrack } from '@/features/music/types';
+import type { AudioSource, MusicTrack } from '@/features/music/types';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type MusicTrackRowProps = {
-  track: MusicTrack;
+  track: MusicTrack & { source?: AudioSource };
   active?: boolean;
   previewing?: boolean;
+  saved?: boolean;
+  showSourceBadge?: boolean;
   onPress?: () => void;
   onPreview?: () => void;
   onUse?: () => void;
+  onToggleSave?: () => void;
 };
 
 export function MusicTrackRow({
   track,
   active,
   previewing,
+  saved,
+  showSourceBadge,
   onPress,
   onPreview,
   onUse,
+  onToggleSave,
 }: MusicTrackRowProps) {
   const { colors } = useTheme();
   const playable = isMusicTrackPlayable(track.audioUrl);
   const rotation = useSharedValue(0);
+  const source = track.source;
 
   useEffect(() => {
     if (previewing) {
@@ -61,9 +68,10 @@ export function MusicTrackRow({
       style={[
         styles.card,
         {
-          borderColor: active ? colors.accent : colors.border,
-          backgroundColor: colors.surface,
+          borderColor: active ? colors.accent : 'transparent',
+          backgroundColor: previewing ? `${colors.primary}12` : `${colors.textMuted}0D`,
         },
+        previewing && styles.cardPlaying,
       ]}
     >
       <Pressable onPress={onPreview} disabled={!playable || !onPreview} style={styles.coverWrap}>
@@ -94,9 +102,18 @@ export function MusicTrackRow({
       </Pressable>
 
       <View style={styles.meta}>
-        <Text variant="label" numberOfLines={1} style={styles.title}>
-          {track.displayTitle}
-        </Text>
+        <View style={styles.titleRow}>
+          <Text variant="label" numberOfLines={1} style={styles.title}>
+            {track.displayTitle}
+          </Text>
+          {showSourceBadge && source === 'sound' ? (
+            <View style={[styles.sourceBadge, { backgroundColor: `${colors.accent}22` }]}>
+              <Text variant="caption" style={{ color: colors.accent, fontSize: 10, fontWeight: '700' }}>
+                Ses
+              </Text>
+            </View>
+          ) : null}
+        </View>
         <Text secondary variant="caption" numberOfLines={1}>
           {track.artist || 'Bilinmeyen sanatçı'}
         </Text>
@@ -105,6 +122,16 @@ export function MusicTrackRow({
           {track.usageCount > 0 ? ` · ${track.usageCount.toLocaleString('tr-TR')} kullanım` : ''}
         </Text>
       </View>
+
+      {onToggleSave ? (
+        <Pressable onPress={onToggleSave} hitSlop={8} style={styles.iconAction}>
+          <Ionicons
+            name={saved ? 'bookmark' : 'bookmark-outline'}
+            size={20}
+            color={saved ? colors.accent : colors.textSecondary}
+          />
+        </Pressable>
+      ) : null}
 
       {onUse ? (
         <Pressable
@@ -116,7 +143,11 @@ export function MusicTrackRow({
             Kullan
           </Text>
         </Pressable>
-      ) : null}
+      ) : (
+        <View style={styles.iconAction}>
+          <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -128,8 +159,15 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     padding: spacing.sm,
     borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1.5,
     marginBottom: spacing.xs,
+  },
+  cardPlaying: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   coverWrap: {
     position: 'relative',
@@ -168,8 +206,25 @@ const styles = StyleSheet.create({
     minWidth: 0,
     gap: 2,
   },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+  },
   title: {
+    flex: 1,
     fontWeight: '700',
+  },
+  sourceBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+  },
+  iconAction: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   useBtn: {
     paddingHorizontal: spacing.sm,

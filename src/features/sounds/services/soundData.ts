@@ -149,6 +149,46 @@ export async function fetchFollowingSounds(limit = 30): Promise<Sound[]> {
   return sounds;
 }
 
+export async function fetchRecentSounds(userId: string, limit = 30): Promise<Sound[]> {
+  const cacheKey = `recent:${userId}:${limit}`;
+  const cached = getCachedSounds(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from('sound_usage')
+    .select(`created_at, sounds (${SOUND_SELECT})`)
+    .eq('user_id', userId)
+    .eq('is_valid', true)
+    .order('created_at', { ascending: false })
+    .limit(limit * 4);
+
+  if (error || !data) return [];
+
+  const seen = new Set<string>();
+  const sounds: Sound[] = [];
+  for (const row of data) {
+    const nested = row.sounds as unknown as SoundRow | SoundRow[] | null;
+    const soundRow = Array.isArray(nested) ? nested[0] : nested;
+    if (!soundRow || soundRow.status !== 'published' || seen.has(soundRow.id)) continue;
+    seen.add(soundRow.id);
+    sounds.push(mapSound(soundRow));
+    if (sounds.length >= limit) break;
+  }
+
+  setCachedSounds(cacheKey, sounds);
+  return sounds;
+}
+
+export async function fetchSavedSoundIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('sound_favorites')
+    .select('sound_id')
+    .eq('user_id', userId);
+
+  if (error || !data) return new Set();
+  return new Set(data.map((row) => row.sound_id as string));
+}
+
 export async function fetchSavedSounds(userId: string, limit = 30): Promise<Sound[]> {
   const cacheKey = `saved:${userId}:${limit}`;
   const cached = getCachedSounds(cacheKey);

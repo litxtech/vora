@@ -1,6 +1,7 @@
 import {
   getCachedCategories,
   getCachedTracks,
+  invalidateMusicCache,
   setCachedCategories,
   setCachedTracks,
 } from '@/features/music/services/musicCache';
@@ -205,6 +206,52 @@ export async function fetchRecentMusic(userId: string, limit = 30): Promise<Musi
 
   setCachedTracks(cacheKey, tracks);
   return tracks;
+}
+
+export async function fetchSavedMusic(userId: string, limit = 30): Promise<MusicTrack[]> {
+  const cacheKey = `saved:${userId}:${limit}`;
+  const cached = getCachedTracks(cacheKey);
+  if (cached) return cached;
+
+  const { data, error } = await supabase
+    .from('user_saved_music')
+    .select(`created_at, music_tracks (${TRACK_SELECT})`)
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error || !data) return [];
+
+  const tracks: MusicTrack[] = [];
+  for (const row of data) {
+    const nested = row.music_tracks as unknown as TrackRow | TrackRow[] | null;
+    const trackRow = Array.isArray(nested) ? nested[0] : nested;
+    if (trackRow) tracks.push(mapTrack(trackRow));
+  }
+
+  setCachedTracks(cacheKey, filterPlayableTracks(tracks));
+  return filterPlayableTracks(tracks);
+}
+
+export async function fetchSavedMusicIds(userId: string): Promise<Set<string>> {
+  const { data, error } = await supabase
+    .from('user_saved_music')
+    .select('track_id')
+    .eq('user_id', userId);
+
+  if (error || !data) return new Set();
+  return new Set(data.map((row) => row.track_id as string));
+}
+
+export async function toggleSavedMusic(
+  trackId: string,
+): Promise<{ saved: boolean; error: string | null }> {
+  const { data, error } = await supabase.rpc('toggle_saved_music', { p_track_id: trackId });
+  if (error) {
+    return { saved: false, error: error.message };
+  }
+  invalidateMusicCache();
+  return { saved: Boolean(data), error: null };
 }
 
 export async function fetchMusicByCategory(categoryId: string, limit = 40): Promise<MusicTrack[]> {

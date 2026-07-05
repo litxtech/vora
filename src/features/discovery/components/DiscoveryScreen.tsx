@@ -16,6 +16,7 @@ import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import type { RegionId } from '@/constants/regions';
 import { DiscoveryHeader } from '@/features/discovery/components/DiscoveryHeader';
+import { DiscoveryMusicList } from '@/features/discovery/components/DiscoveryMusicList';
 import { DiscoveryTabBar } from '@/features/discovery/components/DiscoveryTabBar';
 import { DiscoveryUserSearchResults } from '@/features/discovery/components/DiscoveryUserSearchResults';
 import { TrendBusinessCard } from '@/features/discovery/components/TrendBusinessCard';
@@ -100,6 +101,8 @@ function buildDiscoveryRows(result: DiscoveryResult | null): DiscoveryRow[] {
         kind: 'hotel' as const,
         payload: item,
       }));
+    case 'music':
+      return [];
     default:
       return [];
   }
@@ -184,6 +187,7 @@ export function DiscoveryScreen() {
 
   const activeTabLabel = DISCOVERY_TABS.find((t) => t.id === tab)?.label ?? 'İçerik';
   const showUserSearch = userSearchOpen;
+  const isMusicTab = tab === 'music';
   const listData = useMemo(() => {
     if (result && result.tab !== tab) return [];
     return buildDiscoveryRows(result);
@@ -247,7 +251,7 @@ export function DiscoveryScreen() {
             onSeeAll={() => router.push('/featured-profiles' as never)}
           />
         ) : null}
-        {!showUserSearch ? (
+        {!showUserSearch && !isMusicTab ? (
           <View style={styles.sectionHead}>
             <Text variant="label">{activeTabLabel}</Text>
             <Text variant="caption" secondary>
@@ -260,6 +264,7 @@ export function DiscoveryScreen() {
     [
       activeTabLabel,
       featuredProfiles,
+      isMusicTab,
       showFeaturedCarousel,
       setTab,
       showUserSearch,
@@ -335,6 +340,22 @@ export function DiscoveryScreen() {
       ) : null,
     ...getAndroidFlatListPerfProps(),
   };
+
+  if (isMusicTab) {
+    return (
+      <GradientBackground>
+        <DiscoveryMusicList
+          contentBottomInset={listBottomInset}
+          ListHeaderComponent={
+            <View style={[styles.headerStack, { paddingTop: insets.top + spacing.md }]}>
+              <DiscoveryHeader />
+              {!showUserSearch ? <DiscoveryTabBar value={tab} onChange={setTab} /> : null}
+            </View>
+          }
+        />
+      </GradientBackground>
+    );
+  }
 
   return (
     <GradientBackground>

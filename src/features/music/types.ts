@@ -40,6 +40,11 @@ export type MusicTrack = {
 
 export type AudioSource = 'music' | 'sound';
 
+/** Katalog müziği + kullanıcı sesleri — tek listede gösterim. */
+export type AudioCatalogItem = MusicTrack & {
+  source: AudioSource;
+};
+
 export type MusicSelection = {
   /** @default 'music' */
   source?: AudioSource;

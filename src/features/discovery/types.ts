@@ -3,9 +3,10 @@ import type { ReelItem } from '@/features/reels/types';
 import type { EventListing } from '@/features/events/types';
 import type { PersonnelListing } from '@/features/personnel-center/types';
 import type { HotelListing } from '@/features/hotel-center/types';
+import type { AudioCatalogItem } from '@/features/music/types';
 import type { RegionId } from '@/constants/regions';
 
-export type DiscoveryTab = 'posts' | 'reels' | 'news' | 'events' | 'businesses' | 'jobs' | 'hotels';
+export type DiscoveryTab = 'posts' | 'reels' | 'news' | 'events' | 'businesses' | 'jobs' | 'hotels' | 'music';
 
 export type DiscoveryScope = 'region' | 'karadeniz';
 
@@ -41,7 +42,8 @@ export type DiscoveryResult =
   | { tab: 'events'; items: EventListing[]; nextCursor: string | null }
   | { tab: 'businesses'; items: TrendBusiness[]; nextCursor: string | null }
   | { tab: 'jobs'; items: PersonnelListing[]; nextCursor: string | null }
-  | { tab: 'hotels'; items: HotelListing[]; nextCursor: string | null };
+  | { tab: 'hotels'; items: HotelListing[]; nextCursor: string | null }
+  | { tab: 'music'; items: AudioCatalogItem[]; nextCursor: string | null };
 
 export type DiscoveryUserResult = {
   id: string;

@@ -1,59 +1,25 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
-import { router, type Href } from 'expo-router';
+import { useCallback } from 'react';
+import { Alert, Modal, Pressable, StyleSheet, View } from 'react-native';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
-import { MusicFilterChip } from '@/features/music/components/MusicFilterChip';
-import { MusicTrackRow } from '@/features/music/components/MusicTrackRow';
-import { isMusicTrackPlayable, MUSIC_LIST_TABS, type MusicListTabId } from '@/features/music/constants';
+import { MusicCatalogPanel } from '@/features/music/components/MusicCatalogPanel';
+import { isMusicTrackPlayable } from '@/features/music/constants';
+import { catalogItemToMusicSelection } from '@/features/music/services/audioCatalog';
+import type { AudioCatalogItem, MusicSelection } from '@/features/music/types';
 import { isPersistableMusicTrackId } from '@/features/music/utils/trackId';
-import { invalidateMusicCache } from '@/features/music/services/musicCache';
-import { useMusicPreview } from '@/features/music/hooks/useMusicPreview';
-import { useMusicSearch } from '@/features/music/hooks/useMusicSearch';
-import {
-  fetchFeaturedMusic,
-  fetchMusicByCategory,
-  fetchMusicCategories,
-  fetchNewMusic,
-  fetchRecentMusic,
-  fetchTrendingMusic,
-} from '@/features/music/services/musicData';
-import type { MusicCategory, MusicTrack } from '@/features/music/types';
-import { radius, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
-import { useAuth } from '@/providers/AuthProvider';
-
-const TAB_ICONS: Record<MusicListTabId, keyof typeof Ionicons.glyphMap> = {
-  featured: 'star-outline',
-  recent: 'time-outline',
-  trending: 'flame-outline',
-  new: 'sparkles-outline',
-};
 
 type MusicPickerSheetProps = {
   visible: boolean;
   selectedTrackId: string | null;
   onClose: () => void;
-  onSelect: (track: MusicTrack) => void;
-  /** Video önizlemesini duraklat — ses oturumu çakışmasını önler */
+  onSelect: (selection: MusicSelection) => void;
   pauseVideo?: () => void;
-  alternateModeLabel?: string;
-  onAlternateMode?: () => void;
-  /** Gönderi/hikâye seçicisinde: detay sayfasına yönlendirme yok */
   selectionMode?: boolean;
-  /** Seçim modunda satıra dokununca doğrudan seç (hikâye) */
   tapToSelect?: boolean;
 };
 
@@ -63,427 +29,90 @@ export function MusicPickerSheet({
   onClose,
   onSelect,
   pauseVideo,
-  alternateModeLabel,
-  onAlternateMode,
-  selectionMode = false,
-  tapToSelect = false,
+  selectionMode = true,
+  tapToSelect = true,
 }: MusicPickerSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { user } = useAuth();
-  const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<MusicListTabId>('recent');
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [categories, setCategories] = useState<MusicCategory[]>([]);
-  const [tracks, setTracks] = useState<MusicTrack[]>([]);
-  const [loading, setLoading] = useState(false);
-  const { results: searchResults, searching, hasQuery } = useMusicSearch(query);
-  const { togglePreview, stopPreview, playingId } = useMusicPreview();
 
-  useEffect(() => {
-    if (!visible) return;
-    invalidateMusicCache();
-    void fetchMusicCategories().then(setCategories);
-  }, [visible]);
-
-  const loadTracks = useCallback(async () => {
-    if (hasQuery) return;
-    setLoading(true);
-    try {
-      if (categoryId) {
-        setTracks(await fetchMusicByCategory(categoryId));
+  const handleAddTrack = useCallback(
+    (track: AudioCatalogItem) => {
+      if (!isMusicTrackPlayable(track.audioUrl)) {
+        Alert.alert('Ses dosyası yok', 'Bu parçanın sesi henüz yüklenmemiş.');
         return;
       }
-
-      switch (tab) {
-        case 'recent':
-          setTracks(user ? await fetchRecentMusic(user.id) : []);
-          break;
-        case 'trending':
-          setTracks(await fetchTrendingMusic('7d'));
-          break;
-        case 'new':
-          setTracks(await fetchNewMusic());
-          break;
-        default:
-          setTracks(await fetchFeaturedMusic());
+      if (track.source === 'music' && !isPersistableMusicTrackId(track.id)) {
+        Alert.alert('Demo parça', 'Paylaşım için listeden lisanslı bir parça seçin.');
+        return;
       }
-    } finally {
-      setLoading(false);
-    }
-  }, [categoryId, hasQuery, tab, user]);
-
-  useEffect(() => {
-    if (!visible || hasQuery) return;
-    void loadTracks();
-  }, [visible, loadTracks, hasQuery]);
-
-  useEffect(() => {
-    if (!visible) {
-      setQuery('');
-      setCategoryId(null);
-      setTab('recent');
-      stopPreview();
-      return;
-    }
-    pauseVideo?.();
-  }, [visible, stopPreview, pauseVideo]);
-
-  const displayTracks = hasQuery ? searchResults : tracks;
-  const previewTrack = displayTracks.find((item) => item.id === playingId) ?? null;
-
-  const handleListen = async (track: MusicTrack) => {
-    pauseVideo?.();
-    const result = await togglePreview(track.id, track.audioUrl);
-    if (!result.ok && result.error) {
-      Alert.alert('Önizleme', result.error);
-    }
-  };
-
-  const handleAddTrack = (track: MusicTrack) => {
-    if (!isMusicTrackPlayable(track.audioUrl)) {
-      Alert.alert('Ses dosyası yok', 'Bu parçanın sesi henüz yüklenmemiş.');
-      return;
-    }
-    if (!isPersistableMusicTrackId(track.id)) {
-      Alert.alert(
-        'Demo parça',
-        'Bu parça yalnızca önizleme içindir. Paylaşım için listeden lisanslı bir parça seçin.',
-      );
-      return;
-    }
-    stopPreview();
-    onSelect(track);
-    onClose();
-  };
+      onSelect(catalogItemToMusicSelection(track));
+      onClose();
+    },
+    [onClose, onSelect],
+  );
 
   const handleClose = useCallback(() => {
-    stopPreview();
     onClose();
-  }, [onClose, stopPreview]);
+  }, [onClose]);
 
-  const sectionTitle = useMemo(() => {
-    if (hasQuery) return 'Arama sonuçları';
-    if (categoryId) {
-      return categories.find((c) => c.id === categoryId)?.label ?? 'Kategori';
-    }
-    return MUSIC_LIST_TABS.find((t) => t.id === tab)?.label ?? 'Müzikler';
-  }, [hasQuery, categoryId, categories, tab]);
-
-  const selectTab = (id: MusicListTabId) => {
-    setTab(id);
-    setCategoryId(null);
-  };
-
-  const selectCategory = (id: string) => {
-    setCategoryId((prev) => (prev === id ? null : id));
-  };
-
-  const openSoundLibrary = () => {
-    stopPreview();
-    onClose();
-    router.push('/sounds' as Href);
-  };
-
-  const openSoundCreate = () => {
-    stopPreview();
-    onClose();
-    router.push('/sounds/create' as Href);
-  };
+  if (!visible) return null;
 
   return (
-    <Modal visible={visible} animationType={resolveModalAnimationType('slide')} presentationStyle="fullScreen" onRequestClose={handleClose}>
-      <View style={[styles.screen, { backgroundColor: colors.background, paddingTop: insets.top }]}>
-        <View style={styles.header}>
-          <Pressable onPress={handleClose} hitSlop={12} style={styles.iconBtn}>
-            <Ionicons name="chevron-down" size={22} color={colors.text} />
-          </Pressable>
-          <Text variant="label" style={styles.headerTitle}>
-            Müzik ekle
-          </Text>
-          {alternateModeLabel && onAlternateMode ? (
-            <Pressable onPress={onAlternateMode} hitSlop={12} style={styles.iconBtn}>
-              <Text variant="caption" style={{ color: colors.primary, fontWeight: '700' }}>
-                {alternateModeLabel}
-              </Text>
+    <Modal
+      visible
+      animationType={resolveModalAnimationType('slide')}
+      presentationStyle="fullScreen"
+      onRequestClose={handleClose}
+    >
+      <GradientBackground>
+        <View style={[styles.screen, { paddingTop: insets.top }]}>
+          <View style={styles.header}>
+            <Pressable onPress={handleClose} hitSlop={12} style={styles.iconBtn}>
+              <Ionicons name="chevron-down" size={24} color={colors.text} />
             </Pressable>
-          ) : (
-            <View style={styles.iconBtn} />
-          )}
-        </View>
-
-        {!selectionMode ? (
-          <View style={styles.quickLinks}>
-            <Pressable
-              style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={openSoundLibrary}
-            >
-              <Ionicons name="library-outline" size={18} color={colors.accent} />
-              <Text variant="caption" style={{ fontWeight: '600' }}>
-                Ses Kütüphanesi
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[styles.quickLink, { backgroundColor: colors.surface, borderColor: colors.border }]}
-              onPress={openSoundCreate}
-            >
-              <Ionicons name="mic-outline" size={18} color={colors.primary} />
-              <Text variant="caption" style={{ fontWeight: '600' }}>
-                Ses Oluştur
-              </Text>
-            </Pressable>
-          </View>
-        ) : null}
-
-        <View style={[styles.searchWrap, { backgroundColor: `${colors.textMuted}12` }]}>
-          <Ionicons name="search" size={16} color={colors.textMuted} />
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder="Şarkı, sanatçı, albüm..."
-            placeholderTextColor={colors.textMuted}
-            value={query}
-            onChangeText={setQuery}
-            autoCorrect={false}
-            returnKeyType="search"
-          />
-          {query.length > 0 ? (
-            <Pressable onPress={() => setQuery('')} hitSlop={8}>
-              <Ionicons name="close-circle" size={16} color={colors.textMuted} />
-            </Pressable>
-          ) : searching ? (
-            <ActivityIndicator size="small" color={colors.primary} />
-          ) : null}
-        </View>
-
-        {!hasQuery ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.filterRow}
-            style={styles.filterScroll}
-          >
-            {MUSIC_LIST_TABS.map((item) => (
-              <MusicFilterChip
-                key={item.id}
-                label={item.label}
-                icon={TAB_ICONS[item.id]}
-                active={tab === item.id && !categoryId}
-                accent
-                onPress={() => selectTab(item.id)}
-              />
-            ))}
-            <View style={[styles.filterDivider, { backgroundColor: `${colors.textMuted}25` }]} />
-            {categories.map((item) => (
-              <MusicFilterChip
-                key={item.id}
-                label={item.label}
-                active={categoryId === item.id}
-                onPress={() => selectCategory(item.id)}
-              />
-            ))}
-          </ScrollView>
-        ) : null}
-
-        <View style={styles.listHeader}>
-          <Text variant="caption" style={{ color: colors.textSecondary, fontWeight: '600' }}>
-            {sectionTitle}
-          </Text>
-          {!loading && displayTracks.length > 0 ? (
-            <Text variant="caption" secondary>
-              {displayTracks.length} parça
+            <Text variant="label" style={styles.headerTitle}>
+              Müzik ekle
             </Text>
-          ) : null}
-        </View>
-
-        {loading && !hasQuery ? (
-          <View style={styles.loaderWrap}>
-            <ActivityIndicator color={colors.primary} />
+            <View style={styles.iconBtn} />
           </View>
-        ) : (
-          <FlatList
-            data={displayTracks}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={[
-              styles.list,
-              { paddingBottom: (previewTrack ? 88 : 0) + insets.bottom + spacing.md },
-            ]}
-            showsVerticalScrollIndicator={false}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <Ionicons name="musical-notes-outline" size={32} color={colors.textMuted} />
-                <Text secondary variant="caption" style={{ textAlign: 'center' }}>
-                  {hasQuery
-                    ? 'Sonuç bulunamadı.'
-                    : tab === 'recent'
-                      ? 'Henüz müzik kullanmadınız. Trend veya yeni parçalara göz atın.'
-                      : 'Henüz müzik eklenmemiş.'}
-                </Text>
-              </View>
-            }
-            renderItem={({ item }) => (
-              <MusicTrackRow
-                track={item}
-                active={selectedTrackId === item.id}
-                previewing={playingId === item.id}
-                onPreview={() => void handleListen(item)}
-                onUse={() => handleAddTrack(item)}
-                onPress={() => {
-                  if (selectionMode && tapToSelect) {
-                    handleAddTrack(item);
-                    return;
-                  }
-                  if (selectionMode) {
-                    void handleListen(item);
-                    return;
-                  }
-                  if (isPersistableMusicTrackId(item.id)) {
-                    stopPreview();
-                    onClose();
-                    router.push(`/music/${item.id}` as Href);
-                  }
-                }}
-              />
-            )}
-          />
-        )}
 
-        {previewTrack ? (
-          <Pressable
-            style={[
-              styles.previewBar,
-              {
-                backgroundColor: colors.surfaceElevated,
-                borderTopColor: `${colors.primary}44`,
-                paddingBottom: insets.bottom + spacing.sm,
-              },
-            ]}
-            onPress={() => handleAddTrack(previewTrack)}
-          >
-            <Pressable
-              style={[styles.previewPlayBtn, { backgroundColor: colors.primary }]}
-              onPress={(event) => {
-                event.stopPropagation();
-                void handleListen(previewTrack);
-              }}
-            >
-              <Ionicons name="pause" size={18} color="#fff" />
-            </Pressable>
-            <View style={styles.previewMeta}>
-              <Text variant="label" numberOfLines={1}>
-                {previewTrack.displayTitle}
-              </Text>
-              <Text secondary variant="caption" numberOfLines={1}>
-                {previewTrack.artist || 'Bilinmeyen sanatçı'}
-              </Text>
-            </View>
-            <View style={[styles.previewAdd, { backgroundColor: colors.accent }]}>
-              <Text variant="caption" style={styles.previewAddText}>
-                Kullan
-              </Text>
-            </View>
-          </Pressable>
-        ) : null}
-      </View>
+          <MusicCatalogPanel
+            active={visible}
+            contentBottomInset={insets.bottom}
+            selectedTrackId={selectedTrackId}
+            selectionMode={selectionMode}
+            tapToSelect={tapToSelect}
+            heroTitle="Müzik ekle"
+            heroSubtitle="Hikâyene parça seç veya önizle"
+            previewActionLabel="Kullan"
+            onBeforePreview={pauseVideo}
+            onPickTrack={handleAddTrack}
+          />
+        </View>
+      </GradientBackground>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
+  screen: {
+    flex: 1,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  headerTitle: { fontSize: 16, fontWeight: '700' },
-  iconBtn: { width: 72, height: 36, alignItems: 'center', justifyContent: 'center' },
-  quickLinks: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingBottom: spacing.sm,
-  },
-  quickLink: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.lg,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    marginHorizontal: spacing.md,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 8,
-    borderRadius: radius.lg,
-  },
-  searchInput: { flex: 1, fontSize: 14, paddingVertical: 0 },
-  filterScroll: { flexGrow: 0, maxHeight: 44 },
-  filterRow: {
-    paddingHorizontal: spacing.md,
-    gap: 6,
-    alignItems: 'center',
-    paddingBottom: spacing.sm,
-  },
-  filterDivider: {
-    width: 1,
-    height: 20,
-    marginHorizontal: 2,
-  },
-  listHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs,
   },
-  list: { paddingHorizontal: spacing.md },
-  loaderWrap: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  empty: {
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingTop: spacing.xxl,
-    paddingHorizontal: spacing.lg,
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '800',
   },
-  previewBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-  },
-  previewPlayBtn: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  iconBtn: {
+    width: 44,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  previewMeta: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  previewAdd: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-  },
-  previewAddText: {
-    color: '#fff',
-    fontWeight: '700',
   },
 });
