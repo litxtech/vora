@@ -38,12 +38,11 @@ import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore
 import { radius, spacing } from '@/constants/theme';
 import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import { useTheme } from '@/providers/ThemeProvider';
+import { CaptureCameraZoomOverlay } from '@/features/compose/components/CaptureCameraZoomOverlay';
+import { useCaptureCameraZoom } from '@/features/compose/hooks/useCaptureCameraZoom';
 
 const MAX_VIDEO_DURATION_SEC = 90;
 const MIN_VIDEO_MS = 800;
-const DOUBLE_TAP_MS = 400;
-const PREVIEW_TAP_TOP = 56;
-const PREVIEW_TAP_BOTTOM = 140;
 const VIDEO_MODE_READY_TIMEOUT_MS = 6000;
 const RECORD_ASYNC_RETRY_MS = 150;
 const RECORD_ASYNC_MAX_ATTEMPTS = 10;
@@ -91,31 +90,37 @@ export function CreateCaptureScreen() {
   const stopWhenReadyRef = useRef(false);
   const recordingRef = useRef(false);
   const recordAsyncActiveRef = useRef(false);
-  const lastPreviewTapAtRef = useRef(0);
-  const flipCameraRef = useRef<() => void>(() => {});
   const videoModeReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flippingRef = useRef(false);
 
   const cameraMute = !micPermission?.granted;
 
-  const flipCamera = useCallback(() => {
+  const handleFlipCameraRequest = useCallback(() => {
     if (recording || busy || flippingRef.current) return;
     flippingRef.current = true;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFacing((f) => (f === 'back' ? 'front' : 'back'));
-  }, [recording, busy]);
+  }, [busy, recording]);
 
-  flipCameraRef.current = flipCamera;
-
-  const handlePreviewTap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastPreviewTapAtRef.current < DOUBLE_TAP_MS) {
-      lastPreviewTapAtRef.current = 0;
-      flipCameraRef.current();
-      return;
-    }
-    lastPreviewTapAtRef.current = now;
-  }, []);
+  const {
+    linearZoom,
+    displayZoom,
+    selectedLens,
+    indicatorVisible,
+    activePresetId,
+    presets,
+    previewGesture,
+    applyPreset,
+    handleAvailableLensesChanged,
+    updateZoomFromRail,
+    handleZoomRailStart,
+    handleZoomRailEnd,
+    flipCameraWithReset,
+  } = useCaptureCameraZoom({
+    enabled: cameraLive && !busy,
+    resetKey: facing,
+    onFlipCamera: handleFlipCameraRequest,
+  });
 
   useEffect(() => {
     recordingRef.current = recording;
@@ -603,6 +608,14 @@ export function CreateCaptureScreen() {
               mode={cameraMode}
               mute={cameraMute}
               mirror={false}
+              zoom={linearZoom}
+              {...(Platform.OS === 'ios'
+                ? {
+                    selectedLens,
+                    onAvailableLensesChanged: ({ lenses }) =>
+                      handleAvailableLensesChanged(lenses),
+                  }
+                : {})}
               {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
               onCameraReady={handleCameraReady}
               onMountError={({ message }) => {
@@ -624,6 +637,14 @@ export function CreateCaptureScreen() {
           mode={cameraMode}
           mute={cameraMute}
           mirror={false}
+          zoom={linearZoom}
+          {...(Platform.OS === 'ios'
+            ? {
+                selectedLens,
+                onAvailableLensesChanged: ({ lenses }) =>
+                  handleAvailableLensesChanged(lenses),
+              }
+            : {})}
           {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
           onCameraReady={handleCameraReady}
           onMountError={({ message }) => {
@@ -671,7 +692,7 @@ export function CreateCaptureScreen() {
               color="#fff"
             />
           </Pressable>
-          <Pressable onPress={flipCamera} hitSlop={12} style={styles.topBtn}>
+          <Pressable onPress={flipCameraWithReset} hitSlop={12} style={styles.topBtn}>
             <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
           </Pressable>
         </View>
@@ -750,9 +771,9 @@ export function CreateCaptureScreen() {
         </Pressable>
       </View>
 
-      <Pressable
-        style={[
-          styles.cameraTapLayer,
+      <CaptureCameraZoomOverlay
+        enabled={cameraLive && !busy}
+        bounds={
           shareMode === 'story'
             ? {
                 top: insets.top + STORY_CAPTURE_TOP_OFFSET,
@@ -761,13 +782,20 @@ export function CreateCaptureScreen() {
                 right: STORY_CARD_HORIZONTAL_INSET,
               }
             : {
-                top: insets.top + PREVIEW_TAP_TOP,
-                bottom: insets.bottom + PREVIEW_TAP_BOTTOM,
-              },
-        ]}
-        onPress={handlePreviewTap}
-        accessibilityLabel="Kamerayı çevir"
-        accessibilityHint="Önizleme alanına iki kez dokunarak ön ve arka kamera arasında geçiş yapın"
+                top: insets.top + 56,
+                bottom: insets.bottom + 140,
+              }
+        }
+        linearZoom={linearZoom}
+        displayZoom={displayZoom}
+        indicatorVisible={indicatorVisible}
+        activePresetId={activePresetId}
+        presets={presets}
+        previewGesture={previewGesture}
+        applyPreset={applyPreset}
+        onZoomRailChange={updateZoomFromRail}
+        onZoomRailStart={handleZoomRailStart}
+        onZoomRailEnd={handleZoomRailEnd}
       />
 
       {busy ? (
@@ -789,14 +817,6 @@ const styles = StyleSheet.create({
   },
   storyCameraFrame: {
     position: 'absolute',
-  },
-  cameraTapLayer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 5,
-    elevation: 5,
-    backgroundColor: 'rgba(0,0,0,0.01)',
   },
   centered: {
     flex: 1,
