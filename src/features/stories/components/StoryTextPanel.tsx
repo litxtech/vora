@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
   Pressable,
@@ -25,7 +25,10 @@ type StoryTextPanelProps = {
   onUpdate: (id: string, patch: Partial<StudioTextOverlay>) => void;
   onAdd: () => void;
   onRemove: (id: string) => void;
-  onClose: () => void;
+  /** Seçili metni kaydedip paneli kapatır. */
+  onFinish?: (pending?: { id: string; text: string }) => void;
+  /** @deprecated onFinish kullanın */
+  onClose?: () => void;
 };
 
 export function StoryTextPanel({
@@ -36,11 +39,13 @@ export function StoryTextPanel({
   onUpdate,
   onAdd,
   onRemove,
+  onFinish,
   onClose,
 }: StoryTextPanelProps) {
   const { colors, mode } = useTheme();
   const surface = glassSurface[mode];
   const inputRef = useRef<TextInput>(null);
+  const [draft, setDraft] = useState('');
   const panelMaxHeight = Dimensions.get('window').height * 0.5;
 
   const selected =
@@ -54,18 +59,37 @@ export function StoryTextPanel({
   }, [visible, overlays, selectedId, onSelect]);
 
   useEffect(() => {
-    if (!visible || !selected) return;
+    if (!visible || !selectedId) return;
+    const overlay = overlays.find((item) => item.id === selectedId);
+    if (!overlay) return;
+    setDraft(overlay.text);
     const timer = setTimeout(() => inputRef.current?.focus(), 280);
     return () => clearTimeout(timer);
-  }, [visible, selectedId, selected]);
+  }, [visible, selectedId, overlays]);
 
   const handleDone = () => {
-    overlays.filter((item) => !item.text.trim()).forEach((item) => onRemove(item.id));
-    onClose();
+    inputRef.current?.blur();
+    const trimmed = draft.trim();
+    const finish = onFinish ?? onClose;
+    if (!finish) return;
+
+    if (onFinish) {
+      if (selected && trimmed) {
+        onFinish({ id: selected.id, text: trimmed });
+        return;
+      }
+      onFinish();
+      return;
+    }
+
+    onClose?.();
   };
 
   const patchSelected = (patch: Partial<StudioTextOverlay>) => {
     if (!selected) return;
+    if (typeof patch.text === 'string') {
+      setDraft(patch.text);
+    }
     onUpdate(selected.id, patch);
   };
 
@@ -139,7 +163,7 @@ export function StoryTextPanel({
                 style={[styles.input, { color: colors.text }]}
                 placeholder="Metin yaz…"
                 placeholderTextColor={colors.textMuted}
-                value={selected.text}
+                value={draft}
                 onChangeText={(text) => patchSelected({ text })}
                 multiline
                 maxLength={120}

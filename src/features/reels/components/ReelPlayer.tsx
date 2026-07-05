@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, LayoutChangeEvent, StyleSheet, View } from 'react-native';
+import { Dimensions, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
 import { ensureReelFeedAudioMode } from '@/features/music/services/audioPreview';
 import { VideoView, type VideoPlayer } from 'expo-video';
@@ -13,6 +13,8 @@ import { useSafetyPreferences } from '@/features/moderation/hooks/useSafetyPrefe
 import { recordReelCompleteView } from '@/features/reels/services/reelsEngagement';
 import { prepareReelMusicInPool, attachReelMusic, detachReelMusicIfOwner, ensureReelVideoPlaying } from '@/features/music/services/reelMusicSync';
 import { useReelVideoPlayer } from '@/features/reels/hooks/useReelVideoPlayer';
+import { useReelHoldToSpeed } from '@/features/reels/hooks/useReelHoldToSpeed';
+import { REEL_HOLD_SPEED_DELAY_MS } from '@/features/reels/constants';
 import { markReelWarmed, isReelWarmed } from '@/features/reels/services/reelWarmup';
 import {
   isVideoPlayerAlive,
@@ -148,6 +150,11 @@ function ReelPlayerVideo({
 
   const player = useReelVideoPlayer(item.playbackId, videoSource);
   const musicOriginalVolume = item.musicPlayback?.originalAudioVolume ?? 1;
+  const { boosting, beginBoost, endBoost } = useReelHoldToSpeed({
+    player,
+    reelId: item.id,
+    enabled: isActive && shouldPlay,
+  });
 
   useEffect(() => {
     mountedRef.current = true;
@@ -498,6 +505,23 @@ function ReelPlayerVideo({
         />
       ) : null}
 
+      {isActive && shouldPlay ? (
+        <Pressable
+          style={styles.speedTouchLayer}
+          onPressIn={beginBoost}
+          onPressOut={endBoost}
+          delayPressIn={REEL_HOLD_SPEED_DELAY_MS}
+          accessibilityLabel="Basılı tutarak hızlandır"
+          accessibilityHint="Videoyu iki kat hızda izlemek için basılı tutun"
+        />
+      ) : null}
+
+      {boosting ? (
+        <View style={styles.speedBadge} pointerEvents="none">
+          <Text variant="caption" style={styles.speedBadgeText}>2x</Text>
+        </View>
+      ) : null}
+
       {item.isDemo ? (
         <View style={styles.demoBadge}>
           <Text variant="caption" style={{ color: '#FFB300' }}>Örnek Reel</Text>
@@ -590,6 +614,25 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFill,
     zIndex: 2,
     backgroundColor: '#000',
+  },
+  speedTouchLayer: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 4,
+  },
+  speedBadge: {
+    position: 'absolute',
+    top: 72,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    zIndex: 5,
+  },
+  speedBadgeText: {
+    color: '#fff',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   demoText: { fontSize: 64 },
   demoBadge: {

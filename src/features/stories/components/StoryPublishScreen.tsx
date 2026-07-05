@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  LayoutChangeEvent,
   Pressable,
   StyleSheet,
   View,
@@ -109,6 +110,15 @@ export function StoryPublishScreen({
   const [textOverlays, setTextOverlays] = useState<StudioTextOverlay[]>([]);
   const [textEditing, setTextEditing] = useState(false);
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
+  const [textTransformActive, setTextTransformActive] = useState(false);
+  const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
+
+  const onPreviewLayout = useCallback((event: LayoutChangeEvent) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setPreviewLayout({ width, height });
+    }
+  }, []);
 
   const storyVideoClipSec =
     normalizedDurationSec != null && normalizedDurationSec > 0
@@ -310,6 +320,20 @@ export function StoryPublishScreen({
     [],
   );
 
+  const finishTextEditing = useCallback((pending?: { id: string; text: string }) => {
+    setTextOverlays((prev) => {
+      const withPending = pending
+        ? prev.map((item) =>
+            item.id === pending.id ? { ...item, text: pending.text.trim() } : item,
+          )
+        : prev;
+      return withPending.filter((item) => item.text.trim());
+    });
+    setSelectedTextId(null);
+    setTextEditing(false);
+    setActiveTool(null);
+  }, []);
+
   const handleDeleteTextOverlay = useCallback(
     (id: string) => {
       removeTextOverlay(id);
@@ -335,16 +359,7 @@ export function StoryPublishScreen({
         setMusicOpen(false);
         setMusicEditing(false);
         if (activeTool === 'text' && textEditing) {
-          setTextOverlays((prev) => {
-            const trimmed = prev.filter((item) => item.text.trim());
-            setSelectedTextId((current) => {
-              if (current && trimmed.some((item) => item.id === current)) return current;
-              return trimmed.at(-1)?.id ?? null;
-            });
-            return trimmed;
-          });
-          setTextEditing(false);
-          setActiveTool(null);
+          finishTextEditing();
           return;
         }
         setActiveTool('text');
@@ -390,7 +405,7 @@ export function StoryPublishScreen({
         setActiveTool(activeTool === 'location' ? null : 'location');
       }
     },
-    [activeTool, addTextOverlay, closeOtherTools, handleToggleVideoAudio, musicSelection, selectedTextId, textEditing, textOverlays],
+    [activeTool, addTextOverlay, closeOtherTools, finishTextEditing, handleToggleVideoAudio, musicSelection, selectedTextId, textEditing, textOverlays],
   );
 
   const handleMusicSelect = useCallback(
@@ -447,16 +462,7 @@ export function StoryPublishScreen({
 
   const handleHeaderBack = useCallback(() => {
     if (textEditing) {
-      setTextOverlays((prev) => {
-        const trimmed = prev.filter((item) => item.text.trim());
-        setSelectedTextId((current) => {
-          if (current && trimmed.some((item) => item.id === current)) return current;
-          return trimmed.at(-1)?.id ?? null;
-        });
-        return trimmed;
-      });
-      setTextEditing(false);
-      setActiveTool(null);
+      finishTextEditing();
       return;
     }
     if (selectedTextId) {
@@ -480,7 +486,7 @@ export function StoryPublishScreen({
       return;
     }
     router.back();
-  }, [activeTool, musicEditing, musicInfoOpen, musicOpen, selectedTextId, textEditing]);
+  }, [activeTool, finishTextEditing, musicEditing, musicInfoOpen, musicOpen, selectedTextId, textEditing]);
 
   const handlePublish = useCallback(async () => {
     if (!user?.id || publishing || !mediaSize) return;
@@ -527,7 +533,7 @@ export function StoryPublishScreen({
         music: musicSelection,
         location: selectedLocation,
         links,
-        textOverlays: mediaType === 'video' ? textOverlays.filter((item) => item.text.trim()) : undefined,
+        textOverlays: textOverlays.filter((item) => item.text.trim()),
         trimmedInStudio,
         videoOriginalAudioVolume:
           mediaType === 'video'
@@ -599,113 +605,120 @@ export function StoryPublishScreen({
       </View>
 
       <View style={styles.previewStage}>
-        <View
-          ref={captureRef}
-          collapsable={false}
-          style={[storyCardFrameStyle.frame, styles.previewWrap]}
-        >
-          {canEditFraming ? (
-            <StoryFramingEditor
-              framing={framing}
-              onFramingChange={handleFramingChange}
-              mediaWidth={mediaSize.width}
-              mediaHeight={mediaSize.height}
-              enabled={framingEnabled}
-              interactive
-            >
-              {mediaType === 'image' ? (
-                <Image
-                  source={{ uri: publishUri }}
-                  style={styles.mediaFill}
-                  contentFit="cover"
-                  pointerEvents="none"
-                />
-              ) : (
-                <View style={styles.mediaFill} pointerEvents="none">
-                  <CapturedVideoPreview
-                    uri={publishUri}
-                    style={StyleSheet.absoluteFill}
+        <View style={styles.previewStack} onLayout={onPreviewLayout}>
+          <View
+            ref={captureRef}
+            collapsable={false}
+            style={[storyCardFrameStyle.frame, styles.previewWrap]}
+          >
+            {canEditFraming ? (
+              <StoryFramingEditor
+                framing={framing}
+                onFramingChange={handleFramingChange}
+                mediaWidth={mediaSize.width}
+                mediaHeight={mediaSize.height}
+                enabled={framingEnabled}
+                mediaGesturesEnabled={!textTransformActive}
+                interactive
+              >
+                {mediaType === 'image' ? (
+                  <Image
+                    source={{ uri: publishUri }}
+                    style={styles.mediaFill}
                     contentFit="cover"
-                    music={musicPlaysOnStory ? musicSelection : null}
-                    videoMuted={videoOriginalMuted}
-                    muted={videoOriginalMuted}
+                    pointerEvents="none"
                   />
-                </View>
-              )}
-            </StoryFramingEditor>
-          ) : (
-            <View style={styles.previewLoading}>
-              <ActivityIndicator color={colors.primary} size="large" />
-            </View>
-          )}
+                ) : (
+                  <View style={styles.mediaFill} pointerEvents="none">
+                    <CapturedVideoPreview
+                      uri={publishUri}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      music={musicPlaysOnStory ? musicSelection : null}
+                      videoMuted={videoOriginalMuted}
+                      muted={videoOriginalMuted}
+                    />
+                  </View>
+                )}
+              </StoryFramingEditor>
+            ) : (
+              <View style={styles.previewLoading}>
+                <ActivityIndicator color={colors.primary} size="large" />
+              </View>
+            )}
 
-          {musicSelection && !musicEditing ? (
-            <StoryMusicBadge
-              title={musicSelection.displayTitle}
-              artist={musicSelection.artist}
-              stacked={Boolean(selectedLocation)}
-              onPress={() => setMusicInfoOpen(true)}
-            />
-          ) : null}
+            {musicSelection && !musicEditing ? (
+              <StoryMusicBadge
+                title={musicSelection.displayTitle}
+                artist={musicSelection.artist}
+                stacked={Boolean(selectedLocation)}
+                onPress={() => setMusicInfoOpen(true)}
+              />
+            ) : null}
 
-          {selectedLocation ? (
-            <View style={styles.locationPreview}>
-              <Ionicons name="location" size={13} color="#fff" />
-              <Text variant="caption" style={styles.locationPreviewText} numberOfLines={1}>
-                {selectedLocation.label}
-              </Text>
-            </View>
-          ) : null}
+            {selectedLocation ? (
+              <View style={styles.locationPreview}>
+                <Ionicons name="location" size={13} color="#fff" />
+                <Text variant="caption" style={styles.locationPreviewText} numberOfLines={1}>
+                  {selectedLocation.label}
+                </Text>
+              </View>
+            ) : null}
 
-          {mediaType === 'video' && normalizedDurationSec && !musicEditing ? (
-            <View style={styles.durationBadge}>
-              <Ionicons name="videocam" size={12} color="#fff" />
-              <Text variant="caption" style={styles.durationText}>
-                {Math.round(normalizedDurationSec)} sn
-              </Text>
-            </View>
-          ) : null}
+            {mediaType === 'video' && normalizedDurationSec && !musicEditing ? (
+              <View style={styles.durationBadge}>
+                <Ionicons name="videocam" size={12} color="#fff" />
+                <Text variant="caption" style={styles.durationText}>
+                  {Math.round(normalizedDurationSec)} sn
+                </Text>
+              </View>
+            ) : null}
 
-          {stabilizing ? (
-            <View style={styles.stabilizeBadge}>
-              <ActivityIndicator color="#fff" size="small" />
-            </View>
-          ) : null}
+            {stabilizing ? (
+              <View style={styles.stabilizeBadge}>
+                <ActivityIndicator color="#fff" size="small" />
+              </View>
+            ) : null}
 
-          <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={framingEnabled} />
+            <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={framingEnabled} />
+
+            {musicSelection && musicEditing ? (
+              <StoryMusicTrimCard
+                music={musicSelection}
+                mediaType={mediaType}
+                clipDurationSec={musicClipDurationSec}
+                onStartChange={handleMusicStartChange}
+                onRangeChange={handleMusicRangeChange}
+                onChangeTrack={() => {
+                  setMusicEditing(false);
+                  setMusicOpen(true);
+                }}
+                onRemove={() => {
+                  setMusicSelection(null);
+                  setMusicEditing(false);
+                }}
+                onDone={() => setMusicEditing(false)}
+              />
+            ) : null}
+          </View>
 
           <StoryTextOverlayLayer
             overlays={textOverlays}
             selectedId={selectedTextId}
-            editable={!publishing && !musicEditing}
+            editable={!publishing && !musicEditing && !textEditing}
+            textEditing={textEditing}
+            containerWidth={previewLayout.width}
+            containerHeight={previewLayout.height}
             onUpdate={updateTextOverlay}
             onSelect={handleSelectTextOverlay}
             onDelete={handleDeleteTextOverlay}
             dragDelete={overlayDragDelete}
+            onTextTransformActiveChange={setTextTransformActive}
           />
-
-          {musicSelection && musicEditing ? (
-            <StoryMusicTrimCard
-              music={musicSelection}
-              mediaType={mediaType}
-              clipDurationSec={musicClipDurationSec}
-              onStartChange={handleMusicStartChange}
-              onRangeChange={handleMusicRangeChange}
-              onChangeTrack={() => {
-                setMusicEditing(false);
-                setMusicOpen(true);
-              }}
-              onRemove={() => {
-                setMusicSelection(null);
-                setMusicEditing(false);
-              }}
-              onDone={() => setMusicEditing(false)}
-            />
-          ) : null}
         </View>
       </View>
 
-      {!musicEditing && !textEditing ? (
+      {!musicEditing && !textEditing && activeTool !== 'location' && activeTool !== 'link' ? (
         <StoryPublishRail
           isVideo={mediaType === 'video'}
           activeTool={activeTool}
@@ -728,18 +741,7 @@ export function StoryPublishScreen({
         onUpdate={updateTextOverlay}
         onAdd={addTextOverlay}
         onRemove={removeTextOverlay}
-        onClose={() => {
-          setTextOverlays((prev) => {
-            const trimmed = prev.filter((item) => item.text.trim());
-            setSelectedTextId((current) => {
-              if (current && trimmed.some((item) => item.id === current)) return current;
-              return trimmed.at(-1)?.id ?? null;
-            });
-            return trimmed;
-          });
-          setTextEditing(false);
-          setActiveTool(null);
-        }}
+        onFinish={finishTextEditing}
       />
 
       {uploadMessage ? (
@@ -825,6 +827,10 @@ const styles = StyleSheet.create({
     flex: 1,
     marginHorizontal: STORY_CARD_HORIZONTAL_INSET,
     marginBottom: spacing.sm,
+  },
+  previewStack: {
+    flex: 1,
+    position: 'relative',
   },
   previewWrap: {
     flex: 1,

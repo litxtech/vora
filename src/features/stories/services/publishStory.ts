@@ -141,7 +141,7 @@ async function insertStoryItemRecord(
     music: musicManifest,
     location: locationManifest,
     links: input.links ?? [],
-    textOverlays: input.mediaType === 'video' ? (input.textOverlays ?? []) : [],
+    textOverlays: input.textOverlays ?? [],
     originalAudioVolume:
       input.mediaType === 'video' && !musicManifest
         ? (input.videoOriginalAudioVolume ?? 1)
@@ -341,6 +341,7 @@ async function publishStoryInner(
     music: input.music,
     location: input.location,
     links: input.links,
+    textOverlays: input.textOverlays,
     regionId: input.regionId,
   });
 

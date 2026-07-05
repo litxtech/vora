@@ -239,6 +239,15 @@ export function ensureReelVideoPlaying(videoPlayer: VideoPlayer): void {
   });
 }
 
+export function setReelMusicPlaybackRate(reelId: string, rate: number): void {
+  if (boundReelId !== reelId || !audioPlayer) return;
+  try {
+    audioPlayer.playbackRate = rate;
+  } catch {
+    /* ignore stale player */
+  }
+}
+
 export async function attachReelMusic(
   reelId: string,
   videoPlayer: VideoPlayer,

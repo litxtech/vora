@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { StyleSheet, Text as RNText, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
   runOnJS,
@@ -36,6 +36,12 @@ type DraggableTextOverlayProps = {
   pinchEnabled?: boolean;
   /** Görünmez dokunma/pinch genişletmesi (story) */
   hitPadding?: number;
+  /** Seçiliyken pinch yakalama alanı — hitPadding'den büyük olabilir */
+  pinchHitPadding?: number;
+  /** Metin sürüklenirken / pinch yapılırken üst katmana bildir (medya jestlerini kilitle) */
+  onTransformActiveChange?: (active: boolean) => void;
+  /** Düzenleme paneli açıkken seçili metinde yer tutucu göster */
+  showSelectionHint?: boolean;
 };
 
 const MIN_FONT = 14;
@@ -55,6 +61,9 @@ export function DraggableTextOverlay({
   gesturesWhenSelectedOnly = false,
   pinchEnabled = true,
   hitPadding = 0,
+  pinchHitPadding,
+  onTransformActiveChange,
+  showSelectionHint = false,
 }: DraggableTextOverlayProps) {
   const showChrome = chrome === 'studio';
   const studioUpdate = useStudioEditorStore((s) => s.updateTextOverlay);
@@ -96,6 +105,14 @@ export function DraggableTextOverlay({
     dragDelete?.onDragEnd();
   };
 
+  const notifyTransformStart = () => {
+    onTransformActiveChange?.(true);
+  };
+
+  const notifyTransformEnd = () => {
+    onTransformActiveChange?.(false);
+  };
+
   const composed = useMemo(() => {
     const panGesture = Gesture.Pan()
       .enabled(canTransform)
@@ -103,6 +120,7 @@ export function DraggableTextOverlay({
       .minPointers(1)
       .minDistance(6)
       .onStart(() => {
+        if (onTransformActiveChange) runOnJS(notifyTransformStart)();
         if (dragDelete) runOnJS(dragDelete.onDragStart)();
       })
       .onUpdate((e) => {
@@ -114,11 +132,15 @@ export function DraggableTextOverlay({
         runOnJS(finishPan)(e.translationX, e.translationY, e.absoluteX, e.absoluteY);
         translateX.value = 0;
         translateY.value = 0;
+      })
+      .onFinalize(() => {
+        if (onTransformActiveChange) runOnJS(notifyTransformEnd)();
       });
 
     const pinchGesture = Gesture.Pinch()
       .enabled(canPinch)
       .onBegin(() => {
+        if (onTransformActiveChange) runOnJS(notifyTransformStart)();
         pinchBaseFont.value = overlay.fontSize;
         pinchScale.value = 1;
       })
@@ -128,6 +150,9 @@ export function DraggableTextOverlay({
       .onEnd((e) => {
         runOnJS(commitPinchFontSize)(e.scale, pinchBaseFont.value);
         pinchScale.value = 1;
+      })
+      .onFinalize(() => {
+        if (onTransformActiveChange) runOnJS(notifyTransformEnd)();
       });
 
     const tapGesture = Gesture.Tap()
@@ -144,6 +169,7 @@ export function DraggableTextOverlay({
     canTransform,
     dragDelete,
     editable,
+    onTransformActiveChange,
     overlay.fontSize,
     overlay.id,
     pinchBaseFont,
@@ -173,7 +199,26 @@ export function DraggableTextOverlay({
 
   if (!visible) return null;
 
-  const hitPadY = hitPadding > 0 ? hitPadding * 0.65 : 0;
+  const gesturePadding =
+    selected && canPinch && (pinchHitPadding ?? 0) > 0
+      ? Math.max(hitPadding, pinchHitPadding ?? 0)
+      : hitPadding;
+  const hitPadY = gesturePadding > 0 ? gesturePadding * 0.65 : 0;
+  const padX = gesturePadding > 0 ? gesturePadding : 0;
+  const padY = gesturePadding > 0 ? hitPadY : 0;
+
+  const textStyle = [
+    styles.text,
+    {
+      fontSize: overlay.fontSize,
+      lineHeight: Math.round(overlay.fontSize * 1.28),
+      color: overlay.color,
+      fontWeight: overlay.fontFamily === 'bold' ? ('800' as const) : ('600' as const),
+      opacity: overlay.text ? 1 : 0.65,
+    },
+  ];
+  const label =
+    overlay.text || (selected && (editable || showSelectionHint) ? 'Metin yaz…' : '');
 
   return (
     <GestureDetector gesture={composed}>
@@ -181,37 +226,25 @@ export function DraggableTextOverlay({
         collapsable={false}
         style={[
           showChrome ? styles.wrap : styles.wrapMinimal,
-          hitPadding > 0
-            ? {
-                paddingHorizontal: hitPadding,
-                paddingVertical: hitPadY,
-                marginLeft: -hitPadding,
-                marginTop: -hitPadY,
-              }
-            : null,
           {
-            left: overlay.x * containerWidth,
-            top: overlay.y * containerHeight,
+            left: overlay.x * containerWidth - padX,
+            top: overlay.y * containerHeight - padY,
+            paddingHorizontal: padX,
+            paddingVertical: padY,
           },
           animatedStyle,
           showChrome && selected && editable ? styles.selected : null,
         ]}
       >
-        <Text
-          style={[
-            styles.text,
-            {
-              fontSize: overlay.fontSize,
-              lineHeight: Math.round(overlay.fontSize * 1.28),
-              color: overlay.color,
-              fontWeight: overlay.fontFamily === 'bold' ? '800' : '600',
-              opacity: overlay.text ? 1 : 0.65,
-            },
-          ]}
-          includeFontPadding={false}
-        >
-          {overlay.text || (selected && editable ? 'Metin yaz…' : '')}
-        </Text>
+        {showChrome ? (
+          <Text style={textStyle} includeFontPadding={false}>
+            {label}
+          </Text>
+        ) : (
+          <RNText style={textStyle} includeFontPadding={false}>
+            {label}
+          </RNText>
+        )}
 
         {showChrome && selected && editable ? (
           <GestureDetector gesture={resizeGesture}>
