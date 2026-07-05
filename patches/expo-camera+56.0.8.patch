@@ -1,5 +1,5 @@
 diff --git a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
-index d9690e3..4736cf8 100644
+index d9690e3..d5f3170 100644
 --- a/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
 +++ b/node_modules/expo-camera/android/src/main/java/expo/modules/camera/ExpoCameraView.kt
 @@ -133,6 +133,9 @@ class ExpoCameraView(
@@ -12,3 +12,17 @@ index d9690e3..4736cf8 100644
    }
    private val scope = CoroutineScope(Dispatchers.Main)
    private var shouldCreateCamera = false
+@@ -633,8 +636,11 @@ class ExpoCameraView(
+   }
+ 
+   private fun setCameraZoom(value: Float) {
+-    val maxZoomRatio = camera?.cameraInfo?.zoomState?.value?.maxZoomRatio ?: 1f
+-    val targetZoomRatio = max(1f, min(maxZoomRatio, value.coerceIn(0f, 1f) * maxZoomRatio))
++    val zoomState = camera?.cameraInfo?.zoomState?.value
++    val minZoomRatio = zoomState?.minZoomRatio ?: 1f
++    val maxZoomRatio = zoomState?.maxZoomRatio ?: 1f
++    val linear = value.coerceIn(0f, 1f)
++    val targetZoomRatio = minZoomRatio + linear * (maxZoomRatio - minZoomRatio)
+     camera?.cameraControl?.setZoomRatio(targetZoomRatio)
+   }
+ 

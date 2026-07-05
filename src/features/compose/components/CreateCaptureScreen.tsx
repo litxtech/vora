@@ -112,12 +112,16 @@ export function CreateCaptureScreen() {
     previewGesture,
     applyPreset,
     handleAvailableLensesChanged,
+    refreshAvailableLenses,
     updateZoomFromRail,
     handleZoomRailStart,
     handleZoomRailEnd,
     flipCameraWithReset,
+    showManualControls,
+    isPinchingRef,
   } = useCaptureCameraZoom({
     enabled: cameraLive && !busy,
+    recording,
     resetKey: facing,
     onFlipCamera: handleFlipCameraRequest,
   });
@@ -159,7 +163,8 @@ export function CreateCaptureScreen() {
     clearVideoModeReadyTimeout();
     flippingRef.current = false;
     setCameraReady(true);
-  }, [clearVideoModeReadyTimeout]);
+    void refreshAvailableLenses(() => cameraRef.current?.getAvailableLensesAsync() ?? Promise.resolve([]));
+  }, [clearVideoModeReadyTimeout, refreshAvailableLenses]);
 
   useEffect(() => {
     void (async () => {
@@ -462,6 +467,8 @@ export function CreateCaptureScreen() {
   };
 
   const stopVideoRecording = useCallback(() => {
+    if (isPinchingRef.current) return;
+
     longPressActive.current = false;
 
     if (pendingRecordRef.current && !recordAsyncActiveRef.current) {
@@ -479,7 +486,12 @@ export function CreateCaptureScreen() {
         resetRecordingState();
       }
     }
-  }, [resetRecordingState]);
+  }, [isPinchingRef, resetRecordingState]);
+
+  const handleShutterPressOut = useCallback(() => {
+    if (recordingRef.current) return;
+    stopVideoRecording();
+  }, [stopVideoRecording]);
 
   const pickFromGallery = useCallback(async (mediaType: 'images' | 'videos') => {
     if (busy || recording) return;
@@ -753,7 +765,7 @@ export function CreateCaptureScreen() {
             longPressActive.current = true;
             void startVideoRecording();
           }}
-          onPressOut={stopVideoRecording}
+          onPressOut={handleShutterPressOut}
           delayLongPress={220}
           style={styles.shutterWrap}
         >
@@ -773,6 +785,7 @@ export function CreateCaptureScreen() {
 
       <CaptureCameraZoomOverlay
         enabled={cameraLive && !busy}
+        showManualControls={showManualControls}
         bounds={
           shareMode === 'story'
             ? {

@@ -5,6 +5,9 @@ export const CAPTURE_LINEAR_ZOOM_MAX = 1;
 /** Önizleme etiketinde gösterilen maksimum zoom (ör. 8x) */
 export const CAPTURE_MAX_DISPLAY_ZOOM = 8;
 
+/** Geniş açı (ultra-wide) etiketi */
+export const CAPTURE_MIN_DISPLAY_ZOOM = 0.5;
+
 /** Pinch hassasiyeti — düşük değer daha kontrollü zoom */
 export const CAPTURE_PINCH_SENSITIVITY = 0.62;
 

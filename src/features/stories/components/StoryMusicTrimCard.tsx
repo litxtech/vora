@@ -33,7 +33,7 @@ export function StoryMusicTrimCard({
 
   return (
     <View style={styles.host} pointerEvents="box-none">
-      <View style={styles.card}>
+      <View style={styles.card} pointerEvents="auto">
         <View style={styles.titleRow}>
           <Ionicons name="musical-notes" size={15} color="#c4b5fd" />
           <Text variant="caption" style={styles.title} numberOfLines={1}>
@@ -82,7 +82,8 @@ export function StoryMusicTrimCard({
 const styles = StyleSheet.create({
   host: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 12,
+    zIndex: 120,
+    elevation: 120,
     justifyContent: 'flex-end',
     alignItems: 'center',
     paddingHorizontal: spacing.sm,
@@ -98,6 +99,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(8,8,12,0.88)',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: 'rgba(255,255,255,0.18)',
+    elevation: 12,
   },
   titleRow: {
     flexDirection: 'row',

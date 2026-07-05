@@ -4,10 +4,11 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut, runOnJS, useSharedValue } from 'react-native-reanimated';
 import { Text } from '@/components/ui/Text';
 import { radius, spacing } from '@/constants/theme';
+import { CAPTURE_MIN_DISPLAY_ZOOM } from '@/features/compose/constants/cameraZoom';
 import type { useCaptureCameraZoom } from '@/features/compose/hooks/useCaptureCameraZoom';
 import {
+  displayToRailPosition,
   formatCaptureZoomLabel,
-  linearToRailPosition,
 } from '@/features/compose/utils/cameraZoom';
 
 type ZoomControls = Pick<
@@ -23,6 +24,8 @@ type ZoomControls = Pick<
 
 type CaptureCameraZoomOverlayProps = ZoomControls & {
   enabled: boolean;
+  /** Preset chip + dikey rail — kayıt sırasında kapalı */
+  showManualControls?: boolean;
   bounds: {
     top: number;
     bottom: number;
@@ -36,6 +39,7 @@ type CaptureCameraZoomOverlayProps = ZoomControls & {
 
 export function CaptureCameraZoomOverlay({
   enabled,
+  showManualControls = true,
   bounds,
   linearZoom,
   displayZoom,
@@ -81,8 +85,8 @@ export function CaptureCameraZoomOverlay({
   const railGesture = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(enabled)
-        .minDistance(0)
+        .enabled(enabled && showManualControls)
+        .minDistance(4)
         .onStart(() => {
           runOnJS(invokeRailStart)();
         })
@@ -95,11 +99,14 @@ export function CaptureCameraZoomOverlay({
         .onEnd(() => {
           runOnJS(invokeRailEnd)();
         }),
-    [enabled, invokeRailChange, invokeRailEnd, invokeRailStart, railHeight],
+    [enabled, invokeRailChange, invokeRailEnd, invokeRailStart, railHeight, showManualControls],
   );
 
-  const showChrome = enabled && (indicatorVisible || linearZoom > 0.01);
-  const railPosition = linearToRailPosition(linearZoom);
+  const showChrome =
+    enabled && (indicatorVisible || displayZoom > CAPTURE_MIN_DISPLAY_ZOOM + 0.02);
+  const railPosition = displayToRailPosition(displayZoom);
+  const showPresets = showManualControls && enabled && presets.length > 1;
+  const showRail = showManualControls && showChrome;
 
   return (
     <>
@@ -115,7 +122,7 @@ export function CaptureCameraZoomOverlay({
             },
           ]}
           accessibilityLabel="Kamera önizlemesi"
-          accessibilityHint="İki parmakla yakınlaştırın veya çift dokunarak kamerayı çevirin"
+          accessibilityHint="İki parmakla 0.5x–8x arası yakınlaştırın; çift dokunarak kamerayı çevirin"
         />
       </GestureDetector>
 
@@ -141,7 +148,7 @@ export function CaptureCameraZoomOverlay({
           </View>
 
           <GestureDetector gesture={railGesture}>
-            <View style={styles.railHit} onLayout={handleRailLayout}>
+            <View style={[styles.railHit, !showRail && styles.railHidden]} onLayout={handleRailLayout}>
               <View style={styles.railTrack} pointerEvents="none">
                 <View style={[styles.railFill, { height: `${railPosition * 100}%` }]} />
                 <View style={[styles.railThumb, { top: `${railPosition * 100}%` }]} />
@@ -151,13 +158,15 @@ export function CaptureCameraZoomOverlay({
         </Animated.View>
       ) : null}
 
-      {enabled && presets.length > 1 ? (
+      {showPresets ? (
         <View
           pointerEvents="box-none"
           style={[
             styles.presetBar,
             {
-              bottom: bounds.bottom + spacing.xl + 96,
+              bottom: bounds.bottom + 72,
+              left: bounds.left ?? 0,
+              right: bounds.right ?? 0,
             },
           ]}
         >
@@ -226,6 +235,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  railHidden: {
+    opacity: 0,
+    pointerEvents: 'none',
+  },
   railTrack: {
     width: 4,
     flex: 1,
@@ -265,10 +278,8 @@ const styles = StyleSheet.create({
   },
   presetBar: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 9,
-    elevation: 9,
+    zIndex: 8,
+    elevation: 8,
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
