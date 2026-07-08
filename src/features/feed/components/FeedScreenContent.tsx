@@ -9,8 +9,13 @@ import { FeaturedProfilesCarousel } from '@/features/profile/components/Featured
 import { fetchFeaturedProfiles } from '@/features/profile/services/featuredProfiles';
 import type { FeaturedProfileCard } from '@/features/profile/services/featuredProfiles';
 import { FeedHeader } from '@/features/feed/components/FeedHeader';
-import { FeedTrendingStrip } from '@/features/agenda/components/FeedTrendingStrip';
 import { PostUploadBanner } from '@/features/compose/components/PostUploadBanner';
+import { StoryUploadFeedBanner } from '@/features/stories/components/StoryUploadFeedBanner';
+import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
+import { StoryRingBar } from '@/features/stories/components/StoryRingBar';
+import { STORIES_FEATURE } from '@/features/stories/featureFlags';
+import { prefetchStoryRings } from '@/features/stories/services/storyRingSession';
+import { useStoryRingStore } from '@/features/stories/store/storyRingStore';
 import { FeedList } from '@/features/feed/components/FeedList';
 import { NewPostsBanner } from '@/features/feed/components/NewPostsBanner';
 import { useFeed } from '@/features/feed/hooks/useFeed';
@@ -23,13 +28,20 @@ import { fetchFeedHeaderEvents } from '@/features/feed/services/featuredEvents';
 import { fetchFeedHeaderLostItems } from '@/features/feed/services/featuredLostItems';
 import type { EventListing } from '@/features/events/types';
 import type { LostListing } from '@/features/lost-found/types';
-import { shouldDeferFeedHeaderContent } from '@/lib/device/androidPerfProfile';
+import {
+  getFeedRichHeaderDelayMs,
+  shouldDeferFeedHeaderContent,
+  shouldDeferFeedRichHeader,
+  shouldLoadFeedFeaturedProfiles,
+  shouldLoadFeedSpotlightCarousel,
+  shouldPollFeedProcessingVideos,
+  shouldUseFeedRealtime,
+  shouldWarmupAndroidTabModules,
+} from '@/lib/device/androidPerfProfile';
 import { warmupAndroidTabModules } from '@/lib/device/androidTabWarmup';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
-import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
-import type { RegionId } from '@/constants/regions';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
 import { FeedSideDrawerShell } from '@/features/feed/components/FeedSideDrawer';
@@ -42,24 +54,44 @@ export function FeedScreenContent() {
   const insets = useSafeAreaInsets();
   const tabBarBottomInset = useStableTabBarInset();
   const listBottomInset = getFloatingTabBarReserve(tabBarBottomInset) + spacing.md;
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
   const { isVisible } = useFeatureFlags();
-  const discoverVisible = useFeatureVisible('discover');
   const featuredProfilesVisible = isVisible('featured-profiles');
+  const storiesVisible = isVisible(STORIES_FEATURE.root);
+  const storyRingBarVisible = isVisible(STORIES_FEATURE.ringBar);
+  const storyRingBootstrapVisible = isVisible(STORIES_FEATURE.ringBootstrap);
   const resetNewPosts = useFeedStore((s) => s.resetNewPosts);
   const category = useFeedStore((s) => s.category);
   const regionId = useFeedStore((s) => s.regionId);
   const [headerEvents, setHeaderEvents] = useState<EventListing[]>([]);
   const [headerLostItems, setHeaderLostItems] = useState<LostListing[]>([]);
   const [featuredProfiles, setFeaturedProfiles] = useState<FeaturedProfileCard[]>([]);
+  const [richHeaderReady, setRichHeaderReady] = useState(!shouldDeferFeedRichHeader());
+  const hasCachedStoryRings = useStoryRingStore((s) => s.rings.length > 0);
+  const showStoryRingBar =
+    (richHeaderReady || hasCachedStoryRings) && category === 'all' && storiesVisible && storyRingBarVisible;
 
   const { items, loading, refreshing, loadingMore, error, refresh, loadMore, updateItem, removeItem } = useFeed();
 
-  useFeedProcessingVideos(items, updateItem, isFocused);
-  useFeedRealtime(isFocused);
+  useFeedProcessingVideos(items, updateItem, isFocused && shouldPollFeedProcessingVideos());
+  useFeedRealtime(isFocused && shouldUseFeedRealtime());
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isFocused || !shouldDeferFeedRichHeader()) return;
+    setRichHeaderReady(false);
+    const delayMs = getFeedRichHeaderDelayMs();
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      if (!cancelled) setRichHeaderReady(true);
+    }, delayMs);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (!isFocused || !shouldWarmupAndroidTabModules()) return;
     const task = warmupAndroidTabModules();
     return () => task.cancel();
   }, [isFocused]);
@@ -79,11 +111,17 @@ export function FeedScreenContent() {
       return;
     }
 
-    const loadHeaderContent = () => {
-      fetchFeedHeaderEvents(regionId).then(setHeaderEvents);
-      fetchFeedHeaderLostItems(regionId).then(setHeaderLostItems);
+    if (shouldDeferFeedRichHeader() && !richHeaderReady) {
+      return;
+    }
 
-      if (!featuredProfilesVisible) {
+    const loadHeaderContent = () => {
+      if (shouldLoadFeedSpotlightCarousel()) {
+        fetchFeedHeaderEvents(regionId).then(setHeaderEvents);
+        fetchFeedHeaderLostItems(regionId).then(setHeaderLostItems);
+      }
+
+      if (!featuredProfilesVisible || !shouldLoadFeedFeaturedProfiles()) {
         setFeaturedProfiles([]);
         return;
       }
@@ -101,7 +139,7 @@ export function FeedScreenContent() {
     }
 
     loadHeaderContent();
-  }, [isFocused, category, regionId, user?.id, featuredProfilesVisible]);
+  }, [isFocused, category, regionId, user?.id, featuredProfilesVisible, richHeaderReady]);
 
   const handleBannerRefresh = useCallback(() => {
     resetNewPosts();
@@ -112,9 +150,6 @@ export function FeedScreenContent() {
     router.push('/featured-profiles' as never);
   }, [router]);
 
-  const agendaRegionId = (regionId ?? profile?.region_id ?? 'trabzon') as RegionId;
-  const isAgendaKaradenizWideScope = regionId === null;
-
   const header = useMemo(
     () => (
       <View style={styles.headerWrap}>
@@ -122,13 +157,15 @@ export function FeedScreenContent() {
           <NewPostsBanner onRefresh={handleBannerRefresh} />
         </View>
         <FeedHeader />
-        {category === 'all' && discoverVisible ? (
-          <FeedTrendingStrip regionId={agendaRegionId} isKaradenizWideScope={isAgendaKaradenizWideScope} />
+        {showStoryRingBar ? (
+          <FeatureGate featureId={STORIES_FEATURE.ringBar}>
+            <StoryRingBar />
+          </FeatureGate>
         ) : null}
-        {category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
+        {richHeaderReady && category === 'all' && featuredProfilesVisible && featuredProfiles.length > 0 ? (
           <FeaturedProfilesCarousel profiles={featuredProfiles} onSeeAll={handleSeeAllFeatured} />
         ) : null}
-        {category === 'all' && (headerEvents.length > 0 || headerLostItems.length > 0) ? (
+        {richHeaderReady && category === 'all' && (headerEvents.length > 0 || headerLostItems.length > 0) ? (
           <FeedSpotlightCarousel events={headerEvents} lostItems={headerLostItems} />
         ) : null}
         <View style={styles.filtersSection}>
@@ -137,12 +174,14 @@ export function FeedScreenContent() {
       </View>
     ),
     [
-      isAgendaKaradenizWideScope,
-      agendaRegionId,
       category,
-      discoverVisible,
       featuredProfiles,
       featuredProfilesVisible,
+      storiesVisible,
+      storyRingBarVisible,
+      showStoryRingBar,
+      regionId,
+      richHeaderReady,
       handleBannerRefresh,
       handleSeeAllFeatured,
       headerEvents,
@@ -159,13 +198,19 @@ export function FeedScreenContent() {
   const handleRefresh = useCallback(() => {
     resetNewPosts();
     refresh();
-  }, [resetNewPosts, refresh]);
+    if (storiesVisible && storyRingBootstrapVisible) {
+      void prefetchStoryRings(user?.id ?? null, { background: true, animate: true, force: true, useCache: true });
+    }
+  }, [refresh, resetNewPosts, storiesVisible, storyRingBootstrapVisible, user?.id]);
 
   return (
     <FeedSideDrawerShell>
       <GradientBackground>
         <View style={[styles.screen, { paddingTop: insets.top }]}>
-          <PostUploadBanner />
+          <View style={styles.uploadBanners}>
+            <StoryUploadFeedBanner />
+            <PostUploadBanner />
+          </View>
           <FeedList
             items={items}
             loading={loading}
@@ -188,6 +233,11 @@ export function FeedScreenContent() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, position: 'relative' },
+  uploadBanners: {
+    paddingHorizontal: spacing.md,
+    gap: spacing.xs,
+    zIndex: 20,
+  },
   headerWrap: {
     gap: spacing.sm,
     paddingHorizontal: spacing.md,

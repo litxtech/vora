@@ -1,12 +1,16 @@
-import { memo, useCallback, useEffect, useState, type ReactNode } from 'react';
-import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Platform, StyleSheet, useWindowDimensions, View, type View as RNView } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { router } from 'expo-router';
 import Animated, {
   cancelAnimation,
   Easing,
   interpolate,
+  runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -23,15 +27,55 @@ import { useFeedStore } from '@/features/feed/store/feedStore';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
+import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
+
 const FEED_DRAWER_WIDTH_RATIO = 0.78;
-const FEED_DRAWER_OPEN_MS = 300;
-const FEED_DRAWER_CLOSE_MS = 280;
-const FEED_DRAWER_EASING = Easing.bezier(0.22, 1, 0.36, 1);
+const DRAWER_INTERACTION_PROGRESS = 0.04;
+const DRAWER_DISMISS_PROGRESS = 0.45;
+const DRAWER_DISMISS_VELOCITY_X = -450;
 const DRAWER_AVATAR_SIZE = 48;
 
-const MemoFeedChildren = memo(function MemoFeedChildren({ children }: { children: ReactNode }) {
-  return <>{children}</>;
-});
+const TABLET_INSTANT_DRAWER = isAndroidTablet();
+
+/** iOS stack push benzeri açılış — tablette anında. */
+const DRAWER_OPEN_TIMING = {
+  duration: TABLET_INSTANT_DRAWER ? 0 : 400,
+  easing: Easing.bezier(0.33, 1, 0.68, 1),
+};
+
+/** Stack pop benzeri kapanış. */
+const DRAWER_CLOSE_TIMING = {
+  duration: TABLET_INSTANT_DRAWER ? 0 : 340,
+  easing: Easing.bezier(0.32, 0, 0.67, 0),
+};
+
+function closeDrawerTiming() {
+  'worklet';
+  return DRAWER_CLOSE_TIMING;
+}
+
+function closeReleaseSpring(velocity: number) {
+  'worklet';
+  return {
+    damping: 32,
+    stiffness: 400,
+    mass: 0.72,
+    overshootClamping: true,
+    velocity,
+  };
+}
+
+function openReleaseSpring(velocity: number) {
+  'worklet';
+  if (TABLET_INSTANT_DRAWER) {
+    return { duration: 0, easing: Easing.linear };
+  }
+  const speed = Math.min(Math.abs(velocity), 2.5);
+  return {
+    duration: Math.max(260, 400 - speed * 55),
+    easing: Easing.bezier(0.33, 1, 0.68, 1),
+  };
+}
 
 type FeedSideDrawerProfileHeaderProps = {
   onNavigate?: () => void;
@@ -100,6 +144,200 @@ function FeedSideDrawerProfileHeader({ onNavigate }: FeedSideDrawerProfileHeader
   );
 }
 
+type FeedDrawerAnimatorProps = {
+  drawerWidth: number;
+  backgroundColor: string;
+  scrimMaxOpacity: number;
+  feedRegionId: ReturnType<typeof useFeedStore.getState>['regionId'];
+  onClose: () => void;
+  children: ReactNode;
+};
+
+const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
+  drawerWidth,
+  backgroundColor,
+  scrimMaxOpacity,
+  feedRegionId,
+  onClose,
+  children,
+}: FeedDrawerAnimatorProps) {
+  const progress = useSharedValue(0);
+  const drawerWidthSv = useSharedValue(drawerWidth);
+  const dragStartProgress = useSharedValue(0);
+  const ownsProgress = useSharedValue(false);
+  const drawerOpenSv = useSharedValue(0);
+  const feedInnerRef = useRef<RNView>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  const applyFeedInteractionLocked = useCallback((locked: boolean) => {
+    feedInnerRef.current?.setNativeProps?.({
+      pointerEvents: locked ? 'none' : 'auto',
+    });
+    useFeedDrawerStore.getState().setListInteractionLocked(locked);
+  }, []);
+
+  const closeFromGesture = useCallback(() => {
+    onCloseRef.current();
+  }, []);
+
+  const finishGestureAnimation = useCallback(() => {
+    ownsProgress.value = false;
+    applyFeedInteractionLocked(false);
+  }, [ownsProgress, applyFeedInteractionLocked]);
+
+  useEffect(() => {
+    drawerWidthSv.value = drawerWidth;
+  }, [drawerWidth, drawerWidthSv]);
+
+  useEffect(() => {
+    const initialOpen = useFeedDrawerStore.getState().open;
+    progress.value = initialOpen ? 1 : 0;
+    drawerOpenSv.value = initialOpen ? 1 : 0;
+    applyFeedInteractionLocked(initialOpen);
+
+    return useFeedDrawerStore.subscribe((state, previous) => {
+      drawerOpenSv.value = state.open ? 1 : 0;
+      if (state.open === previous.open) return;
+
+      cancelAnimation(progress);
+
+      if (state.open) {
+        ownsProgress.value = false;
+        applyFeedInteractionLocked(true);
+        progress.value = withTiming(1, DRAWER_OPEN_TIMING);
+        if (Platform.OS !== 'android') {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }
+        return;
+      }
+
+      ownsProgress.value = false;
+      progress.value = withTiming(0, DRAWER_CLOSE_TIMING, (finished) => {
+        if (!finished) return;
+        runOnJS(applyFeedInteractionLocked)(false);
+      });
+    });
+  }, [drawerOpenSv, ownsProgress, progress, applyFeedInteractionLocked]);
+
+  useAnimatedReaction(
+    () => progress.value,
+    (value, previous) => {
+      if (value > 0.02 || drawerOpenSv.value === 1) return;
+      if ((previous ?? 1) <= 0.02) return;
+      ownsProgress.value = false;
+      runOnJS(applyFeedInteractionLocked)(false);
+    },
+  );
+
+  const feedStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: progress.value * drawerWidthSv.value }],
+  }));
+
+  const scrimStyle = useAnimatedStyle(
+    () => ({
+      opacity: interpolate(progress.value, [0, 0.45, 1], [0, scrimMaxOpacity * 0.72, scrimMaxOpacity]),
+    }),
+    [scrimMaxOpacity],
+  );
+
+  const feedDismissGesture = useMemo(() => {
+    const pan = Gesture.Pan()
+      .manualActivation(true)
+      .maxPointers(1)
+      .activeOffsetX([-10, 10])
+      .failOffsetY([-24, 24])
+      .onTouchesDown((_, state) => {
+        if (progress.value > DRAWER_INTERACTION_PROGRESS) {
+          state.activate();
+        } else {
+          state.fail();
+        }
+      })
+      .onStart(() => {
+        ownsProgress.value = true;
+        cancelAnimation(progress);
+        dragStartProgress.value = progress.value;
+        runOnJS(applyFeedInteractionLocked)(true);
+      })
+      .onUpdate((event) => {
+        const width = Math.max(drawerWidthSv.value, 1);
+        const next = dragStartProgress.value + event.translationX / width;
+        progress.value = Math.min(1, Math.max(0, next));
+      })
+      .onEnd((event) => {
+        const width = Math.max(drawerWidthSv.value, 1);
+        const velocity = event.velocityX / width;
+        const shouldClose =
+          progress.value < DRAWER_DISMISS_PROGRESS || event.velocityX < DRAWER_DISMISS_VELOCITY_X;
+
+        ownsProgress.value = true;
+
+        if (shouldClose) {
+          progress.value = withSpring(0, closeReleaseSpring(velocity), (finished) => {
+            if (!finished) return;
+            runOnJS(finishGestureAnimation)();
+          });
+          runOnJS(closeFromGesture)();
+          return;
+        }
+
+        progress.value = withTiming(1, openReleaseSpring(velocity), (finished) => {
+          if (!finished) return;
+          ownsProgress.value = false;
+        });
+      });
+
+    const tap = Gesture.Tap().maxDuration(250).onEnd(() => {
+      if (progress.value <= DRAWER_INTERACTION_PROGRESS) return;
+
+      ownsProgress.value = true;
+      progress.value = withTiming(0, closeDrawerTiming(), (finished) => {
+        if (!finished) return;
+        runOnJS(finishGestureAnimation)();
+      });
+      runOnJS(closeFromGesture)();
+    });
+
+    return Gesture.Exclusive(pan, tap);
+  }, [
+    closeFromGesture,
+    dragStartProgress,
+    drawerWidthSv,
+    finishGestureAnimation,
+    ownsProgress,
+    progress,
+    applyFeedInteractionLocked,
+  ]);
+
+  return (
+    <>
+      <View
+        style={[shellStyles.drawer, { width: drawerWidth, backgroundColor }]}
+        collapsable={false}
+      >
+        <CentersDrawerMenu
+          headerPrefix={<FeedSideDrawerProfileHeader onNavigate={onClose} />}
+          onCenterNavigate={onClose}
+          feedRegionId={feedRegionId}
+        />
+      </View>
+
+      <GestureDetector gesture={feedDismissGesture}>
+        <Animated.View
+          style={[shellStyles.feed, { backgroundColor }, feedStyle]}
+          collapsable={false}
+        >
+          <View ref={feedInnerRef} style={shellStyles.feedInner} collapsable={false} pointerEvents="box-none">
+            {children}
+          </View>
+          <Animated.View pointerEvents="none" style={[shellStyles.scrim, scrimStyle]} />
+        </Animated.View>
+      </GestureDetector>
+    </>
+  );
+});
+
 type FeedSideDrawerShellProps = {
   children: ReactNode;
 };
@@ -108,112 +346,28 @@ export function FeedSideDrawerShell({ children }: FeedSideDrawerShellProps) {
   const { width } = useWindowDimensions();
   const { colors, isDark } = useTheme();
   const drawerWidth = width * FEED_DRAWER_WIDTH_RATIO;
-  const open = useFeedDrawerStore((s) => s.open);
   const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
   const feedRegionId = useFeedStore((s) => s.regionId);
-  const progress = useSharedValue(0);
-  const drawerWidthSv = useSharedValue(drawerWidth);
-  const [scrimActive, setScrimActive] = useState(false);
-
-  useEffect(() => {
-    drawerWidthSv.value = drawerWidth;
-  }, [drawerWidth, drawerWidthSv]);
-
-  useEffect(() => {
-    if (open) {
-      setScrimActive(true);
-      return;
-    }
-
-    const timer = setTimeout(() => setScrimActive(false), FEED_DRAWER_CLOSE_MS + 40);
-    return () => clearTimeout(timer);
-  }, [open]);
-
-  useEffect(() => {
-    cancelAnimation(progress);
-    progress.value = withTiming(open ? 1 : 0, {
-      duration: open ? FEED_DRAWER_OPEN_MS : FEED_DRAWER_CLOSE_MS,
-      easing: FEED_DRAWER_EASING,
-    });
-
-    if (open && Platform.OS !== 'android') {
-      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }
-  }, [open, progress]);
-
-  const feedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progress.value * drawerWidthSv.value }],
-  }));
-
-  const drawerStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: interpolate(progress.value, [0, 1], [-drawerWidthSv.value, 0]),
-      },
-    ],
-  }));
-
-  const drawerContentStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(progress.value, [0, 0.35, 1], [0, 1, 1]),
-    transform: [
-      {
-        translateX: interpolate(progress.value, [0, 1], [-18, 0]),
-      },
-    ],
-  }));
-
-  const scrimMaxOpacity = isDark ? 0.48 : 0.38;
-
-  const scrimStyle = useAnimatedStyle(
-    () => ({
-      opacity: interpolate(progress.value, [0, 1], [0, scrimMaxOpacity]),
-    }),
-    [scrimMaxOpacity],
-  );
 
   const handleClose = useCallback(() => {
-    if (!open) return;
+    if (!useFeedDrawerStore.getState().open) return;
     closeDrawer();
-  }, [closeDrawer, open]);
+  }, [closeDrawer]);
+
+  const animatorProps = useMemo(
+    () => ({
+      drawerWidth,
+      backgroundColor: colors.background,
+      scrimMaxOpacity: isDark ? 0.48 : 0.38,
+      feedRegionId,
+      onClose: handleClose,
+    }),
+    [colors.background, drawerWidth, feedRegionId, handleClose, isDark],
+  );
 
   return (
     <View style={[shellStyles.root, { backgroundColor: colors.background }]} collapsable={false}>
-      <Animated.View
-        style={[
-          shellStyles.drawer,
-          { width: drawerWidth, backgroundColor: colors.background },
-          drawerStyle,
-        ]}
-        pointerEvents={open ? 'auto' : 'none'}
-      >
-        <Animated.View style={[shellStyles.drawerInner, drawerContentStyle]}>
-          <CentersDrawerMenu
-            headerPrefix={<FeedSideDrawerProfileHeader onNavigate={closeDrawer} />}
-            onCenterNavigate={closeDrawer}
-            feedRegionId={feedRegionId}
-          />
-        </Animated.View>
-      </Animated.View>
-
-      <Animated.View
-        style={[shellStyles.feed, { backgroundColor: colors.background }, feedStyle]}
-        collapsable={false}
-      >
-        <View style={shellStyles.feedInner} pointerEvents={open ? 'none' : 'auto'}>
-          <MemoFeedChildren>{children}</MemoFeedChildren>
-        </View>
-        {scrimActive ? (
-          <Animated.View pointerEvents="box-none" style={[shellStyles.scrimWrap, scrimStyle]}>
-            <Pressable
-              style={shellStyles.scrimPress}
-              onPress={handleClose}
-              accessibilityRole="button"
-              accessibilityLabel="Menüyü kapat"
-              android_ripple={{ color: 'transparent' }}
-            />
-          </Animated.View>
-        ) : null}
-      </Animated.View>
+      <FeedDrawerAnimator {...animatorProps}>{children}</FeedDrawerAnimator>
     </View>
   );
 }
@@ -252,9 +406,6 @@ const shellStyles = StyleSheet.create({
     bottom: 0,
     zIndex: 1,
   },
-  drawerInner: {
-    flex: 1,
-  },
   feed: {
     flex: 1,
     zIndex: 2,
@@ -262,13 +413,10 @@ const shellStyles = StyleSheet.create({
   },
   feedInner: {
     flex: 1,
+    backfaceVisibility: 'hidden',
   },
-  scrimWrap: {
+  scrim: {
     ...StyleSheet.absoluteFillObject,
-    zIndex: 4,
     backgroundColor: '#000',
-  },
-  scrimPress: {
-    flex: 1,
   },
 });

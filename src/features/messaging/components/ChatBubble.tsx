@@ -28,6 +28,8 @@ import { ChatSharedCard } from './ChatSharedCard';
 import { ChatCallLog } from './ChatCallLog';
 import { ChatHeyetDecisionCard } from '@/features/heyet/components/ChatHeyetDecisionCard';
 import { parseCallLogMetadata } from '../services/callLogMetadata';
+import { isStoryReplyMessage } from '../services/storyReplyMetadata';
+import { ChatStoryReplyCard } from './ChatStoryReplyCard';
 import { ChatVideoAttachment } from './ChatVideoAttachment';
 import { CHAT_SENDER_AVATAR_SIZE, ChatSenderAvatar } from './ChatSenderAvatar';
 import { ChatMessageText } from './ChatMessageText';
@@ -221,8 +223,9 @@ export const ChatBubble = memo(function ChatBubble({
   const textColor = isMine ? chat.outgoingText : chat.incomingText;
   const metaColor = isMine ? chat.metaOutgoing : chat.metaIncoming;
   const phoneLinkColor = isMine ? '#D4EEFF' : colors.primary;
+  const isStoryReply = isStoryReplyMessage(message);
   const isText =
-    message.messageType === 'text' && !message.deletedForAll;
+    message.messageType === 'text' && !message.deletedForAll && !isStoryReply;
   const isAudioMessage = message.messageType === 'audio';
   const isMediaMessage = message.messageType === 'image' || message.messageType === 'video';
   const hasMediaCaption = isMediaMessage && message.content.trim().length > 0;
@@ -352,16 +355,17 @@ export const ChatBubble = memo(function ChatBubble({
         isMediaMessage ? styles.bubbleMedia : null,
         mediaOnly ? styles.bubbleMediaOnly : null,
         isReelShare ? styles.bubbleReelShare : null,
+        isStoryReply ? styles.bubbleReelShare : null,
         isCallLog ? styles.bubbleCallLog : null,
         {
           backgroundColor:
-            isReelShare || isCallLog || mediaOnly
+            isReelShare || isStoryReply || isCallLog || mediaOnly
               ? 'transparent'
               : isMine
                 ? chat.outgoingBubble
                 : chat.incomingBubble,
-          shadowOpacity: isReelShare || isCallLog || mediaOnly ? 0 : 0.08,
-          elevation: isReelShare || isCallLog || mediaOnly ? 0 : 1,
+          shadowOpacity: isReelShare || isStoryReply || isCallLog || mediaOnly ? 0 : 0.08,
+          elevation: isReelShare || isStoryReply || isCallLog || mediaOnly ? 0 : 1,
         },
         showAvatar ? styles.bubbleInGroup : null,
       ]}
@@ -510,6 +514,16 @@ export const ChatBubble = memo(function ChatBubble({
         ) : null}
         {contentVisible && message.messageType === 'file' ? (
           <ChatFile content={message.content} mediaUrl={message.mediaUrl} isMine={isMine} labelColor={textColor} />
+        ) : null}
+
+        {contentVisible && isStoryReply ? (
+          <ChatStoryReplyCard
+            message={message}
+            isMine={isMine}
+            textColor={textColor}
+            metaColor={metaColor}
+            bubbleBackground={isMine ? chat.outgoingBubble : chat.incomingBubble}
+          />
         ) : null}
 
         {contentVisible &&

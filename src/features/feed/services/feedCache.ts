@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { FEED_PAGE_SIZE } from '@/features/feed/constants';
+import { getFeedFetchLimits } from '@/lib/device/androidPerfProfile';
 import type { FeedCategory, FeedItem } from '@/features/feed/types';
 import type { RegionId } from '@/constants/regions';
 
@@ -46,7 +46,7 @@ export async function readDiskFeedCache(cacheKey: string): Promise<FeedCacheSnap
 export async function writeFeedCache(snapshot: FeedCacheSnapshot): Promise<void> {
   const trimmed = {
     ...snapshot,
-    items: snapshot.items.slice(0, FEED_PAGE_SIZE),
+    items: snapshot.items.slice(0, getFeedFetchLimits().pageSize),
   };
   memoryCache = trimmed;
   try {

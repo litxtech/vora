@@ -1,5 +1,11 @@
 import { PixelRatio } from 'react-native';
-import { getImageTargetWidth, isAndroid, type ImageSizeTier } from '@/lib/device/androidPerfProfile';
+import {
+  getImageMaxDecodeWidth,
+  getImageRenderQuality,
+  getImageTargetWidth,
+  isAndroid,
+  type ImageSizeTier,
+} from '@/lib/device/androidPerfProfile';
 
 const SUPABASE_OBJECT_PUBLIC = /^(https:\/\/[^/]+)\/storage\/v1\/object\/public\/([^?]+)/;
 const SUPABASE_RENDER_IMAGE = /\/storage\/v1\/render\/image\//;
@@ -9,18 +15,17 @@ function shouldUseSupabaseRender(): boolean {
   return isAndroid();
 }
 
-const MAX_DECODE_WIDTH = 1200;
-
 function physicalWidth(layoutWidth: number): number {
-  return Math.min(Math.ceil(layoutWidth * PixelRatio.get()), MAX_DECODE_WIDTH);
+  return Math.min(Math.ceil(layoutWidth * PixelRatio.get()), getImageMaxDecodeWidth());
 }
 
 /** Avatar yüklemeleri zaten kare; sunucuda cover ikinci kez kırpar (Android'de yüz çok yakın görünür). */
 function buildRenderQuery(tier: ImageSizeTier, targetW: number): string {
+  const quality = getImageRenderQuality();
   if (tier === 'avatar') {
-    return `width=${targetW}&height=${targetW}&quality=78&resize=contain`;
+    return `width=${targetW}&height=${targetW}&quality=${quality}&resize=contain`;
   }
-  return `width=${targetW}&quality=78&resize=cover`;
+  return `width=${targetW}&quality=${quality}&resize=cover`;
 }
 
 export function optimizedImageUrl(

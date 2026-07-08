@@ -96,11 +96,18 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
   { id: 'channels', label: 'Kanallar', group: 'social', kind: 'root', routes: ['/channels'] },
   { id: 'ads', label: 'Reklam Paneli', group: 'social', kind: 'root', routes: ['/ads', '/ads/studio'] },
   {
-    id: 'featured-profiles',
-    label: 'Öne Çıkan Profiller',
+    id: 'stories',
+    label: 'Hikayeler',
     group: 'social',
     kind: 'root',
-    routes: ['/featured-profiles'],
+    routes: ['/stories', '/stories/publish'],
+  },
+  {
+    id: 'user-sounds',
+    label: 'Ses Oluştur',
+    group: 'social',
+    kind: 'root',
+    routes: ['/sounds', '/sounds/create'],
   },
   {
     id: 'proximity-match',

@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -16,7 +17,7 @@ type FeedTrendingStripProps = {
   karadenizWide?: boolean;
 };
 
-export function FeedTrendingStrip({
+export const FeedTrendingStrip = memo(function FeedTrendingStrip({
   regionId,
   isKaradenizWideScope: isKaradenizWideScopeProp,
   karadenizWide,
@@ -101,7 +102,7 @@ export function FeedTrendingStrip({
       </ScrollView>
     </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   wrap: {

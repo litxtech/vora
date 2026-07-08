@@ -268,6 +268,7 @@ export const ADMIN_MENU_SECTIONS = [
       { id: 'operations', label: 'Operasyon', icon: 'settings-outline' as const, href: '/admin/operations', adminOnly: true, accent: 'accent' as const },
       { id: 'sounds', label: 'Bildirim Sesleri', icon: 'musical-notes-outline' as const, href: '/admin/notification-sounds', adminOnly: true, accent: 'accent' as const },
       { id: 'music-library', label: 'Müzik Kütüphanesi', icon: 'disc-outline' as const, href: '/admin/music-library', adminOnly: true, accent: 'accent' as const },
+      { id: 'user-sounds', label: 'Kullanıcı Sesleri', icon: 'mic-outline' as const, href: '/admin/user-sounds', adminOnly: true, accent: 'accent' as const },
       { id: 'notification-stats', label: 'Bildirim İstatistikleri', icon: 'analytics-outline' as const, href: '/admin/notification-stats', adminOnly: true, accent: 'success' as const },
     ],
   },

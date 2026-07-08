@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -15,6 +15,7 @@ import { CENTER_GROUPS, centersByGroup } from '@/constants/centers';
 import { useCenterEntryVisible } from '@/features/centers/hooks/useCenterEntryVisible';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { CENTERS_HUB_FEATURE } from '@/features/centers/featureFlags';
+import { WALLET_ROUTE } from '@/features/wallet/constants';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
 import { spacing } from '@/constants/theme';
@@ -45,11 +46,14 @@ export function CentersDrawerMenu({
   const tabBarBottomInset = useStableTabBarInset();
   const listBottomInset = getFloatingTabBarReserve(tabBarBottomInset) + spacing.sm;
   const { colors } = useTheme();
-  const { profile } = useAuth();
+  const { profile, signOut, isGuest } = useAuth();
+  const showWallet = useFeatureVisible('wallet');
+  const showSettings = useFeatureVisible('settings');
   const incidentRegion = (feedRegionId ?? (profile?.region_id as RegionId | undefined) ?? null) as RegionId | null;
   const { count: activeIncidentCount } = useActiveIncidentCount(incidentRegion);
   const showLeaderboard = useFeatureVisible('feed-header-leaderboard');
   const showLivePulse = useFeatureVisible('incident-graph');
+  const showMap = useFeatureVisible('map') && useFeatureVisible('feed-header-map');
   const isCenterVisible = useCenterEntryVisible();
   const showHubSearch = useFeatureVisible(CENTERS_HUB_FEATURE.search);
   const showHubSupport = useFeatureVisible(CENTERS_HUB_FEATURE.support);
@@ -70,12 +74,35 @@ export function CentersDrawerMenu({
 
   const showEmptySearch = query.length > 0 && sections.length === 0;
   const showSupport = isCenterVisible('support-center') && showHubSupport;
-  const showFeedShortcuts = showLeaderboard || showLivePulse;
+  const showFeedShortcuts = showLeaderboard || showLivePulse || showMap;
 
   const handleSupportPress = () => {
     router.push('/support-center' as Href);
     onCenterNavigate?.();
   };
+
+  const handleSignOutPress = useCallback(() => {
+    onCenterNavigate?.();
+    Alert.alert(
+      'Çıkış Yap',
+      isGuest
+        ? 'Misafir oturumunuz sonlandırılacak.'
+        : 'Hesabınızdan çıkış yapılacak. Oturumunuz yalnızca siz çıkış yaptığınızda sonlanır.',
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Çıkış Yap',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut('manual');
+            router.replace('/(welcome)/lobby');
+          },
+        },
+      ],
+    );
+  }, [isGuest, onCenterNavigate, signOut]);
+
+  const showAccountSection = showWallet || showSettings;
 
   return (
     <ScrollView
@@ -133,6 +160,14 @@ export function CentersDrawerMenu({
               accentIcon={activeIncidentCount > 0}
             />
           ) : null}
+          {showMap ? (
+            <CentersDrawerLinkRow
+              icon="map-outline"
+              label="Harita"
+              href="/(tabs)/map"
+              onNavigate={onCenterNavigate}
+            />
+          ) : null}
           {showCentersHub && sections.length > 0 ? (
             <View style={[styles.divider, { backgroundColor: colors.border }]} />
           ) : null}
@@ -174,6 +209,48 @@ export function CentersDrawerMenu({
           </InstantPressable>
         </View>
       ) : null}
+
+      {showAccountSection ? (
+        <View style={styles.section}>
+          <View style={[styles.divider, styles.dividerTop, { backgroundColor: colors.border }]} />
+          <Text variant="caption" style={[styles.sectionLabel, { color: colors.textMuted }]}>
+            Hesap
+          </Text>
+          {showWallet ? (
+            <CentersDrawerLinkRow
+              icon="wallet-outline"
+              label="Cüzdan"
+              href={WALLET_ROUTE as Href}
+              onNavigate={onCenterNavigate}
+            />
+          ) : null}
+          {showSettings ? (
+            <CentersDrawerLinkRow
+              icon="settings-outline"
+              label="Ayarlar"
+              href="/settings"
+              onNavigate={onCenterNavigate}
+            />
+          ) : null}
+        </View>
+      ) : null}
+
+      <View style={styles.section}>
+        {!showAccountSection && !showSupport ? (
+          <View style={[styles.divider, styles.dividerTop, { backgroundColor: colors.border }]} />
+        ) : null}
+        <InstantPressable
+          onPress={handleSignOutPress}
+          style={({ pressed }) => [styles.supportRow, pressed && { backgroundColor: `${colors.danger}12` }]}
+          accessibilityRole="button"
+          accessibilityLabel="Çıkış yap"
+        >
+          <Ionicons name="log-out-outline" size={22} color={colors.danger} style={styles.supportIcon} />
+          <Text variant="body" style={[styles.supportLabel, { color: colors.danger }]}>
+            Çıkış Yap
+          </Text>
+        </InstantPressable>
+      </View>
     </ScrollView>
   );
 }

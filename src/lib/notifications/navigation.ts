@@ -88,7 +88,7 @@ function tryNavigateByTargets(
     return true;
   }
   if (ids.conversationId) {
-    navigateToConversation(ids.conversationId);
+    navigateToConversation(ids.conversationId, ids.messageId);
     return true;
   }
   if (ids.postId) {
@@ -277,7 +277,7 @@ function navigateToReel(reelId: string | null): void {
   openReelById(reelId);
 }
 
-function navigateToConversation(conversationId: string | null): void {
+function navigateToConversation(conversationId: string | null, messageId?: string | null): void {
   if (!isLikelyUuid(conversationId)) {
     safePush('/(tabs)/messages' as Href);
     return;
@@ -287,7 +287,10 @@ function navigateToConversation(conversationId: string | null): void {
     conversationId,
     store.conversationUnreadById[conversationId] ?? 0,
   );
-  openChat(conversationId, unread > 0 ? { unreadCount: unread } : undefined);
+  openChat(conversationId, {
+    ...(unread > 0 ? { unreadCount: unread } : {}),
+    ...(messageId ? { messageId } : {}),
+  });
 }
 
 function navigateToUser(actorId: string | null, options?: NotificationNavigationOptions): void {
@@ -326,7 +329,7 @@ function performNavigation(
       if (ids.callSessionId) {
         void presentIncomingCall(ids.callSessionId);
       } else if (ids.conversationId) {
-        navigateToConversation(ids.conversationId);
+        navigateToConversation(ids.conversationId, ids.messageId);
       } else if (ids.tripId) {
         safePush(`/detail/rides/${ids.tripId}` as Href);
       } else {
@@ -339,7 +342,7 @@ function performNavigation(
       if (ids.callSessionId) {
         void presentIncomingCall(ids.callSessionId);
       } else if (ids.conversationId) {
-        navigateToConversation(ids.conversationId);
+        navigateToConversation(ids.conversationId, ids.messageId);
       } else {
         safePush('/(tabs)/messages' as Href);
       }
@@ -349,7 +352,7 @@ function performNavigation(
       if (ids.callSessionId) {
         safePush({ pathname: '/call/[sessionId]', params: { sessionId: ids.callSessionId } } as Href);
       } else if (ids.conversationId) {
-        navigateToConversation(ids.conversationId);
+        navigateToConversation(ids.conversationId, ids.messageId);
       } else {
         safePush('/(tabs)/messages' as Href);
       }

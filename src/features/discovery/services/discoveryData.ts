@@ -24,6 +24,7 @@ import type { FeedAuthor, FeedItem } from '@/features/feed/types';
 import { filterPostsByAudience, type PostAudience } from '@/features/profile/services/audienceFilter';
 import type { PersonnelListing } from '@/features/personnel-center/types';
 import { fetchTrendHotels } from '@/features/hotel-center/services/hotelData';
+import { fetchAudioCatalog } from '@/features/music/services/audioCatalog';
 import type { ReelItem } from '@/features/reels/types';
 import { fetchHiddenAuthors, shouldHideAuthor } from '@/features/moderation/services/relationships';
 import { getMuxThumbnailUrl } from '@/lib/mux/client';
@@ -623,6 +624,19 @@ async function fetchTrendHotelsDiscovery(query: DiscoveryQuery): Promise<Discove
   };
 }
 
+async function fetchTrendMusicDiscovery(query: DiscoveryQuery): Promise<DiscoveryResult> {
+  const offset = parseOffsetCursor(query.cursor);
+  const all = await fetchAudioCatalog(80);
+  const page = all.slice(offset, offset + DISCOVERY_PAGE_SIZE);
+  const hasMore = offset + DISCOVERY_PAGE_SIZE < all.length;
+
+  return {
+    tab: 'music',
+    items: page,
+    nextCursor: nextOffsetCursor(offset, page.length, hasMore),
+  };
+}
+
 export async function fetchDiscoveryPage(query: DiscoveryQuery): Promise<DiscoveryResult> {
   switch (query.tab) {
     case 'posts':
@@ -639,6 +653,8 @@ export async function fetchDiscoveryPage(query: DiscoveryQuery): Promise<Discove
       return fetchTrendJobs(query);
     case 'hotels':
       return fetchTrendHotelsDiscovery(query);
+    case 'music':
+      return fetchTrendMusicDiscovery(query);
     default:
       return fetchTrendPosts(query, 'general');
   }

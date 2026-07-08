@@ -124,6 +124,18 @@ export function useStandaloneMusicPlayer({ config, scopeActive, playing }: UseSt
   }, [config?.musicVolume, config?.audioUrl]);
 
   useEffect(() => {
+    if (!scopeActive || !config?.audioUrl || !playerRef.current) return;
+
+    const player = playerRef.current;
+    void player.seekTo(config.musicStartSec).then(() => {
+      if (playingRef.current) void player.play();
+      else player.pause();
+    }).catch(() => {
+      playerRef.current = null;
+    });
+  }, [scopeActive, config?.audioUrl, config?.musicStartSec, config?.musicEndSec]);
+
+  useEffect(() => {
     if (!scopeActive || !playing || !config?.audioUrl) return;
 
     const interval = setInterval(() => {

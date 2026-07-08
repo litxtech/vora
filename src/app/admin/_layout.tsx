@@ -64,6 +64,7 @@ export default function AdminLayout() {
       <Stack.Screen name="operations" />
       <Stack.Screen name="notification-sounds" />
       <Stack.Screen name="music-library" />
+      <Stack.Screen name="user-sounds" />
       <Stack.Screen name="notification-stats" />
       <Stack.Screen name="map" />
       <Stack.Screen name="logs" />

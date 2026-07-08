@@ -1,4 +1,4 @@
-import { InteractionManager } from 'react-native';
+import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import { fetchCallSession } from '@/features/calls/services/callService';
 import { isOnCallScreen, openCallScreen } from '@/features/calls/services/callNavigation';
 import { useCallStore } from '@/features/calls/store/callStore';
@@ -22,7 +22,7 @@ export function extractCallSessionId(data: Record<string, unknown>): string | nu
 
 async function waitForNavigationReady(): Promise<void> {
   await new Promise<void>((resolve) => {
-    InteractionManager.runAfterInteractions(() => {
+    deferAfterInteractions(() => {
       requestAnimationFrame(() => resolve());
     });
   });

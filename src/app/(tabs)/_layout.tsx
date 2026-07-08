@@ -4,19 +4,20 @@ import { Redirect, Tabs } from 'expo-router';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
-import { isAndroid } from '@/lib/device/androidPerfProfile';
-import { useTabsGuard } from '@/features/auth/hooks/useRouteGuard';
-import { useTabMessagingBadge } from '@/features/messaging/hooks/useTabMessagingBadge';
-import { getFloatingTabBarReserve } from '@/constants/tabBar';
-import { createFloatingTabBarStyle, TabBarBackgroundView } from '@/components/navigation/floatingTabBar';
 import {
   getAndroidInstantPressableProps,
   getAndroidTabLazyOption,
   getAndroidTabScreenOptions,
+  isAndroid,
   shouldDetachInactiveTabScreens,
+  shouldUseFeedTabSwipeShell,
   shouldUseSolidAndroidTabBar,
 } from '@/lib/device/androidPerfProfile';
-import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
+import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
+import { useTabsGuard } from '@/features/auth/hooks/useRouteGuard';
+import { useMessagingStore } from '@/features/messaging/store/messagingStore';
+import { getFloatingTabBarReserve } from '@/constants/tabBar';
+import { createFloatingTabBarStyle, TabBarBackgroundView } from '@/components/navigation/floatingTabBar';
 import { resolveDefaultTabHref } from '@/features/feature-flags/resolveDefaultTabHref';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
 import { CreateTabButton } from '@/features/compose/components/CreateTabButton';
@@ -40,16 +41,16 @@ const ReelsTabIcon = memo(function ReelsTabIcon({ color }: { color: string }) {
 
 export default function TabsLayout() {
   const { colors, isDark, mode, tabBar, metrics } = useTheme();
-  const messagingBadge = useTabMessagingBadge();
+  const messagingBadge = useMessagingStore((s) => s.totalUnread);
   const { isVisible } = useFeatureFlags();
   const tabBarBottomInset = useStableTabBarInset();
   const guard = useTabsGuard();
-  const showFeedTab = useFeatureVisible('feed');
-  const showDiscoverTab = useFeatureVisible('discover');
-  const showReelsTab = useFeatureVisible('reels');
-  const showMessagesTab = useFeatureVisible('messages');
-  const showProfileTab = useFeatureVisible('profile');
-  const showComposeTab = useFeatureVisible('compose');
+  const showFeedTab = isVisible('feed');
+  const showDiscoverTab = isVisible('discover');
+  const showReelsTab = isVisible('reels');
+  const showMessagesTab = isVisible('messages');
+  const showProfileTab = isVisible('profile');
+  const showComposeTab = isVisible('compose');
 
   const messagesTabBadge =
     showMessagesTab && messagingBadge > 0
@@ -77,6 +78,7 @@ export default function TabsLayout() {
   const screenOptions = useMemo(
     () => ({
       headerShown: false as const,
+      freezeOnBlur: false,
       tabBarStyle: baseTabBarStyle,
       ...(useSolidTabBar
         ? {}
@@ -125,11 +127,19 @@ export default function TabsLayout() {
       detachInactiveScreens={shouldDetachInactiveTabScreens()}
       safeAreaInsets={{ bottom: tabBarReserve, top: 0, left: 0, right: 0 }}
       screenOptions={screenOptions}
-      screenLayout={({ children, route, navigation }) => (
-        <TabSwipeShell routeName={route.name} navigation={navigation}>
-          {children}
-        </TabSwipeShell>
-      )}
+      screenLayout={({ children, route, navigation }) => {
+        if (isAndroidTablet() || (isAndroid() && route.name !== 'index')) {
+          return children;
+        }
+        if (!shouldUseFeedTabSwipeShell() && route.name === 'index') {
+          return children;
+        }
+        return (
+          <TabSwipeShell routeName={route.name} navigation={navigation}>
+            {children}
+          </TabSwipeShell>
+        );
+      }}
     >
       <Tabs.Screen
         name="index"
@@ -178,13 +188,6 @@ export default function TabsLayout() {
         options={{
           title: 'Paylaş',
           href: showComposeTab ? undefined : null,
-          tabBarLabel: () => null,
-          tabBarItemStyle: {
-            flex: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            paddingVertical: 0,
-          },
           tabBarButton: (props) => <CreateTabButton {...props} />,
           ...getAndroidTabLazyOption('create'),
         }}

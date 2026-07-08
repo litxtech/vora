@@ -4,10 +4,12 @@ import { parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
 import type { FeedItem } from '@/features/feed/types';
 import { emitMuxVideoReady } from '@/services/video/muxReadyEvents';
 
+import { getFeedProcessingVideoPollMultiplier } from '@/lib/device/androidPerfProfile';
+
 function pollDelayMs(elapsedMs: number): number {
-  if (elapsedMs < 20_000) return 2_000;
-  if (elapsedMs < 60_000) return 3_000;
-  return 5_000;
+  const base =
+    elapsedMs < 20_000 ? 2_000 : elapsedMs < 60_000 ? 3_000 : 5_000;
+  return Math.round(base * getFeedProcessingVideoPollMultiplier());
 }
 
 /** Feed'deki "Video işleniyor..." kartlarını Mux hazır olunca otomatik oynatılabilir URL'ye çevirir. */

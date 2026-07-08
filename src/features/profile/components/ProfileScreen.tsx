@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, type Href, useIsFocused, useFocusEffect } from 'expo-router';
+import { useMainTabPrefetchActive } from '@/features/navigation/hooks/useMainTabScreenActive';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
@@ -20,7 +21,7 @@ import { openReelsViewer } from '@/features/reels/services/reelsNavigation';
 import { BoostCampaignDisplay } from '@/features/profile/components/BoostCampaignDisplay';
 import { ProfileHeader } from '@/features/profile/components/ProfileHeader';
 import { ProfileReelGrid } from '@/features/profile/components/ProfileReelGrid';
-import { TrustStatsCard } from '@/features/profile/components/TrustStatsCard';
+import { SoundProfileStats } from '@/features/sounds/components/SoundProfileStats';
 import { ProfileHeaderDetails } from '@/features/profile/components/ProfileHeaderDetails';
 import { ProfileOwnActionsBar } from '@/features/profile/components/ProfileOwnActionsBar';
 import { ProfileVerifyAccountNudge } from '@/features/profile/components/ProfileVerifyAccountNudge';
@@ -138,6 +139,7 @@ export function ProfileScreen({
   reserveTabBarInset = false,
 }: ProfileScreenProps) {
   const isFocused = useIsFocused();
+  const isScreenActive = useMainTabPrefetchActive('profile');
   const { user, profile: authProfile, isGuest, isLoading: authLoading } = useAuth();
   const { actingAs, refreshSwitchState, linkedSibling, outgoingPendingUsername } = useAccountSwitch();
   const { colors } = useTheme();
@@ -286,16 +288,16 @@ export function ProfileScreen({
   );
 
   useEffect(() => {
-    if (!isFocused) return;
+    if (!isScreenActive) return;
     const hasWarmData =
       Boolean(getCachedProfileBundle(userId, isOwnProfile ? userId : viewerId)) ||
       (isOwnProfile && authProfileRef.current?.id === userId);
     if (authLoading && !hasWarmData) return;
     void loadProfileRef.current(false);
-  }, [authLoading, isFocused, userId, viewerId, isOwnProfile, authProfile?.id]);
+  }, [authLoading, isScreenActive, userId, viewerId, isOwnProfile, authProfile?.id]);
 
   useEffect(() => {
-    if (!profile?.id || authLoading || !isFocused) return;
+    if (!profile?.id || authLoading || !isScreenActive) return;
     if (tab === 'badges' || (tab === 'saved' && isOwnProfile)) return;
 
     const viewerId = user?.id ?? null;
@@ -337,7 +339,7 @@ export function ProfileScreen({
     return () => {
       cancelled = true;
     };
-  }, [tab, userId, user?.id, profile?.id, isOwnProfile, authLoading, isFocused]);
+  }, [tab, userId, user?.id, profile?.id, isOwnProfile, authLoading, isScreenActive]);
 
   const visibleTabs = PROFILE_TABS.filter((t) => {
     if (t.privateOnly && !isOwnProfile) return false;
@@ -594,6 +596,10 @@ export function ProfileScreen({
             onInsightsPress={handleViewersPress}
           />
         </View>
+      ) : null}
+
+      {isOwnProfile && !isDeletedProfile ? (
+        <SoundProfileStats userId={profile.id} />
       ) : null}
 
       {showVerifyNudge ? <ProfileVerifyAccountNudge /> : null}

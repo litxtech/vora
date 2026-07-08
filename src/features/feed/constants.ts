@@ -6,6 +6,9 @@ import type { RegionId } from '@/constants/regions';
 
 export const FEED_PAGE_SIZE = 15;
 
+/** Sıralama havuzu: sayfa boyutunun kaç katı gönderi çekilip skorlanır. */
+export { FEED_RANK_POOL_MULTIPLIER, FEED_RANK_PERIOD_HOURS } from '@/features/feed/services/feedRank';
+
 export const FEED_ALL_REGIONS_LABEL = 'Tüm iller';
 export const FEED_ALL_DISTRICTS_LABEL = 'Tüm ilçeler';
 

@@ -103,6 +103,12 @@ export function usePublishedMusicPlayer({ videoPlayer, config, active }: UsePubl
     return () => subscription.remove();
   }, [active, config, videoPlayer]);
 
+  useEffect(() => {
+    const player = playerRef.current;
+    if (!active || !player || !config) return;
+    void player.seekTo(config.musicStartSec);
+  }, [active, config?.musicStartSec, config?.musicEndSec, config?.audioUrl]);
+
   useEffect(
     () => () => {
       releaseAudioPlayer(playerRef.current);

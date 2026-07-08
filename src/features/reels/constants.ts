@@ -4,6 +4,11 @@ import type { UserRole } from '@/types/database';
 /** Bottom tab bar content height (icon + label), excluding home indicator inset. */
 export const REELS_TAB_BAR_HEIGHT = 52;
 
+/** Basılı tutunca reel oynatma hızı (Instagram/TikTok tarzı). */
+export const REEL_HOLD_SPEED_RATE = 2;
+/** Kaydırma ile çakışmaması için hızlanma gecikmesi (ms). */
+export const REEL_HOLD_SPEED_DELAY_MS = 160;
+
 /**
  * Aktif reel + 1 geri + 1 ileri mount edilir — kaydırma sırasında eşzamanlı
  * decoder yükünü sınırlar (ısınma). Daha ileri reel'ler gizli preload havuzunda

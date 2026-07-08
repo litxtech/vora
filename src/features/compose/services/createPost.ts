@@ -25,7 +25,8 @@ import { VIDEO_PROGRESS } from '@/services/video/progressMessages';
 import { throwIfAborted } from '@/services/video/uploadCancelled';
 import { isLocalVideoUri, isVideoUrl } from '@/lib/media/isVideoUrl';
 import type { MusicSelection } from '@/features/music/types';
-import { editManifestToDbField, getMusicPersistenceError, musicSelectionToDbFields, recordMusicUsage } from '@/features/music/services/recordUsage';
+import { editManifestToDbField, getMusicPersistenceError } from '@/features/music/services/recordUsage';
+import { audioSelectionToDbFields, recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import type { MapLocationSource } from '@/features/map/types';
 import { isValidPostCoordinate } from '@/features/map/utils/geoBounds';
 import type { PublishedEditManifest } from '@/features/vora-studio/types';
@@ -266,7 +267,7 @@ export async function createPost(
       status: publishStatus,
       requires_moderation: false,
       community_id: input.communityId ?? null,
-      ...musicSelectionToDbFields(input.music ?? null),
+      ...audioSelectionToDbFields(input.music ?? null),
       ...editManifestToDbField(input.editManifest ?? null),
     })
     .select('id')
@@ -375,13 +376,13 @@ export async function createPost(
     } else {
       reelId = reelResult.reelId;
       if (input.music && reelId) {
-        await recordMusicUsage(input.music, { postId: data.id, reelId });
+        await recordAudioUsage(input.music, { postId: data.id, reelId });
       }
     }
   }
 
   if (input.music && !reelId) {
-    await recordMusicUsage(input.music, { postId: data.id });
+    await recordAudioUsage(input.music, { postId: data.id });
   }
 
   onProgress?.('done', 1, 'Paylaşıldı', null);

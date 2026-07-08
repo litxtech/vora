@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  InteractionManager,
   Linking,
   Platform,
   Pressable,
@@ -15,25 +14,35 @@ import type { CameraView as CameraViewType } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import * as MediaLibrary from 'expo-media-library/legacy';
 import * as Haptics from 'expo-haptics';
-import { router, type Href } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
+import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import {
   CAPTURE_PHOTO_QUALITY,
   capturePictureOptions,
   finalizeCapturedPhoto,
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
+import {
+  STORY_CAPTURE_BOTTOM_OFFSET,
+  STORY_CAPTURE_TOP_OFFSET,
+  STORY_CARD_HORIZONTAL_INSET,
+  STORY_MAX_VIDEO_SEC,
+} from '@/features/stories/constants';
+import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
+import { routeStoryVideo } from '@/features/stories/services/routeStoryVideo';
+import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import { radius, spacing } from '@/constants/theme';
+import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import { useTheme } from '@/providers/ThemeProvider';
+import { CaptureCameraZoomOverlay } from '@/features/compose/components/CaptureCameraZoomOverlay';
+import { useCaptureCameraZoom } from '@/features/compose/hooks/useCaptureCameraZoom';
 
 const MAX_VIDEO_DURATION_SEC = 90;
 const MIN_VIDEO_MS = 800;
-const DOUBLE_TAP_MS = 400;
-const PREVIEW_TAP_TOP = 56;
-const PREVIEW_TAP_BOTTOM = 140;
 const VIDEO_MODE_READY_TIMEOUT_MS = 6000;
 const RECORD_ASYNC_RETRY_MS = 150;
 const RECORD_ASYNC_MAX_ATTEMPTS = 10;
@@ -49,10 +58,17 @@ function isRenderableGalleryUri(uri: string): boolean {
   return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
+type CaptureShareMode = 'story' | 'post' | 'reels';
+
 export function CreateCaptureScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ mode?: string }>();
+  const initialMode: CaptureShareMode =
+    params.mode === 'story' ? 'story' : params.mode === 'reels' ? 'reels' : 'post';
+  const [shareMode, setShareMode] = useState<CaptureShareMode>(initialMode);
   const { requireAuth } = useRequireAuth();
+  const showSoundCreate = useFeatureVisible('user-sounds');
   const cameraRef = useRef<CameraViewType>(null);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -74,31 +90,41 @@ export function CreateCaptureScreen() {
   const stopWhenReadyRef = useRef(false);
   const recordingRef = useRef(false);
   const recordAsyncActiveRef = useRef(false);
-  const lastPreviewTapAtRef = useRef(0);
-  const flipCameraRef = useRef<() => void>(() => {});
   const videoModeReadyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const flippingRef = useRef(false);
 
   const cameraMute = !micPermission?.granted;
 
-  const flipCamera = useCallback(() => {
+  const handleFlipCameraRequest = useCallback(() => {
     if (recording || busy || flippingRef.current) return;
     flippingRef.current = true;
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setFacing((f) => (f === 'back' ? 'front' : 'back'));
-  }, [recording, busy]);
+  }, [busy, recording]);
 
-  flipCameraRef.current = flipCamera;
-
-  const handlePreviewTap = useCallback(() => {
-    const now = Date.now();
-    if (now - lastPreviewTapAtRef.current < DOUBLE_TAP_MS) {
-      lastPreviewTapAtRef.current = 0;
-      flipCameraRef.current();
-      return;
-    }
-    lastPreviewTapAtRef.current = now;
-  }, []);
+  const {
+    linearZoom,
+    displayZoom,
+    selectedLens,
+    indicatorVisible,
+    activePresetId,
+    presets,
+    previewGesture,
+    applyPreset,
+    handleAvailableLensesChanged,
+    refreshAvailableLenses,
+    updateZoomFromRail,
+    handleZoomRailStart,
+    handleZoomRailEnd,
+    flipCameraWithReset,
+    showManualControls,
+    isPinchingRef,
+  } = useCaptureCameraZoom({
+    enabled: cameraLive && !busy,
+    recording,
+    resetKey: facing,
+    onFlipCamera: handleFlipCameraRequest,
+  });
 
   useEffect(() => {
     recordingRef.current = recording;
@@ -137,7 +163,8 @@ export function CreateCaptureScreen() {
     clearVideoModeReadyTimeout();
     flippingRef.current = false;
     setCameraReady(true);
-  }, [clearVideoModeReadyTimeout]);
+    void refreshAvailableLenses(() => cameraRef.current?.getAvailableLensesAsync() ?? Promise.resolve([]));
+  }, [clearVideoModeReadyTimeout, refreshAvailableLenses]);
 
   useEffect(() => {
     void (async () => {
@@ -154,7 +181,7 @@ export function CreateCaptureScreen() {
     }
 
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = deferAfterInteractions(() => {
       requestAnimationFrame(() => {
         if (!cancelled) setCameraLive(true);
       });
@@ -173,7 +200,7 @@ export function CreateCaptureScreen() {
     if (!cameraPermission?.granted || !cameraReady) return;
 
     let cancelled = false;
-    const task = InteractionManager.runAfterInteractions(() => {
+    const task = deferAfterInteractions(() => {
       void (async () => {
         try {
           const { status } = await MediaLibrary.requestPermissionsAsync();
@@ -233,20 +260,66 @@ export function CreateCaptureScreen() {
     return result.granted;
   }, [micPermission?.granted, requestMicPermission]);
 
-  const goToMediaEditor = (
-    items: { uri: string; width?: number; height?: number }[],
-    mediaType: 'image' | 'video',
-  ) => {
-    router.replace({
-      pathname: '/media-editor',
-      params: {
-        mediaUris: items.map((item) => item.uri).join(','),
-        mediaType,
-        mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
-        mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
-      },
-    } as Href);
-  };
+  const goToMediaEditor = useCallback(
+    async (
+      items: { uri: string; width?: number; height?: number }[],
+      mediaType: 'image' | 'video',
+      durationSec?: number,
+    ) => {
+      if (shareMode === 'story') {
+        const uri = items[0]?.uri ?? '';
+        if (!uri) return;
+
+        if (mediaType === 'video') {
+          setBusy(true);
+          try {
+            await routeStoryVideo(uri, durationSec);
+          } catch (err) {
+            Alert.alert(
+              'Video hazırlanamadı',
+              err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+            );
+          } finally {
+            setBusy(false);
+          }
+          return;
+        }
+
+        useStoryPublishStore.getState().setDraft({
+          mediaUri: uri,
+          mediaType: 'image',
+          durationSec,
+        });
+        router.replace('/stories/publish' as Href);
+        return;
+      }
+
+      if (shareMode === 'reels') {
+        router.replace({
+          pathname: '/media-editor',
+          params: {
+            mediaUris: items.map((item) => item.uri).join(','),
+            mediaType,
+            mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
+            mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
+            publishAs: 'reel',
+          },
+        } as Href);
+        return;
+      }
+
+      router.replace({
+        pathname: '/media-editor',
+        params: {
+          mediaUris: items.map((item) => item.uri).join(','),
+          mediaType,
+          mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
+          mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
+        },
+      } as Href);
+    },
+    [shareMode],
+  );
 
   const handlePhoto = async () => {
     if (busy || recording || !cameraReady || cameraMode !== 'picture') return;
@@ -261,7 +334,7 @@ export function CreateCaptureScreen() {
       if (photo?.uri) {
         const finalized = await finalizeCapturedPhoto(photo.uri, photo);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        goToMediaEditor(
+        void goToMediaEditor(
           [{ uri: finalized.uri, width: finalized.width, height: finalized.height }],
           'image',
         );
@@ -298,7 +371,9 @@ export function CreateCaptureScreen() {
 
       for (let attempt = 0; attempt < RECORD_ASYNC_MAX_ATTEMPTS; attempt += 1) {
         try {
-          const recordPromise = camera.recordAsync({ maxDuration: MAX_VIDEO_DURATION_SEC });
+          const recordPromise = camera.recordAsync({
+            maxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
+          });
           if (shouldStopImmediately) {
             setTimeout(() => {
               try {
@@ -330,11 +405,12 @@ export function CreateCaptureScreen() {
           }
           return;
         }
+        const elapsedSec = (recordStartedAt.current ? Date.now() - recordStartedAt.current : 0) / 1000;
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setCameraLive(false);
         setCameraReady(false);
         await handoffCameraToVideoPlayback();
-        goToMediaEditor([{ uri: video.uri }], 'video');
+        await goToMediaEditor([{ uri: video.uri }], 'video', elapsedSec);
       }
     } catch (err) {
       if (!shouldStopImmediately) {
@@ -343,7 +419,7 @@ export function CreateCaptureScreen() {
     } finally {
       resetRecordingState();
     }
-  }, [resetRecordingState]);
+  }, [goToMediaEditor, resetRecordingState, shareMode]);
 
   useEffect(() => {
     if (!cameraReady || !pendingRecordRef.current || cameraMode !== 'video') return;
@@ -391,6 +467,8 @@ export function CreateCaptureScreen() {
   };
 
   const stopVideoRecording = useCallback(() => {
+    if (isPinchingRef.current) return;
+
     longPressActive.current = false;
 
     if (pendingRecordRef.current && !recordAsyncActiveRef.current) {
@@ -408,9 +486,14 @@ export function CreateCaptureScreen() {
         resetRecordingState();
       }
     }
-  }, [resetRecordingState]);
+  }, [isPinchingRef, resetRecordingState]);
 
-  const pickFromGallery = async (mediaType: 'images' | 'videos') => {
+  const handleShutterPressOut = useCallback(() => {
+    if (recordingRef.current) return;
+    stopVideoRecording();
+  }, [stopVideoRecording]);
+
+  const pickFromGallery = useCallback(async (mediaType: 'images' | 'videos') => {
     if (busy || recording) return;
 
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -421,9 +504,12 @@ export function CreateCaptureScreen() {
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: mediaType === 'videos' ? ['videos'] : ['images'],
-      allowsMultipleSelection: mediaType === 'images',
-      selectionLimit: mediaType === 'images' ? 4 : 1,
-      videoMaxDuration: MAX_VIDEO_DURATION_SEC,
+      allowsMultipleSelection: shareMode === 'story' ? false : mediaType === 'images',
+      selectionLimit: shareMode === 'story' ? 1 : mediaType === 'images' ? 4 : 1,
+      allowsEditing: false,
+      ...(shareMode === 'story' && mediaType === 'videos'
+        ? {}
+        : { videoMaxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC }),
       quality: 0.9,
     });
 
@@ -431,12 +517,38 @@ export function CreateCaptureScreen() {
 
     if (mediaType === 'videos') {
       const uri = result.assets[0]?.uri;
-      if (uri) goToMediaEditor([{ uri }], 'video');
+      const duration = result.assets[0]?.duration ?? undefined;
+      if (!uri) return;
+
+      if (shareMode === 'story') {
+        setBusy(true);
+        try {
+          await routeStoryVideo(uri, duration);
+        } catch (err) {
+          Alert.alert(
+            'Video hazırlanamadı',
+            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+          );
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
+
+      void goToMediaEditor([{ uri }], 'video', duration);
       return;
     }
 
-    goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
-  };
+    void goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
+  }, [goToMediaEditor, shareMode]);
+
+  const pickStoryFromGallery = useCallback(() => {
+    Alert.alert('Galeriden seç', 'Hikayene ne eklemek istiyorsun?', [
+      { text: 'Fotoğraf', onPress: () => void pickFromGallery('images') },
+      { text: 'Video', onPress: () => void pickFromGallery('videos') },
+      { text: 'İptal', style: 'cancel' },
+    ]);
+  }, [pickFromGallery]);
 
   const cycleFlash = () => {
     setFlash((prev) => (prev === 'off' ? 'auto' : prev === 'auto' ? 'on' : 'off'));
@@ -485,7 +597,49 @@ export function CreateCaptureScreen() {
 
   return (
     <View style={styles.root}>
-      {cameraLive ? (
+      {shareMode === 'story' ? (
+        <View
+          style={[
+            storyCardFrameStyle.frame,
+            styles.storyCameraFrame,
+            {
+              top: insets.top + STORY_CAPTURE_TOP_OFFSET,
+              bottom: insets.bottom + STORY_CAPTURE_BOTTOM_OFFSET,
+              left: STORY_CARD_HORIZONTAL_INSET,
+              right: STORY_CARD_HORIZONTAL_INSET,
+            },
+          ]}
+        >
+          {cameraLive ? (
+            <CameraView
+              key={`${facing}-${cameraMode}`}
+              ref={cameraRef}
+              style={StyleSheet.absoluteFill}
+              facing={facing}
+              flash={flash}
+              mode={cameraMode}
+              mute={cameraMute}
+              mirror={false}
+              zoom={linearZoom}
+              {...(Platform.OS === 'ios'
+                ? {
+                    selectedLens,
+                    onAvailableLensesChanged: ({ lenses }) =>
+                      handleAvailableLensesChanged(lenses),
+                  }
+                : {})}
+              {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
+              onCameraReady={handleCameraReady}
+              onMountError={({ message }) => {
+                setCameraLive(false);
+                Alert.alert('Kamera açılamadı', message, [{ text: 'Tamam', onPress: () => router.back() }]);
+              }}
+            />
+          ) : (
+            <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]} />
+          )}
+        </View>
+      ) : cameraLive ? (
         <CameraView
           key={`${facing}-${cameraMode}`}
           ref={cameraRef}
@@ -495,6 +649,14 @@ export function CreateCaptureScreen() {
           mode={cameraMode}
           mute={cameraMute}
           mirror={false}
+          zoom={linearZoom}
+          {...(Platform.OS === 'ios'
+            ? {
+                selectedLens,
+                onAvailableLensesChanged: ({ lenses }) =>
+                  handleAvailableLensesChanged(lenses),
+              }
+            : {})}
           {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
           onCameraReady={handleCameraReady}
           onMountError={({ message }) => {
@@ -523,6 +685,18 @@ export function CreateCaptureScreen() {
         )}
 
         <View style={styles.topRight}>
+          {showSoundCreate ? (
+            <Pressable
+              hitSlop={12}
+              style={styles.topBtn}
+              onPress={async () => {
+                if (!(await requireAuth('Ses Oluştur'))) return;
+                router.push('/sounds/create' as Href);
+              }}
+            >
+              <Ionicons name="mic-outline" size={22} color="#fff" />
+            </Pressable>
+          ) : null}
           <Pressable onPress={cycleFlash} hitSlop={12} style={styles.topBtn}>
             <Ionicons
               name={flash === 'on' ? 'flash' : flash === 'auto' ? 'flash-outline' : 'flash-off-outline'}
@@ -530,17 +704,39 @@ export function CreateCaptureScreen() {
               color="#fff"
             />
           </Pressable>
-          <Pressable onPress={flipCamera} hitSlop={12} style={styles.topBtn}>
+          <Pressable onPress={flipCameraWithReset} hitSlop={12} style={styles.topBtn}>
             <Ionicons name="camera-reverse-outline" size={24} color="#fff" />
           </Pressable>
         </View>
       </View>
 
+      <View style={[styles.modeBar, { top: insets.top + spacing.sm + 44 }]}>
+        {(['story', 'post', 'reels'] as const).map((mode) => {
+          const active = shareMode === mode;
+          const label = mode === 'story' ? 'Hikaye' : mode === 'post' ? 'Gönderi' : 'Reels';
+          return (
+            <Pressable
+              key={mode}
+              style={[styles.modeChip, active && styles.modeChipActive]}
+              onPress={() => setShareMode(mode)}
+            >
+              <Text style={[styles.modeChipText, active && styles.modeChipTextActive]}>{label}</Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
       <View style={[styles.bottomBar, { paddingBottom: insets.bottom + spacing.lg }]}>
         <Pressable
           style={styles.galleryBtn}
-          onPress={() => void pickFromGallery('images')}
-          onLongPress={() => void pickFromGallery('videos')}
+          onPress={() => {
+            if (shareMode === 'story') {
+              pickStoryFromGallery();
+              return;
+            }
+            void pickFromGallery('images');
+          }}
+          onLongPress={shareMode === 'story' ? undefined : () => void pickFromGallery('videos')}
           delayLongPress={280}
         >
           {galleryThumb ? (
@@ -569,7 +765,7 @@ export function CreateCaptureScreen() {
             longPressActive.current = true;
             void startVideoRecording();
           }}
-          onPressOut={stopVideoRecording}
+          onPressOut={handleShutterPressOut}
           delayLongPress={220}
           style={styles.shutterWrap}
         >
@@ -587,17 +783,32 @@ export function CreateCaptureScreen() {
         </Pressable>
       </View>
 
-      <Pressable
-        style={[
-          styles.cameraTapLayer,
-          {
-            top: insets.top + PREVIEW_TAP_TOP,
-            bottom: insets.bottom + PREVIEW_TAP_BOTTOM,
-          },
-        ]}
-        onPress={handlePreviewTap}
-        accessibilityLabel="Kamerayı çevir"
-        accessibilityHint="Önizleme alanına iki kez dokunarak ön ve arka kamera arasında geçiş yapın"
+      <CaptureCameraZoomOverlay
+        enabled={cameraLive && !busy}
+        showManualControls={showManualControls}
+        bounds={
+          shareMode === 'story'
+            ? {
+                top: insets.top + STORY_CAPTURE_TOP_OFFSET,
+                bottom: insets.bottom + STORY_CAPTURE_BOTTOM_OFFSET,
+                left: STORY_CARD_HORIZONTAL_INSET,
+                right: STORY_CARD_HORIZONTAL_INSET,
+              }
+            : {
+                top: insets.top + 56,
+                bottom: insets.bottom + 140,
+              }
+        }
+        linearZoom={linearZoom}
+        displayZoom={displayZoom}
+        indicatorVisible={indicatorVisible}
+        activePresetId={activePresetId}
+        presets={presets}
+        previewGesture={previewGesture}
+        applyPreset={applyPreset}
+        onZoomRailChange={updateZoomFromRail}
+        onZoomRailStart={handleZoomRailStart}
+        onZoomRailEnd={handleZoomRailEnd}
       />
 
       {busy ? (
@@ -615,15 +826,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#000',
   },
   cameraPlaceholder: {
-    backgroundColor: '#000',
+    backgroundColor: '#0a0a0a',
   },
-  cameraTapLayer: {
+  storyCameraFrame: {
     position: 'absolute',
-    left: 0,
-    right: 0,
-    zIndex: 5,
-    elevation: 5,
-    backgroundColor: 'rgba(0,0,0,0.01)',
   },
   centered: {
     flex: 1,
@@ -771,6 +977,32 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 10,
     fontWeight: '600',
+  },
+  modeBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    zIndex: 11,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: spacing.sm,
+  },
+  modeChip: {
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  modeChipActive: {
+    backgroundColor: 'rgba(255,255,255,0.92)',
+  },
+  modeChipText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modeChipTextActive: {
+    color: '#000',
   },
   busyOverlay: {
     ...StyleSheet.absoluteFillObject,

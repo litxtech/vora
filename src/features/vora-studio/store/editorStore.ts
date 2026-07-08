@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { LIVE_SUPPORT_CLIP_MAX_SEC, STUDIO_MAX_DURATION_SEC } from '@/features/vora-studio/constants';
+import { LIVE_SUPPORT_CLIP_MAX_SEC, STORY_CLIP_MAX_SEC, STUDIO_MAX_DURATION_SEC } from '@/features/vora-studio/constants';
 import type {
   StudioEditorState,
   StudioExportMode,
@@ -18,6 +18,16 @@ import {
 } from '@/features/vora-studio/utils/clips';
 import { clampTime, generateId } from '@/features/vora-studio/utils/time';
 
+function clipCapForMode(exportMode: StudioExportMode): { capped: boolean; maxClipSec: number } {
+  if (exportMode === 'live-support') {
+    return { capped: true, maxClipSec: LIVE_SUPPORT_CLIP_MAX_SEC };
+  }
+  if (exportMode === 'story') {
+    return { capped: true, maxClipSec: STORY_CLIP_MAX_SEC };
+  }
+  return { capped: false, maxClipSec: STUDIO_MAX_DURATION_SEC };
+}
+
 type StudioActions = {
   initProject: (sourceUri: string, durationSec: number, exportMode?: StudioExportMode) => void;
   reset: () => void;
@@ -27,6 +37,7 @@ type StudioActions = {
   setSelectedTextOverlay: (id: string | null) => void;
   setTrimStart: (sec: number) => void;
   setTrimEnd: (sec: number) => void;
+  slideTrimWindow: (startSec: number) => void;
   setPlayhead: (sec: number) => void;
   setPlaying: (playing: boolean) => void;
   setOriginalAudioVolume: (volume: number) => void;
@@ -81,11 +92,9 @@ export const useStudioEditorStore = create<StudioEditorState & StudioActions>((s
   ...initialState,
 
   initProject: (sourceUri, durationSec, exportMode = 'reel') => {
-    const isLiveSupport = exportMode === 'live-support';
-    const capped = isLiveSupport ? durationSec : Math.min(durationSec, STUDIO_MAX_DURATION_SEC);
-    const trimEnd = isLiveSupport
-      ? Math.min(LIVE_SUPPORT_CLIP_MAX_SEC, capped)
-      : capped;
+    const { capped: isClipCapped, maxClipSec } = clipCapForMode(exportMode);
+    const capped = isClipCapped ? durationSec : Math.min(durationSec, STUDIO_MAX_DURATION_SEC);
+    const trimEnd = isClipCapped ? Math.min(maxClipSec, capped) : capped;
     set({
       ...initialState,
       sourceUri,
@@ -97,7 +106,7 @@ export const useStudioEditorStore = create<StudioEditorState & StudioActions>((s
       thumbnailTimeSec: 0,
       exportMode,
       activeTool: 'trim',
-      toolSheetOpen: isLiveSupport,
+      toolSheetOpen: isClipCapped,
     });
   },
 
@@ -120,11 +129,26 @@ export const useStudioEditorStore = create<StudioEditorState & StudioActions>((s
 
   setTrimStart: (sec) => {
     const { trimEndSec, clips, exportMode, durationSec } = get();
-    let nextEnd = trimEndSec;
-    let next = clampTime(sec, 0, trimEndSec - 0.5);
-    if (exportMode === 'live-support' && nextEnd - next > LIVE_SUPPORT_CLIP_MAX_SEC) {
-      nextEnd = Math.min(durationSec, next + LIVE_SUPPORT_CLIP_MAX_SEC);
+    const { capped: isClipCapped, maxClipSec } = clipCapForMode(exportMode);
+
+    if (isClipCapped) {
+      const windowSec = Math.min(trimEndSec - get().trimStartSec, maxClipSec);
+      const nextStart = clampTime(sec, 0, Math.max(0, durationSec - windowSec));
+      const nextEnd = Math.min(durationSec, nextStart + windowSec);
+      const nextClips =
+        clips.length === 1 ? [{ ...clips[0], startSec: nextStart, endSec: nextEnd }] : clips;
+      set({
+        trimStartSec: nextStart,
+        trimEndSec: nextEnd,
+        playheadSec: clampTime(get().playheadSec, nextStart, nextEnd),
+        clips: nextClips,
+      });
+      get().syncMusicToClip();
+      return;
     }
+
+    let nextEnd = trimEndSec;
+    const next = clampTime(sec, 0, trimEndSec - 0.5);
     const nextClips =
       clips.length === 1 ? [{ ...clips[0], startSec: next, endSec: nextEnd }] : clips;
     set({
@@ -137,16 +161,50 @@ export const useStudioEditorStore = create<StudioEditorState & StudioActions>((s
   },
 
   setTrimEnd: (sec) => {
-    const { durationSec, trimStartSec, clips, exportMode } = get();
-    let next = clampTime(sec, trimStartSec + 0.5, durationSec);
-    if (exportMode === 'live-support' && next - trimStartSec > LIVE_SUPPORT_CLIP_MAX_SEC) {
-      next = Math.min(durationSec, trimStartSec + LIVE_SUPPORT_CLIP_MAX_SEC);
+    const { durationSec, trimStartSec, trimEndSec, clips, exportMode } = get();
+    const { capped: isClipCapped, maxClipSec } = clipCapForMode(exportMode);
+
+    if (isClipCapped) {
+      const windowSec = Math.min(trimEndSec - trimStartSec, maxClipSec);
+      const nextEnd = clampTime(sec, windowSec, durationSec);
+      const nextStart = Math.max(0, nextEnd - windowSec);
+      const nextClips =
+        clips.length === 1 ? [{ ...clips[0], startSec: nextStart, endSec: nextEnd }] : clips;
+      set({
+        trimStartSec: nextStart,
+        trimEndSec: nextEnd,
+        playheadSec: clampTime(get().playheadSec, nextStart, nextEnd),
+        clips: nextClips,
+      });
+      get().syncMusicToClip();
+      return;
     }
+
+    const next = clampTime(sec, trimStartSec + 0.5, durationSec);
     const nextClips =
       clips.length === 1 ? [{ ...clips[0], startSec: trimStartSec, endSec: next }] : clips;
     set({
       trimEndSec: next,
       playheadSec: clampTime(get().playheadSec, trimStartSec, next),
+      clips: nextClips,
+    });
+    get().syncMusicToClip();
+  },
+
+  slideTrimWindow: (startSec) => {
+    const { durationSec, trimStartSec, trimEndSec, clips, exportMode } = get();
+    const { capped: isClipCapped, maxClipSec } = clipCapForMode(exportMode);
+    if (!isClipCapped) return;
+
+    const windowSec = Math.min(trimEndSec - trimStartSec, maxClipSec);
+    const nextStart = clampTime(startSec, 0, Math.max(0, durationSec - windowSec));
+    const nextEnd = Math.min(durationSec, nextStart + windowSec);
+    const nextClips =
+      clips.length === 1 ? [{ ...clips[0], startSec: nextStart, endSec: nextEnd }] : clips;
+    set({
+      trimStartSec: nextStart,
+      trimEndSec: nextEnd,
+      playheadSec: clampTime(get().playheadSec, nextStart, nextEnd),
       clips: nextClips,
     });
     get().syncMusicToClip();

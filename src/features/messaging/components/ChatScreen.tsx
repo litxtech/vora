@@ -208,8 +208,16 @@ function applyReadStatus(
 }
 
 export function ChatScreen() {
-  const params = useLocalSearchParams<{ id: string | string[]; from?: string | string[] }>();
+  const params = useLocalSearchParams<{
+    id: string | string[];
+    from?: string | string[];
+    messageId?: string | string[];
+  }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
+  const deepLinkMessageId = (() => {
+    const raw = Array.isArray(params.messageId) ? params.messageId[0] : params.messageId;
+    return raw?.trim() || null;
+  })();
   const fromIzdivac = (Array.isArray(params.from) ? params.from[0] : params.from) === 'izdivac';
   const { user, profile, isLoading: authLoading } = useAuth();
   const { requireAuth } = useRequireAuth();
@@ -239,6 +247,8 @@ export function ChatScreen() {
   const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const copyToastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingScrollMessageIdRef = useRef<string | null>(null);
+  const pendingJumpMessageIdRef = useRef<string | null>(null);
+  const handledDeepLinkMessageIdRef = useRef<string | null>(null);
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
@@ -400,6 +410,8 @@ export function ChatScreen() {
 
   useLayoutEffect(() => {
     if (!id) return;
+    handledDeepLinkMessageIdRef.current = null;
+    pendingJumpMessageIdRef.current = null;
     enteredMessageIdsRef.current.clear();
     const snapshot = readConversationOpenSnapshot(id, user?.id);
     markMessagesEntered(snapshot.messages);
@@ -2223,11 +2235,9 @@ export function ChatScreen() {
     }
   };
 
-  const scrollToMessage = useCallback((list: ChatMessage[], messageId: string) => {
-    const displayIndex = [...list].reverse().findIndex((m) => m.id === messageId);
-    if (displayIndex < 0) {
-      Alert.alert('Mesaj bulunamadı', 'Mesaj silinmiş veya yüklenemiyor olabilir.');
-      return;
+  const scrollToMessage = useCallback((list: ChatMessage[], messageId: string): boolean => {
+    if (!list.some((m) => m.id === messageId)) {
+      return false;
     }
 
     pendingScrollMessageIdRef.current = messageId;
@@ -2235,6 +2245,7 @@ export function ChatScreen() {
     if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
     highlightTimerRef.current = setTimeout(() => setHighlightedMessageId(null), 2500);
     setScrollRequest((value) => value + 1);
+    return true;
   }, []);
 
   useEffect(() => {
@@ -2258,16 +2269,18 @@ export function ChatScreen() {
     async (target: ChatMessage) => {
       if (!id || !user?.id) return;
 
-      if (messages.some((m) => m.id === target.id)) {
-        scrollToMessage(messages, target.id);
+      const targetId = target.id;
+      const currentMessages = messagesRef.current;
+
+      if (scrollToMessage(currentMessages, targetId)) {
+        pendingJumpMessageIdRef.current = null;
         return;
       }
 
-      let list = [...messages];
-      let more = hasMore;
+      let list = [...currentMessages];
       let before = list[0]?.createdAt;
 
-      while (more && !list.some((m) => m.id === target.id)) {
+      while (!list.some((m) => m.id === targetId)) {
         const older = await fetchMessages(
           id,
           user.id,
@@ -2275,27 +2288,75 @@ export function ChatScreen() {
           PAGE_SIZE,
           before,
         );
-        if (older.length === 0) {
-          more = false;
-          break;
-        }
-        list = [...older, ...list];
+        if (older.length === 0) break;
+
+        const existing = new Set(list.map((m) => m.id));
+        list = [...older.filter((m) => !existing.has(m.id)), ...list];
         before = older[0]?.createdAt;
-        more = older.length >= PAGE_SIZE;
+        if (older.length < PAGE_SIZE) break;
       }
 
-      if (!list.some((m) => m.id === target.id)) {
-        Alert.alert('Mesaj bulunamadı');
+      if (!list.some((m) => m.id === targetId)) {
+        if (currentMessages.length === 0 && !detailResolved) {
+          pendingJumpMessageIdRef.current = targetId;
+          return;
+        }
+        Alert.alert('Mesaj bulunamadı', 'Mesaj silinmiş veya yüklenemiyor olabilir.');
+        pendingJumpMessageIdRef.current = null;
         return;
       }
 
-      setMessages(capMessageList(list, [target.id]));
+      pendingJumpMessageIdRef.current = null;
+      setMessages(capMessageList(list, [targetId]));
       markMessagesEntered(list);
-      setHasMore(more || list.length >= PAGE_SIZE);
-      scrollToMessage(list, target.id);
+      setHasMore(list.length >= PAGE_SIZE);
+      scrollToMessage(list, targetId);
     },
-    [id, user?.id, messages, hasMore, scrollToMessage, markMessagesEntered],
+    [id, user?.id, detailResolved, scrollToMessage, markMessagesEntered],
   );
+
+  const jumpToMessageById = useCallback(
+    async (messageId: string) => {
+      const existing = messagesRef.current.find((m) => m.id === messageId);
+      if (existing) {
+        await jumpToMessage(existing);
+        return;
+      }
+      await jumpToMessage({
+        id: messageId,
+        conversationId: id ?? '',
+        senderId: '',
+        content: '',
+        mediaUrl: null,
+        messageType: 'text',
+        replyToId: null,
+        editedAt: null,
+        deletedForAll: false,
+        isRead: true,
+        createdAt: new Date(0).toISOString(),
+      });
+    },
+    [id, jumpToMessage],
+  );
+
+  useEffect(() => {
+    const pendingId = pendingJumpMessageIdRef.current;
+    if (!pendingId || !id || !user?.id) return;
+    if (!messagesRef.current.some((m) => m.id === pendingId)) return;
+    pendingJumpMessageIdRef.current = null;
+    void jumpToMessageById(pendingId);
+  }, [messages, id, user?.id, jumpToMessageById]);
+
+  useEffect(() => {
+    if (!deepLinkMessageId || !id || !user?.id) return;
+    if (handledDeepLinkMessageIdRef.current === deepLinkMessageId) return;
+    if (!detailResolved && messagesRef.current.length === 0) {
+      pendingJumpMessageIdRef.current = deepLinkMessageId;
+      return;
+    }
+    handledDeepLinkMessageIdRef.current = deepLinkMessageId;
+    void jumpToMessageById(deepLinkMessageId);
+  }, [deepLinkMessageId, detailResolved, id, jumpToMessageById, messages.length, user?.id]);
 
   const renderMessage = useCallback(
     ({ item, index }: { item: ChatMessage; index: number }) => {

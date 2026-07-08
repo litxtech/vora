@@ -81,5 +81,8 @@ export function musicSelectionToDbFields(selection: MusicSelection | null) {
 export function getMusicPersistenceError(selection: MusicSelection | null | undefined): string | null {
   if (!selection) return null;
   if (isPersistableMusicTrackId(selection.trackId)) return null;
+  if (selection.source === 'sound') {
+    return 'Seçilen ses paylaşıma kaydedilemiyor.';
+  }
   return 'Seçilen müzik paylaşıma kaydedilemiyor. Lütfen listeden lisanslı bir parça seçin.';
 }

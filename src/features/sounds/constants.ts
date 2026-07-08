@@ -1,0 +1,76 @@
+import type { SoundListTabId, SoundReportReason } from '@/features/sounds/types';
+
+export const SOUNDS_BUCKET = 'user-sounds';
+
+/** Supabase `user-sounds` bucket limiti (100 MB) — yüklemeden önce sıkıştırılır */
+export const MAX_SOUND_UPLOAD_BYTES = 100 * 1024 * 1024;
+
+/** Canlı kayıt için üst süre yok; dosya/video uzunluğu da serbest (sıkıştırma uygulanır) */
+export const MAX_SOUND_DURATION_SEC = Number.MAX_SAFE_INTEGER;
+export const MIN_SOUND_DURATION_SEC = 1;
+
+/** UI ipucu — pratik kayıt önerisi */
+export const SOUND_RECORD_HINT_SEC = 60;
+
+export const SOUND_LIST_TABS: { id: SoundListTabId; label: string }[] = [
+  { id: 'recent', label: 'Son Kullandıklarım' },
+  { id: 'saved', label: 'Kaydettiklerim' },
+  { id: 'mine', label: 'Benim Seslerim' },
+  { id: 'trending', label: 'Trend' },
+  { id: 'new', label: 'Yeni' },
+  { id: 'following', label: 'Takip' },
+];
+
+export const SOUND_BADGE_TIERS = [
+  { threshold: 100, label: '100 Kullanım Rozeti', icon: 'ribbon-outline' as const },
+  { threshold: 500, label: '500 Kullanım · Ekstra Puan', icon: 'star-outline' as const },
+  { threshold: 1000, label: 'Trend Etiketi', icon: 'flame-outline' as const },
+  { threshold: 10000, label: 'Popüler Ses', icon: 'trophy-outline' as const },
+] as const;
+
+export const SOUND_REPORT_REASONS: { id: SoundReportReason; label: string }[] = [
+  { id: 'copyright', label: 'Telif Bildir' },
+  { id: 'inappropriate', label: 'Uygunsuz İçerik' },
+  { id: 'spam', label: 'Spam' },
+  { id: 'misleading_title', label: 'Yanıltıcı Başlık' },
+];
+
+export const SOUND_CACHE_TTL_MS = 5 * 60 * 1000;
+export const SOUND_SEARCH_DEBOUNCE_MS = 200;
+
+export const SOUND_ACCEPTED_AUDIO_MIME = [
+  'audio/mpeg',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/m4a',
+  'audio/aac',
+  'audio/wav',
+  'audio/x-wav',
+  'audio/ogg',
+] as const;
+
+export function defaultSoundTitle(username: string): string {
+  return `Orijinal Ses - @${username}`;
+}
+
+/** 0:42 veya 1:05:30 — kart ve kayıt ekranında süre gösterimi */
+export function formatSoundDuration(totalSec: number): string {
+  const sec = Math.max(0, Math.floor(totalSec));
+  const hours = Math.floor(sec / 3600);
+  const minutes = Math.floor((sec % 3600) / 60);
+  const seconds = sec % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+export function isSoundPlayable(audioUrl: string | null | undefined): boolean {
+  if (!audioUrl) return false;
+  return audioUrl.startsWith('http');
+}
+
+export function soundBadgeLabel(tier: number): string | null {
+  const match = [...SOUND_BADGE_TIERS].reverse().find((b) => tier >= b.threshold);
+  return match?.label ?? null;
+}

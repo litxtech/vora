@@ -239,6 +239,15 @@ export function ensureReelVideoPlaying(videoPlayer: VideoPlayer): void {
   });
 }
 
+export function setReelMusicPlaybackRate(reelId: string, rate: number): void {
+  if (boundReelId !== reelId || !audioPlayer) return;
+  try {
+    audioPlayer.playbackRate = rate;
+  } catch {
+    /* ignore stale player */
+  }
+}
+
 export async function attachReelMusic(
   reelId: string,
   videoPlayer: VideoPlayer,
@@ -295,6 +304,14 @@ export function prefetchReelMusic(config: MusicPlaybackConfig | null | undefined
 
 export function prepareReelMusicInPool(config: MusicPlaybackConfig): void {
   prefetchReelMusic(config);
+}
+
+/** Havuzdan müzik oynatıcısı alır (hikâye fotoğraf slaytları vb.). */
+export async function acquireReelMusicPlayer(
+  audioUrl: string,
+  volume: number,
+): Promise<AudioPlayer> {
+  return getPooledPlayer(audioUrl, volume);
 }
 
 export function clearReelMusicPool(): void {

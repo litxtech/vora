@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { safeRouterBack } from '@/lib/navigation/safeRouterBack';
 import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -15,7 +15,7 @@ export function ScreenBackButton({ onPress, style }: ScreenBackButtonProps) {
   return (
     <Pressable
       style={[styles.back, style]}
-      onPress={onPress ?? (() => router.back())}
+      onPress={onPress ?? (() => safeRouterBack())}
       hitSlop={12}
       accessibilityRole="button"
       accessibilityLabel="Geri"

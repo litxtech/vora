@@ -15,6 +15,7 @@ export const DISCOVERY_TABS: {
 }[] = [
   { id: 'posts', label: 'Gönderiler', icon: 'flame-outline' },
   { id: 'reels', label: 'Reels', icon: 'play-circle-outline' },
+  { id: 'music', label: 'Müzik', icon: 'musical-notes-outline' },
   { id: 'news', label: 'Haberler', icon: 'newspaper-outline' },
   { id: 'events', label: 'Etkinlikler', icon: 'calendar-outline' },
   { id: 'businesses', label: 'İşletmeler', icon: 'storefront-outline' },

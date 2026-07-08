@@ -1,7 +1,8 @@
 import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
 import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { ImageContentFit } from 'expo-image';
-import { FEED_MEDIA_ASPECT_RATIO, FEED_MEDIA_MAX_HEIGHT } from '@/features/feed/constants';
+import { FEED_MEDIA_ASPECT_RATIO } from '@/features/feed/constants';
+import { getFeedMediaMaxHeight } from '@/lib/device/androidPerfProfile';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { FeedMediaPreview } from '@/components/media/FeedMediaPreview';
 import { OptimizedImage } from '@/components/media/OptimizedImage';
@@ -37,7 +38,7 @@ function shouldRenderSlide(activeIndex: number, slideIndex: number, total: numbe
 export const MediaCarousel = memo(function MediaCarousel({
   urls,
   variant = 'inline',
-  maxHeight = FEED_MEDIA_MAX_HEIGHT,
+  maxHeight = getFeedMediaMaxHeight(),
   onMediaPress,
   onSlideIndexChange,
   overlay,

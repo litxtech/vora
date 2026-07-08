@@ -10,19 +10,23 @@ const AVATAR_SIZE = 34;
 export function FeedHeaderAvatarButton() {
   const { colors } = useTheme();
   const { profile } = useAuth();
-  const open = useFeedDrawerStore((s) => s.open);
+  const drawerOpen = useFeedDrawerStore((s) => s.open);
   const openDrawer = useFeedDrawerStore((s) => s.openDrawer);
+  const closeDrawer = useFeedDrawerStore((s) => s.closeDrawer);
 
   return (
     <Pressable
       onPress={() => {
-        if (!open) openDrawer();
+        if (drawerOpen) {
+          closeDrawer();
+          return;
+        }
+        openDrawer();
       }}
       hitSlop={6}
       accessibilityRole="button"
-      accessibilityLabel="Menüyü aç"
-      disabled={open}
-      style={({ pressed }) => [styles.btn, pressed && !open && styles.pressed]}
+      accessibilityLabel={drawerOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+      style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
       {...getAndroidInstantPressableProps()}
     >
       <ProfileTabIcon

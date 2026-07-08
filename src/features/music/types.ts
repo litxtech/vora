@@ -38,7 +38,16 @@ export type MusicTrack = {
   createdAt: string;
 };
 
+export type AudioSource = 'music' | 'sound';
+
+/** Katalog müziği + kullanıcı sesleri — tek listede gösterim. */
+export type AudioCatalogItem = MusicTrack & {
+  source: AudioSource;
+};
+
 export type MusicSelection = {
+  /** @default 'music' */
+  source?: AudioSource;
   trackId: string;
   displayTitle: string;
   artist: string;

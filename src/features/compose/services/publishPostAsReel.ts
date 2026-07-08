@@ -1,7 +1,8 @@
 import { supabase } from '@/lib/supabase/client';
 import type { MusicSelection } from '@/features/music/types';
 import type { PublishedEditManifest } from '@/features/vora-studio/types';
-import { editManifestToDbField, musicSelectionToDbFields } from '@/features/music/services/recordUsage';
+import { editManifestToDbField } from '@/features/music/services/recordUsage';
+import { audioSelectionToDbFields } from '@/features/sounds/services/recordSoundUsage';
 import { supabaseErrorMessage } from '@/lib/errors';
 
 export async function publishPostAsReel(input: {
@@ -22,7 +23,7 @@ export async function publishPostAsReel(input: {
       source_post_id: input.postId ?? null,
       caption: input.caption.trim() || null,
       status: 'published',
-      ...musicSelectionToDbFields(input.music ?? null),
+      ...audioSelectionToDbFields(input.music ?? null),
       ...editManifestToDbField(input.editManifest ?? null),
     })
     .select('id')

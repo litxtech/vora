@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useScrollToTop } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import type { FlashListRef } from '@shopify/flash-list';
@@ -12,9 +12,10 @@ import { FeedJobCard } from '@/features/feed/components/FeedJobCard';
 import { FeedLostItemCard } from '@/features/feed/components/FeedLostItemCard';
 import { FeedEmptyState } from '@/features/feed/components/shared/FeedEmptyState';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
+import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
-import { getFeedListPerfProps, getFeedEstimatedItemSize, isAndroid } from '@/lib/device/androidPerfProfile';
+import { getFeedListPerfProps, getFeedEstimatedItemSize, getFeedFlashListDrawDistance, getFeedScrollSettleMs, isAndroid, shouldAutoplayFeedVideos } from '@/lib/device/androidPerfProfile';
 import { shouldUseSilentListRefresh } from '@/lib/ui/listRefresh';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -119,6 +120,7 @@ export function FeedList({
   listBottomInset = 0,
 }: FeedListProps) {
   const { colors } = useTheme();
+  const listInteractionLocked = useFeedDrawerStore((s) => s.listInteractionLocked);
   const showInitialEmpty = !loading && items.length === 0;
   const listPerf = getFeedListPerfProps();
   const listRef = useRef<FlatList<FeedItem> | FlashListRef<FeedItem>>(null);
@@ -126,14 +128,22 @@ export function FeedList({
   const [visibleRowIds, setVisibleRowIds] = useState<Set<string>>(() => new Set());
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingViewableRef = useRef<ViewToken[]>([]);
+  const commitActiveVideoRef = useRef<(viewableItems: ViewToken[]) => void>(() => {});
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const commitActiveVideo = useCallback((viewableItems: ViewToken[]) => {
+    if (!shouldAutoplayFeedVideos()) {
+      useFeedVideoPlaybackStore.getState().setActivePost(null);
+      return;
+    }
     useFeedVideoPlaybackStore.getState().setActivePost(pickActiveVideoPostId(viewableItems));
   }, []);
+  commitActiveVideoRef.current = commitActiveVideo;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken[] }) => {
+    if (useFeedDrawerStore.getState().listInteractionLocked) return;
+
     const isScrolling = useFeedVideoPlaybackStore.getState().isScrolling;
     const nextVisible = new Set<string>();
 
@@ -174,7 +184,7 @@ export function FeedList({
 
   const handleScrollEndDrag = useCallback(() => {
     if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
-    scrollSettleTimerRef.current = setTimeout(handleScrollSettled, 120);
+    scrollSettleTimerRef.current = setTimeout(handleScrollSettled, getFeedScrollSettleMs());
   }, [handleScrollSettled]);
 
   useEffect(() => {
@@ -185,6 +195,32 @@ export function FeedList({
 
   useEffect(() => {
     useFeedVideoPlaybackStore.getState().setScrolling(false);
+  }, []);
+
+  useEffect(() => {
+    const clipSubviews = listPerf.removeClippedSubviews ?? false;
+
+    const applyListInteraction = (locked: boolean) => {
+      const videoStore = useFeedVideoPlaybackStore.getState();
+      if (locked) {
+        videoStore.setScrolling(true);
+      } else {
+        videoStore.setScrolling(false);
+        commitActiveVideoRef.current(pendingViewableRef.current);
+      }
+
+      listRef.current?.setNativeProps?.({
+        pointerEvents: locked ? 'none' : 'auto',
+        removeClippedSubviews: locked ? false : clipSubviews,
+      });
+    };
+
+    useFeedDrawerStore.getState().setListInteractionLockHandler(applyListInteraction);
+    applyListInteraction(useFeedDrawerStore.getState().listInteractionLocked);
+
+    return () => {
+      useFeedDrawerStore.getState().setListInteractionLockHandler(null);
+    };
   }, []);
 
   const renderItem = useCallback(
@@ -202,17 +238,20 @@ export function FeedList({
 
   const keyExtractor = useCallback((item: FeedItem) => item.id, []);
 
-  const listHeader = (
-    <View>
-      {header}
-      {error ? (
-        <View style={[styles.errorBox, { backgroundColor: `${colors.danger}18`, borderColor: `${colors.danger}44` }]}>
-          <Text variant="caption" style={{ color: colors.danger }}>
-            {error}
-          </Text>
-        </View>
-      ) : null}
-    </View>
+  const listHeader = useMemo(
+    () => (
+      <View>
+        {header}
+        {error ? (
+          <View style={[styles.errorBox, { backgroundColor: `${colors.danger}18`, borderColor: `${colors.danger}44` }]}>
+            <Text variant="caption" style={{ color: colors.danger }}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+    ),
+    [colors.danger, error, header],
   );
 
   const listEmpty = showInitialEmpty ? (
@@ -245,6 +284,7 @@ export function FeedList({
     onScrollBeginDrag: handleScrollBegin,
     onScrollEndDrag: handleScrollEndDrag,
     onMomentumScrollEnd: handleScrollSettled,
+    scrollEnabled: !listInteractionLocked,
     showsVerticalScrollIndicator: false,
     contentContainerStyle: [styles.content, listBottomInset > 0 && { paddingBottom: listBottomInset }],
     style: styles.list,
@@ -256,7 +296,7 @@ export function FeedList({
       <FlashList
         ref={listRef}
         {...sharedListProps}
-        drawDistance={getFeedEstimatedItemSize() * 2}
+        drawDistance={getFeedFlashListDrawDistance()}
       />
     );
   }
