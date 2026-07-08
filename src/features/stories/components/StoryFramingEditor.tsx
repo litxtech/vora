@@ -24,6 +24,8 @@ type StoryFramingEditorProps = {
   mediaWidth: number;
   mediaHeight: number;
   enabled?: boolean;
+  /** Metin sürüklenirken / pinch yapılırken medya jestlerini kapat */
+  mediaGesturesEnabled?: boolean;
   /** false = otomatik cover; pinch/pan yok */
   interactive?: boolean;
 };
@@ -35,6 +37,7 @@ export function StoryFramingEditor({
   mediaWidth,
   mediaHeight,
   enabled = true,
+  mediaGesturesEnabled = true,
   interactive = true,
 }: StoryFramingEditorProps) {
   const [layout, setLayout] = useState({ width: 0, height: 0 });
@@ -141,10 +144,12 @@ export function StoryFramingEditor({
     onFramingChange,
   ]);
 
+  const gestureActive = enabled && mediaGesturesEnabled && interactive;
+
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
-        .enabled(enabled)
+        .enabled(gestureActive)
         .onStart(() => {
           savedScale.value = scale.value;
         })
@@ -155,13 +160,13 @@ export function StoryFramingEditor({
         .onEnd(() => {
           runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         }),
-    [commitFraming, enabled, metrics.maxZoom, metrics.minZoom, savedScale, scale, translateX, translateY],
+    [commitFraming, gestureActive, metrics.maxZoom, metrics.minZoom, savedScale, scale, translateX, translateY],
   );
 
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(enabled)
+        .enabled(gestureActive)
         .minPointers(1)
         .maxPointers(1)
         .onStart(() => {
@@ -175,13 +180,13 @@ export function StoryFramingEditor({
         .onEnd(() => {
           runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         }),
-    [commitFraming, enabled, savedTranslateX, savedTranslateY, scale, translateX, translateY],
+    [commitFraming, gestureActive, savedTranslateX, savedTranslateY, scale, translateX, translateY],
   );
 
   const doubleTap = useMemo(
     () =>
       Gesture.Tap()
-        .enabled(enabled)
+        .enabled(gestureActive)
         .numberOfTaps(2)
         .onEnd(() => {
           const atFit = Math.abs(savedScale.value - metrics.minZoom) < 0.06;
@@ -196,7 +201,7 @@ export function StoryFramingEditor({
         }),
     [
       commitFraming,
-      enabled,
+      gestureActive,
       metrics.minZoom,
       savedScale,
       savedTranslateX,
@@ -219,13 +224,14 @@ export function StoryFramingEditor({
 
   if (!interactive) {
     const zoom = Math.max(0.05, pixels.zoom);
+    const hasLayout = layout.width > 0 && layout.height > 0;
     return (
       <View
         style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
         onLayout={onLayout}
         collapsable={false}
       >
-        {layout.width > 0 ? (
+        {hasLayout ? (
           <View style={styles.stage}>
             <View
               style={{
@@ -241,10 +247,14 @@ export function StoryFramingEditor({
               {children}
             </View>
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.fallback}>{children}</View>
+        )}
       </View>
     );
   }
+
+  const hasLayout = layout.width > 0 && layout.height > 0;
 
   return (
     <GestureDetector gesture={composed}>
@@ -253,7 +263,7 @@ export function StoryFramingEditor({
         onLayout={onLayout}
         collapsable={false}
       >
-        {layout.width > 0 ? (
+        {hasLayout ? (
           <View style={styles.stage} pointerEvents="box-none">
             <Animated.View
               style={[
@@ -268,7 +278,11 @@ export function StoryFramingEditor({
               {children}
             </Animated.View>
           </View>
-        ) : null}
+        ) : (
+          <View style={styles.fallback} pointerEvents="box-none">
+            {children}
+          </View>
+        )}
       </View>
     </GestureDetector>
   );
@@ -278,6 +292,10 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     overflow: 'hidden',
+  },
+  fallback: {
+    flex: 1,
+    width: '100%',
   },
   stage: {
     flex: 1,

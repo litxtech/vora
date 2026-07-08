@@ -5,6 +5,7 @@ import {
   LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type View as RNView,
 } from 'react-native';
@@ -38,9 +39,16 @@ import { MediaEditorTrashZone } from '@/features/compose/components/MediaEditorT
 import {
   createOverlayDragDeleteHandlers,
 } from '@/features/compose/store/mediaEditorDragStore';
-import { StoryTextOverlayLayer } from '@/features/stories/components/StoryTextOverlayLayer';
+import { StoryCanvasTextOverlays } from '@/features/stories/components/StoryCanvasTextOverlays';
 import { StoryTextPanel } from '@/features/stories/components/StoryTextPanel';
-import { createStoryTextOverlay } from '@/features/stories/utils/storyTextOverlays';
+import {
+  createStoryTextOverlay,
+  serializeStoryTextOverlays,
+} from '@/features/stories/utils/storyTextOverlays';
+import {
+  commitStoryTextDraft,
+  mergeStoryTextDraftIntoOverlays,
+} from '@/features/stories/utils/commitStoryTextDraft';
 import type { StudioTextOverlay } from '@/features/vora-studio/types';
 import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFramedImage';
 import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
@@ -49,6 +57,7 @@ import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/storie
 import { useStoryUploadStore } from '@/features/stories/store/storyUploadStore';
 import { documentDirectory } from 'expo-file-system/legacy';
 import { getLocalFileSize, normalizeLocalFileUri } from '@/lib/files/readLocalFile';
+import { prepareLocalImageUri } from '@/lib/media/prepareLocalImage';
 import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
@@ -57,6 +66,7 @@ import {
   probeImageSize,
   probeVideoSize,
   createStoryFramingForMedia,
+  STORY_CARD_MEDIA_ASPECT,
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
 import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
@@ -72,17 +82,32 @@ type StoryPublishScreenProps = {
   mediaType: 'image' | 'video';
   durationSec?: number;
   trimmedInStudio?: boolean;
+  mediaWidth?: number;
+  mediaHeight?: number;
 };
+
+function resolveInitialMediaSize(
+  mediaWidth?: number,
+  mediaHeight?: number,
+): { width: number; height: number } | null {
+  if (mediaWidth != null && mediaHeight != null && mediaWidth > 0 && mediaHeight > 0) {
+    return { width: mediaWidth, height: mediaHeight };
+  }
+  return null;
+}
 
 export function StoryPublishScreen({
   mediaUri,
   mediaType,
   durationSec,
   trimmedInStudio = false,
+  mediaWidth,
+  mediaHeight,
 }: StoryPublishScreenProps) {
   const normalizedDurationSec = normalizeIncomingDurationSec(durationSec);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
   const { user, profile } = useAuth();
   const regionId = useFeedStore((s) => s.regionId);
   const startStoryPublish = useStoryUploadStore((s) => s.startPublish);
@@ -90,6 +115,9 @@ export function StoryPublishScreen({
     (s) => s.status === 'uploading' || (s.status === 'success' && s.videoUploadActive),
   );
   const captureRef = useRef<RNView>(null);
+  const textOverlaysRef = useRef<StudioTextOverlay[]>([]);
+  const textDraftRef = useRef<{ id: string; text: string } | null>(null);
+  const activeTextOverlayRef = useRef<StudioTextOverlay | null>(null);
 
   const musicSelection = useMusicSelectionStore((s) => s.selection);
   const setMusicSelection = useMusicSelectionStore((s) => s.setSelection);
@@ -98,8 +126,15 @@ export function StoryPublishScreen({
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [publishUri, setPublishUri] = useState(mediaUri);
   const [stabilizing, setStabilizing] = useState(false);
-  const [mediaSize, setMediaSize] = useState<{ width: number; height: number } | null>(null);
-  const [framing, setFraming] = useState<StoryFraming>(DEFAULT_STORY_FRAMING);
+  const [mediaSize, setMediaSize] = useState<{ width: number; height: number } | null>(() =>
+    resolveInitialMediaSize(mediaWidth, mediaHeight),
+  );
+  const [framing, setFraming] = useState<StoryFraming>(() => {
+    const size = resolveInitialMediaSize(mediaWidth, mediaHeight);
+    return size
+      ? createStoryFramingForMedia(size.width, size.height)
+      : DEFAULT_STORY_FRAMING;
+  });
   const [activeTool, setActiveTool] = useState<StoryPublishToolId | null>(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [musicEditing, setMusicEditing] = useState(false);
@@ -112,6 +147,38 @@ export function StoryPublishScreen({
   const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [textTransformActive, setTextTransformActive] = useState(false);
   const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
+  const [hideOverlaysForCapture, setHideOverlaysForCapture] = useState(false);
+  const [textDraft, setTextDraft] = useState<{ id: string; text: string } | null>(null);
+
+  const activeTextOverlay = useMemo(
+    () =>
+      textOverlays.find((item) => item.id === selectedTextId) ??
+      textOverlays[textOverlays.length - 1] ??
+      null,
+    [textOverlays, selectedTextId],
+  );
+
+  const displayTextOverlays = useMemo(() => {
+    let next = mergeStoryTextDraftIntoOverlays(textOverlays, textDraft);
+    if (textEditing && activeTextOverlay && !next.some((item) => item.id === activeTextOverlay.id)) {
+      next = [
+        ...next,
+        {
+          ...activeTextOverlay,
+          text: textDraft?.id === activeTextOverlay.id ? textDraft.text : activeTextOverlay.text,
+        },
+      ];
+    }
+    return next;
+  }, [activeTextOverlay, textDraft, textEditing, textOverlays]);
+
+  useEffect(() => {
+    textOverlaysRef.current = textOverlays;
+  }, [textOverlays]);
+
+  useEffect(() => {
+    activeTextOverlayRef.current = activeTextOverlay;
+  }, [activeTextOverlay]);
 
   const onPreviewLayout = useCallback((event: LayoutChangeEvent) => {
     const { width, height } = event.nativeEvent.layout;
@@ -194,6 +261,11 @@ export function StoryPublishScreen({
     let cancelled = false;
 
     const probe = async () => {
+      const fallback = resolveInitialMediaSize(mediaWidth, mediaHeight) ?? {
+        width: 1080,
+        height: 1920,
+      };
+
       try {
         const size =
           mediaType === 'image'
@@ -208,7 +280,12 @@ export function StoryPublishScreen({
         );
       } catch {
         if (!cancelled) {
-          setMediaSize({ width: 1080, height: 1920 });
+          setMediaSize(fallback);
+          setFraming((prev) =>
+            createStoryFramingForMedia(fallback.width, fallback.height, {
+              backgroundColor: prev.backgroundColor,
+            }),
+          );
         }
       }
     };
@@ -217,7 +294,45 @@ export function StoryPublishScreen({
     return () => {
       cancelled = true;
     };
-  }, [mediaType, publishUri]);
+  }, [mediaType, mediaWidth, mediaHeight, publishUri]);
+
+  useEffect(() => {
+    if (mediaType !== 'image') return;
+
+    const normalized = normalizeLocalFileUri(mediaUri);
+    const alreadyStable =
+      Boolean(documentDirectory) &&
+      normalized.includes(documentDirectory!) &&
+      getLocalFileSize(normalized) > 0;
+
+    if (alreadyStable) {
+      setPublishUri(normalized);
+      return;
+    }
+
+    let cancelled = false;
+
+    void prepareLocalImageUri(mediaUri)
+      .then((stable) => {
+        if (cancelled) return;
+        setPublishUri(stable);
+        useStoryPublishStore.getState().setDraft({
+          mediaUri: stable,
+          mediaType: 'image',
+          durationSec: normalizedDurationSec,
+          mediaWidth,
+          mediaHeight,
+          trimmedInStudio,
+        });
+      })
+      .catch(() => {
+        /* Galeri URI'si olduğu gibi kullanılır */
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaHeight, mediaType, mediaUri, mediaWidth, normalizedDurationSec, trimmedInStudio]);
 
   useEffect(() => {
     if (mediaType !== 'video') return;
@@ -293,20 +408,34 @@ export function StoryPublishScreen({
 
   const addTextOverlay = useCallback(() => {
     const overlay = createStoryTextOverlay(undefined, textOverlays.length);
-    setTextOverlays((prev) => [...prev, overlay]);
+    setTextOverlays((prev) => {
+      const next = [...prev, overlay];
+      textOverlaysRef.current = next;
+      return next;
+    });
     setSelectedTextId(overlay.id);
     setTextEditing(true);
     setActiveTool('text');
   }, [textOverlays.length]);
 
   const updateTextOverlay = useCallback((id: string, patch: Partial<StudioTextOverlay>) => {
-    setTextOverlays((prev) => prev.map((item) => (item.id === id ? { ...item, ...patch } : item)));
+    setTextOverlays((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, ...patch } : item));
+      textOverlaysRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handleTextDraftChange = useCallback((draft: { id: string; text: string }) => {
+    textDraftRef.current = draft;
+    setTextDraft(draft);
   }, []);
 
   const removeTextOverlay = useCallback(
     (id: string) => {
       setTextOverlays((prev) => {
         const next = prev.filter((item) => item.id !== id);
+        textOverlaysRef.current = next;
         if (next.length === 0) {
           setTextEditing(false);
           setActiveTool(null);
@@ -321,37 +450,39 @@ export function StoryPublishScreen({
   );
 
   const finishTextEditing = useCallback((pending?: { id: string; text: string }) => {
-    setTextOverlays((prev) => {
-      const withPending = pending
-        ? prev.map((item) =>
-            item.id === pending.id ? { ...item, text: pending.text.trim() } : item,
-          )
-        : prev;
-      return withPending.filter((item) => item.text.trim());
-    });
-    setSelectedTextId(null);
+    const commit = pending ?? textDraftRef.current;
+    const next = commitStoryTextDraft(
+      textOverlaysRef.current,
+      commit,
+      activeTextOverlayRef.current,
+    );
+    textOverlaysRef.current = next;
+    setTextOverlays(next);
+    setSelectedTextId(next.length > 0 ? next[next.length - 1].id : null);
+    textDraftRef.current = null;
+    setTextDraft(null);
     setTextEditing(false);
     setActiveTool(null);
   }, []);
 
+  const handleSelectTextOverlay = useCallback(
+    (id: string) => {
+      if (!textEditing && selectedTextId === id) {
+        setTextEditing(true);
+        setActiveTool('text');
+        return;
+      }
+      setSelectedTextId(id);
+    },
+    [selectedTextId, textEditing],
+  );
+
   const handleDeleteTextOverlay = useCallback(
     (id: string) => {
       removeTextOverlay(id);
-      if (textEditing && textOverlays.length <= 1) {
-        setTextEditing(false);
-        setActiveTool(null);
-      }
     },
-    [removeTextOverlay, textEditing, textOverlays.length],
+    [removeTextOverlay],
   );
-
-  const handleSelectTextOverlay = useCallback((id: string) => {
-    setSelectedTextId(id);
-    setTextEditing(true);
-    setActiveTool('text');
-    setMusicOpen(false);
-    setMusicEditing(false);
-  }, []);
 
   const handleToolPress = useCallback(
     (tool: StoryPublishToolId) => {
@@ -368,7 +499,7 @@ export function StoryPublishScreen({
           return;
         }
         setTextEditing(true);
-        if (!selectedTextId) {
+        if (!selectedTextId && textOverlays.length > 0) {
           setSelectedTextId(textOverlays[textOverlays.length - 1].id);
         }
         return;
@@ -393,8 +524,12 @@ export function StoryPublishScreen({
 
       setMusicOpen(false);
       setMusicEditing(false);
-      setTextEditing(false);
-      setSelectedTextId(null);
+      if (textEditing) {
+        finishTextEditing();
+      } else {
+        setTextEditing(false);
+        setSelectedTextId(null);
+      }
 
       if (tool === 'link') {
         setActiveTool(activeTool === 'link' ? null : 'link');
@@ -405,7 +540,7 @@ export function StoryPublishScreen({
         setActiveTool(activeTool === 'location' ? null : 'location');
       }
     },
-    [activeTool, addTextOverlay, closeOtherTools, finishTextEditing, handleToggleVideoAudio, musicSelection, selectedTextId, textEditing, textOverlays],
+    [activeTool, addTextOverlay, closeOtherTools, finishTextEditing, handleToggleVideoAudio, musicSelection, selectedTextId, textEditing, textOverlays.length],
   );
 
   const handleMusicSelect = useCallback(
@@ -496,6 +631,20 @@ export function StoryPublishScreen({
       return;
     }
 
+    if (textEditing || textDraftRef.current?.text.trim()) {
+      const committed = commitStoryTextDraft(
+        textOverlaysRef.current,
+        textDraftRef.current,
+        activeTextOverlayRef.current,
+      );
+      textOverlaysRef.current = committed;
+      setTextOverlays(committed);
+      textDraftRef.current = null;
+      setTextDraft(null);
+      setTextEditing(false);
+      setActiveTool(null);
+    }
+
     setPublishing(true);
     setUploadMessage(mediaType === 'image' ? 'Görsel hazırlanıyor…' : null);
 
@@ -504,15 +653,20 @@ export function StoryPublishScreen({
 
     if (mediaType === 'image') {
       try {
+        setHideOverlaysForCapture(true);
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
         uploadUri = await bakeStoryFramedImage(captureRef.current);
       } catch (err) {
         setPublishing(false);
         setUploadMessage(null);
+        setHideOverlaysForCapture(false);
         Alert.alert(
           'Görsel hazırlanamadı',
           err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
         );
         return;
+      } finally {
+        setHideOverlaysForCapture(false);
       }
     } else {
       uploadFraming = {
@@ -521,6 +675,9 @@ export function StoryPublishScreen({
         mediaHeight: mediaSize.height,
       };
     }
+
+    const publishedTextOverlays =
+      serializeStoryTextOverlays(textOverlaysRef.current) ?? [];
 
     startStoryPublish(
       {
@@ -533,7 +690,7 @@ export function StoryPublishScreen({
         music: musicSelection,
         location: selectedLocation,
         links,
-        textOverlays: textOverlays.filter((item) => item.text.trim()),
+        textOverlays: publishedTextOverlays,
         trimmedInStudio,
         videoOriginalAudioVolume:
           mediaType === 'video'
@@ -573,6 +730,7 @@ export function StoryPublishScreen({
   ]);
 
   const canEditFraming = mediaSize != null;
+  const canShowMediaPreview = canEditFraming || Boolean(publishUri);
   const previewMusicConfig = musicSelection
     ? {
         audioUrl: musicSelection.audioUrl,
@@ -590,7 +748,46 @@ export function StoryPublishScreen({
   });
 
   const framingEnabled = !publishing && !musicEditing && !textEditing;
-  const hasText = textOverlays.some((item) => item.text.trim());
+  const overlayEditable = !publishing && !musicEditing;
+  const hasText = displayTextOverlays.some((item) => item.text.trim());
+  const showTextLayer =
+    !hideOverlaysForCapture &&
+    (textEditing || displayTextOverlays.some((item) => item.text.trim()));
+  const activeTextSelectedId =
+    textEditing && activeTextOverlay ? activeTextOverlay.id : selectedTextId;
+
+  const cardWidth = windowWidth - STORY_CARD_HORIZONTAL_INSET * 2;
+  const cardHeight = Math.round(cardWidth / STORY_CARD_MEDIA_ASPECT);
+
+  const previewFraming = useMemo(
+    (): StoryFraming => ({
+      ...framing,
+      mediaWidth: mediaSize?.width ?? mediaWidth ?? DEFAULT_STORY_FRAMING.mediaWidth,
+      mediaHeight: mediaSize?.height ?? mediaHeight ?? DEFAULT_STORY_FRAMING.mediaHeight,
+    }),
+    [framing, mediaHeight, mediaSize, mediaWidth],
+  );
+
+  const mediaPreviewNode =
+    mediaType === 'image' ? (
+      <Image
+        source={{ uri: publishUri }}
+        style={styles.mediaFill}
+        contentFit="cover"
+        pointerEvents="none"
+      />
+    ) : (
+      <View style={styles.mediaFill} pointerEvents="none">
+        <CapturedVideoPreview
+          uri={publishUri}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          music={musicPlaysOnStory ? musicSelection : null}
+          videoMuted={videoOriginalMuted}
+          muted={videoOriginalMuted}
+        />
+      </View>
+    );
 
   return (
     <View style={[styles.root, { backgroundColor: '#000', paddingTop: insets.top }]}>
@@ -605,41 +802,24 @@ export function StoryPublishScreen({
       </View>
 
       <View style={styles.previewStage}>
-        <View style={styles.previewStack} onLayout={onPreviewLayout}>
+        <View style={styles.previewStack}>
           <View
             ref={captureRef}
             collapsable={false}
             style={[storyCardFrameStyle.frame, styles.previewWrap]}
+            onLayout={onPreviewLayout}
           >
-            {canEditFraming ? (
+            {canShowMediaPreview ? (
               <StoryFramingEditor
                 framing={framing}
                 onFramingChange={handleFramingChange}
-                mediaWidth={mediaSize.width}
-                mediaHeight={mediaSize.height}
+                mediaWidth={previewFraming.mediaWidth}
+                mediaHeight={previewFraming.mediaHeight}
                 enabled={framingEnabled}
-                mediaGesturesEnabled={!textTransformActive}
-                interactive
+                mediaGesturesEnabled={!textTransformActive && !musicEditing && !textEditing}
+                interactive={!musicEditing && !textEditing}
               >
-                {mediaType === 'image' ? (
-                  <Image
-                    source={{ uri: publishUri }}
-                    style={styles.mediaFill}
-                    contentFit="cover"
-                    pointerEvents="none"
-                  />
-                ) : (
-                  <View style={styles.mediaFill} pointerEvents="none">
-                    <CapturedVideoPreview
-                      uri={publishUri}
-                      style={StyleSheet.absoluteFill}
-                      contentFit="cover"
-                      music={musicPlaysOnStory ? musicSelection : null}
-                      videoMuted={videoOriginalMuted}
-                      muted={videoOriginalMuted}
-                    />
-                  </View>
-                )}
+                {mediaPreviewNode}
               </StoryFramingEditor>
             ) : (
               <View style={styles.previewLoading}>
@@ -700,21 +880,30 @@ export function StoryPublishScreen({
                 onDone={() => setMusicEditing(false)}
               />
             ) : null}
-          </View>
 
-          <StoryTextOverlayLayer
-            overlays={textOverlays}
-            selectedId={selectedTextId}
-            editable={!publishing && !musicEditing && !textEditing}
-            textEditing={textEditing}
-            containerWidth={previewLayout.width}
-            containerHeight={previewLayout.height}
-            onUpdate={updateTextOverlay}
-            onSelect={handleSelectTextOverlay}
-            onDelete={handleDeleteTextOverlay}
-            dragDelete={overlayDragDelete}
-            onTextTransformActiveChange={setTextTransformActive}
-          />
+            {showTextLayer && (previewLayout.width > 0 && previewLayout.height > 0 || textEditing) ? (
+              <View
+                pointerEvents="box-none"
+                style={StyleSheet.absoluteFillObject}
+                collapsable={false}
+              >
+                <StoryCanvasTextOverlays
+                  overlays={displayTextOverlays}
+                  layoutWidth={previewLayout.width > 0 ? previewLayout.width : cardWidth}
+                  layoutHeight={previewLayout.height > 0 ? previewLayout.height : cardHeight}
+                  selectedId={activeTextSelectedId}
+                  editable={overlayEditable}
+                  textEditing={textEditing}
+                  showPlaceholder={textEditing}
+                  onUpdate={updateTextOverlay}
+                  onSelect={handleSelectTextOverlay}
+                  onDelete={handleDeleteTextOverlay}
+                  dragDelete={overlayDragDelete}
+                  onTextTransformActiveChange={setTextTransformActive}
+                />
+              </View>
+            ) : null}
+          </View>
         </View>
       </View>
 
@@ -735,45 +924,47 @@ export function StoryPublishScreen({
 
       <StoryTextPanel
         visible={textEditing}
-        overlays={textOverlays}
-        selectedId={selectedTextId}
-        onSelect={setSelectedTextId}
+        overlay={activeTextOverlay}
         onUpdate={updateTextOverlay}
+        onDraftChange={handleTextDraftChange}
+        onDone={finishTextEditing}
         onAdd={addTextOverlay}
-        onRemove={removeTextOverlay}
-        onFinish={finishTextEditing}
       />
 
-      {uploadMessage ? (
-        <Text variant="caption" style={styles.uploadHint}>
-          {uploadMessage}
-        </Text>
-      ) : null}
-
-      <Pressable
-        style={[
-          styles.publishBtn,
-          {
-            backgroundColor: colors.primary,
-            opacity: publishing || !mediaSize || stabilizing || musicEditing || textEditing ? 0.5 : 1,
-          },
-        ]}
-        onPress={() => void handlePublish()}
-        disabled={publishing || !mediaSize || stabilizing || musicEditing || textEditing}
-      >
-          {publishing ? (
-            <View style={styles.publishingRow}>
-              <ActivityIndicator color="#fff" size="small" />
-              <Text variant="label" style={{ color: '#fff' }}>
-                {uploadMessage ?? 'Paylaşılıyor…'}
-              </Text>
-            </View>
-          ) : (
-            <Text variant="label" style={{ color: '#fff' }}>
-              Hikayeyi paylaş
+      {!textEditing ? (
+        <>
+          {uploadMessage ? (
+            <Text variant="caption" style={styles.uploadHint}>
+              {uploadMessage}
             </Text>
-          )}
-        </Pressable>
+          ) : null}
+
+          <Pressable
+            style={[
+              styles.publishBtn,
+              {
+                backgroundColor: colors.primary,
+                opacity: publishing || !mediaSize || stabilizing || musicEditing ? 0.5 : 1,
+              },
+            ]}
+            onPress={() => void handlePublish()}
+            disabled={publishing || !mediaSize || stabilizing || musicEditing}
+          >
+            {publishing ? (
+              <View style={styles.publishingRow}>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text variant="label" style={{ color: '#fff' }}>
+                  {uploadMessage ?? 'Paylaşılıyor…'}
+                </Text>
+              </View>
+            ) : (
+              <Text variant="label" style={{ color: '#fff' }}>
+                Hikayeyi paylaş
+              </Text>
+            )}
+          </Pressable>
+        </>
+      ) : null}
 
       <AudioPickerSheet
         visible={musicOpen}

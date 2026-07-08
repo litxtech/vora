@@ -1,247 +1,173 @@
 import { useEffect, useRef, useState } from 'react';
-import {
-  Dimensions,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  TextInput,
-  View,
-} from 'react-native';
+import { Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StickyKeyboardFooter } from '@/components/keyboard';
 import { Text } from '@/components/ui/Text';
 import type { StudioTextOverlay } from '@/features/vora-studio/types';
 import { clampStoryTextFontSize } from '@/features/stories/utils/storyTextOverlays';
-import { glassSurface, radius, spacing } from '@/constants/theme';
-import { useTheme } from '@/providers/ThemeProvider';
+import { radius, spacing } from '@/constants/theme';
 
-const COLORS = ['#FFFFFF', '#000000', '#FF3B30', '#FF9500', '#FFCC00', '#34C759', '#007AFF', '#AF52DE'];
+const COLORS = [
+  '#FFFFFF',
+  '#000000',
+  '#FF3B30',
+  '#FF9500',
+  '#FFCC00',
+  '#34C759',
+  '#007AFF',
+  '#AF52DE',
+];
 
 type StoryTextPanelProps = {
   visible: boolean;
-  overlays: StudioTextOverlay[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
+  overlay: StudioTextOverlay | null;
   onUpdate: (id: string, patch: Partial<StudioTextOverlay>) => void;
-  onAdd: () => void;
-  onRemove: (id: string) => void;
-  /** Seçili metni kaydedip paneli kapatır. */
-  onFinish?: (pending?: { id: string; text: string }) => void;
-  /** @deprecated onFinish kullanın */
-  onClose?: () => void;
+  onDraftChange?: (draft: { id: string; text: string }) => void;
+  onDone: (pending?: { id: string; text: string }) => void;
+  onAdd?: () => void;
 };
 
+/**
+ * Instagram tarzı — yazı klavyenin üstünde, hikâye kartında canlı önizleme.
+ */
 export function StoryTextPanel({
   visible,
-  overlays,
-  selectedId,
-  onSelect,
+  overlay,
   onUpdate,
+  onDraftChange,
+  onDone,
   onAdd,
-  onRemove,
-  onFinish,
-  onClose,
 }: StoryTextPanelProps) {
-  const { colors, mode } = useTheme();
-  const surface = glassSurface[mode];
   const inputRef = useRef<TextInput>(null);
   const [draft, setDraft] = useState('');
-  const panelMaxHeight = Dimensions.get('window').height * 0.5;
 
-  const selected =
-    overlays.find((item) => item.id === selectedId) ?? overlays[overlays.length - 1] ?? null;
+  useEffect(() => {
+    if (!visible || !overlay) return;
+    const next = overlay.text ?? '';
+    setDraft(next);
+    onDraftChange?.({ id: overlay.id, text: next });
+  }, [overlay?.id, onDraftChange, overlay, visible]);
 
   useEffect(() => {
     if (!visible) return;
-    if (!selectedId && overlays.length > 0) {
-      onSelect(overlays[overlays.length - 1].id);
-    }
-  }, [visible, overlays, selectedId, onSelect]);
-
-  useEffect(() => {
-    if (!visible || !selectedId) return;
-    const overlay = overlays.find((item) => item.id === selectedId);
-    if (!overlay) return;
-    setDraft(overlay.text);
-    const timer = setTimeout(() => inputRef.current?.focus(), 280);
+    const timer = setTimeout(() => inputRef.current?.focus(), 200);
     return () => clearTimeout(timer);
-  }, [visible, selectedId, overlays]);
+  }, [visible, overlay?.id]);
 
   const handleDone = () => {
+    if (!overlay) return;
     inputRef.current?.blur();
-    const trimmed = draft.trim();
-    const finish = onFinish ?? onClose;
-    if (!finish) return;
-
-    if (onFinish) {
-      if (selected && trimmed) {
-        onFinish({ id: selected.id, text: trimmed });
-        return;
-      }
-      onFinish();
-      return;
-    }
-
-    onClose?.();
+    const text = draft;
+    onUpdate(overlay.id, { text });
+    onDraftChange?.({ id: overlay.id, text });
+    onDone({ id: overlay.id, text });
   };
 
-  const patchSelected = (patch: Partial<StudioTextOverlay>) => {
-    if (!selected) return;
-    if (typeof patch.text === 'string') {
-      setDraft(patch.text);
-    }
-    onUpdate(selected.id, patch);
-  };
-
-  if (!visible) return null;
+  if (!visible || !overlay) return null;
 
   return (
     <View style={styles.host} pointerEvents="box-none">
-      <StickyKeyboardFooter backgroundColor={colors.surfaceElevated}>
-        <View style={[styles.panel, { backgroundColor: colors.surfaceElevated, maxHeight: panelMaxHeight }]}>
-          <Pressable onPress={handleDone} style={styles.handleHit} hitSlop={12}>
-            <View style={[styles.handle, { backgroundColor: surface.handle }]} />
-          </Pressable>
-
-          <View style={styles.header}>
-            <Text variant="label" style={styles.title}>
-              Metin
-            </Text>
-            <View style={styles.headerActions}>
-              <Pressable
-                onPress={onAdd}
-                hitSlop={10}
-                style={[styles.iconBtn, { backgroundColor: `${colors.textMuted}18` }]}
-              >
-                <Ionicons name="add" size={20} color={colors.text} />
-              </Pressable>
-              {selected ? (
-                <Pressable
-                  onPress={() => onRemove(selected.id)}
-                  hitSlop={10}
-                  style={styles.deleteHeaderBtn}
-                >
-                  <Ionicons name="trash-outline" size={18} color={colors.danger} />
-                  <Text style={{ color: colors.danger, fontWeight: '700', fontSize: 15 }}>Sil</Text>
-                </Pressable>
-              ) : null}
-              <Pressable onPress={handleDone} hitSlop={10}>
-                <Text style={{ color: colors.primary, fontWeight: '700', fontSize: 16 }}>Bitti</Text>
-              </Pressable>
-            </View>
+      <StickyKeyboardFooter backgroundColor="#111">
+        <View style={styles.panel}>
+          <View style={styles.inputRow}>
+            <TextInput
+              ref={inputRef}
+              style={[
+                styles.input,
+                {
+                  color: overlay.color === '#000000' ? '#fff' : overlay.color,
+                },
+              ]}
+              placeholder="Metin yaz…"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              value={draft}
+              onChangeText={(text) => {
+                setDraft(text);
+                onUpdate(overlay.id, { text });
+                onDraftChange?.({ id: overlay.id, text });
+              }}
+              multiline
+              maxLength={120}
+              returnKeyType="done"
+              blurOnSubmit={false}
+              onSubmitEditing={handleDone}
+            />
+            <Pressable style={styles.doneBtn} onPress={handleDone} hitSlop={8}>
+              <Text style={styles.doneLabel}>Bitti</Text>
+            </Pressable>
           </View>
 
-          {overlays.length > 1 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
-              {overlays.map((item) => {
-                const active = item.id === selected?.id;
-                return (
-                  <Pressable
-                    key={item.id}
-                    style={[
-                      styles.tab,
-                      {
-                        backgroundColor: active ? colors.primary : `${colors.textMuted}12`,
-                        borderColor: active ? colors.primary : colors.border,
-                      },
-                    ]}
-                    onPress={() => onSelect(item.id)}
-                  >
-                    <Text variant="caption" style={{ color: active ? '#fff' : colors.textSecondary, fontWeight: '600' }}>
-                      {(item.text || 'Metin').slice(0, 16)}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          ) : null}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tools}
+            keyboardShouldPersistTaps="always"
+          >
+            <Pressable
+              style={[styles.chip, overlay.fontFamily === 'regular' && styles.chipActive]}
+              onPress={() => onUpdate(overlay.id, { fontFamily: 'regular' })}
+            >
+              <Text style={styles.chipText}>Aa</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.chip, overlay.fontFamily === 'bold' && styles.chipActive]}
+              onPress={() => onUpdate(overlay.id, { fontFamily: 'bold' })}
+            >
+              <Text style={[styles.chipText, styles.chipTextBold]}>Aa</Text>
+            </Pressable>
 
-          {selected ? (
-            <>
-              <TextInput
-                ref={inputRef}
-                style={[styles.input, { color: colors.text }]}
-                placeholder="Metin yaz…"
-                placeholderTextColor={colors.textMuted}
-                value={draft}
-                onChangeText={(text) => patchSelected({ text })}
-                multiline
-                maxLength={120}
-                textAlign="center"
-                scrollEnabled
-              />
+            <View style={styles.sep} />
 
-              <View style={styles.sizeRow}>
+            <Pressable
+              style={styles.chip}
+              onPress={() =>
+                onUpdate(overlay.id, { fontSize: clampStoryTextFontSize(overlay.fontSize - 2) })
+              }
+            >
+              <Ionicons name="remove" size={18} color="#fff" />
+            </Pressable>
+            <Text style={styles.size}>{overlay.fontSize}</Text>
+            <Pressable
+              style={styles.chip}
+              onPress={() =>
+                onUpdate(overlay.id, { fontSize: clampStoryTextFontSize(overlay.fontSize + 2) })
+              }
+            >
+              <Ionicons name="add" size={18} color="#fff" />
+            </Pressable>
+
+            <View style={styles.sep} />
+
+            {COLORS.map((color) => {
+              const active = overlay.color === color;
+              const light = color === '#FFFFFF' || color === '#FFCC00';
+              return (
                 <Pressable
-                  style={styles.sizeBtn}
-                  onPress={() => patchSelected({ fontSize: clampStoryTextFontSize(selected.fontSize - 2) })}
-                >
-                  <Ionicons name="remove" size={18} color={colors.text} />
-                </Pressable>
-                <Text variant="caption" secondary style={styles.sizeLabel}>
-                  {selected.fontSize}
-                </Text>
-                <Pressable
-                  style={styles.sizeBtn}
-                  onPress={() => patchSelected({ fontSize: clampStoryTextFontSize(selected.fontSize + 2) })}
-                >
-                  <Ionicons name="add" size={18} color={colors.text} />
-                </Pressable>
-              </View>
-
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
-                {COLORS.map((color) => {
-                  const active = selected.color === color;
-                  return (
-                    <Pressable
-                      key={color}
-                      style={[
-                        styles.colorDot,
-                        { backgroundColor: color },
-                        active && { borderColor: colors.primary, borderWidth: 2.5 },
-                      ]}
-                      onPress={() => patchSelected({ color })}
-                    />
-                  );
-                })}
-              </ScrollView>
-
-              <View style={styles.toolRow}>
-                <Pressable
+                  key={color}
                   style={[
-                    styles.toolBtn,
-                    selected.fontFamily === 'regular' && { backgroundColor: `${colors.primary}16` },
+                    styles.swatch,
+                    { backgroundColor: color },
+                    (color === '#000000' || color === '#FFFFFF') && styles.swatchBorder,
+                    active && styles.swatchActive,
                   ]}
-                  onPress={() => patchSelected({ fontFamily: 'regular' })}
+                  onPress={() => onUpdate(overlay.id, { color })}
                 >
-                  <Text style={{ color: colors.text, fontSize: 16 }}>Aa</Text>
+                  {active ? (
+                    <Ionicons name="checkmark" size={11} color={light ? '#000' : '#fff'} />
+                  ) : null}
                 </Pressable>
-                <Pressable
-                  style={[
-                    styles.toolBtn,
-                    selected.fontFamily === 'bold' && { backgroundColor: `${colors.primary}16` },
-                  ]}
-                  onPress={() => patchSelected({ fontFamily: 'bold' })}
-                >
-                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: '800' }}>Aa</Text>
-                </Pressable>
-              </View>
+              );
+            })}
 
-              <Text variant="caption" secondary style={styles.hint}>
-                Bitti dedikten sonra iki parmakla büyütüp küçültebilirsin
-              </Text>
-            </>
-          ) : (
-            <View style={styles.emptyState}>
-              <Pressable
-                onPress={onAdd}
-                style={[styles.addBtn, { backgroundColor: `${colors.primary}16` }]}
-              >
-                <Ionicons name="add" size={18} color={colors.primary} />
-                <Text style={{ color: colors.primary, fontWeight: '700' }}>Metin ekle</Text>
-              </Pressable>
-            </View>
-          )}
+            {onAdd ? (
+              <>
+                <View style={styles.sep} />
+                <Pressable style={styles.chip} onPress={onAdd}>
+                  <Ionicons name="add" size={20} color="#fff" />
+                </Pressable>
+              </>
+            ) : null}
+          </ScrollView>
         </View>
       </StickyKeyboardFooter>
     </View>
@@ -254,138 +180,95 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 40,
+    zIndex: 500,
+    elevation: 500,
   },
   panel: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.md,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 16,
-  },
-  handleHit: {
-    alignSelf: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.xl,
-  },
-  handle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm,
-    minHeight: 32,
-  },
-  title: {
-    fontSize: 17,
-    fontWeight: '700',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-  iconBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteHeaderBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.xs,
-  },
-  tabs: {
-    gap: spacing.xs,
-    paddingBottom: spacing.sm,
-  },
-  tab: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  input: {
-    minHeight: 48,
-    maxHeight: 80,
-    fontSize: 22,
-    fontWeight: '600',
-    lineHeight: 28,
-    paddingVertical: spacing.sm,
-    textAlign: 'center',
-  },
-  sizeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-    paddingVertical: spacing.xs,
-  },
-  sizeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(128,128,128,0.15)',
-  },
-  sizeLabel: {
-    minWidth: 28,
-    textAlign: 'center',
-    fontWeight: '700',
-  },
-  colorRow: {
-    gap: spacing.md,
-    justifyContent: 'center',
-    paddingVertical: spacing.sm,
-  },
-  colorDot: {
-    width: 30,
-    height: 30,
-    borderRadius: radius.full,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  toolRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.15)',
+    paddingTop: spacing.sm,
     paddingBottom: spacing.xs,
   },
-  toolBtn: {
-    width: 44,
-    height: 44,
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.sm,
+  },
+  input: {
+    flex: 1,
+    minHeight: 44,
+    maxHeight: 96,
+    fontSize: 18,
+    fontWeight: '600',
+    lineHeight: 24,
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.lg,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  doneBtn: {
+    paddingHorizontal: spacing.lg,
+    paddingVertical: 11,
+    borderRadius: radius.full,
+    backgroundColor: '#0095f6',
+  },
+  doneLabel: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  tools: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingBottom: spacing.xs,
+  },
+  chip: {
+    width: 38,
+    height: 38,
+    borderRadius: radius.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255,255,255,0.1)',
+  },
+  chipActive: {
+    backgroundColor: 'rgba(0,149,246,0.35)',
+  },
+  chipText: {
+    color: '#fff',
+    fontSize: 16,
+  },
+  chipTextBold: {
+    fontWeight: '800',
+  },
+  size: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+    minWidth: 24,
+    textAlign: 'center',
+  },
+  sep: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+  },
+  swatch: {
+    width: 28,
+    height: 28,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  hint: {
-    textAlign: 'center',
-    paddingTop: spacing.xs,
+  swatchBorder: {
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
-  emptyState: {
-    alignItems: 'center',
-    paddingVertical: spacing.lg,
-  },
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
+  swatchActive: {
+    borderWidth: 2,
+    borderColor: '#fff',
   },
 });
