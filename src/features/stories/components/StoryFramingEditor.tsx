@@ -26,7 +26,10 @@ type StoryFramingEditorProps = {
   enabled?: boolean;
   /** Metin sürüklenirken / pinch yapılırken medya jestlerini kapat */
   mediaGesturesEnabled?: boolean;
-  /** false = otomatik cover; pinch/pan yok */
+  /**
+   * false = pinch/pan/double-tap kapalı.
+   * Ağaç aynı kalır — interactive flip ile remount / siyah ekran olmaz (IG tarzı).
+   */
   interactive?: boolean;
 };
 
@@ -222,40 +225,10 @@ export function StoryFramingEditor({
     ],
   }));
 
-  if (!interactive) {
-    const zoom = Math.max(0.05, pixels.zoom);
-    const hasLayout = layout.width > 0 && layout.height > 0;
-    return (
-      <View
-        style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
-        onLayout={onLayout}
-        collapsable={false}
-      >
-        {hasLayout ? (
-          <View style={styles.stage}>
-            <View
-              style={{
-                width: metrics.baseWidth,
-                height: metrics.baseHeight,
-                transform: [
-                  { translateX: pixels.translateX },
-                  { translateY: pixels.translateY },
-                  { scale: zoom },
-                ],
-              }}
-            >
-              {children}
-            </View>
-          </View>
-        ) : (
-          <View style={styles.fallback}>{children}</View>
-        )}
-      </View>
-    );
-  }
-
   const hasLayout = layout.width > 0 && layout.height > 0;
 
+  // Tek stabil ağaç: Text/Müzik modunda remount yok → Image/Video siyah ekrana düşmez.
+  // Layout hazır olmasa da aynı Animated.View altında render — fallback ↔ stage swap yok.
   return (
     <GestureDetector gesture={composed}>
       <View
@@ -263,26 +236,19 @@ export function StoryFramingEditor({
         onLayout={onLayout}
         collapsable={false}
       >
-        {hasLayout ? (
-          <View style={styles.stage} pointerEvents="box-none">
-            <Animated.View
-              style={[
-                {
-                  width: metrics.baseWidth,
-                  height: metrics.baseHeight,
-                },
-                mediaStyle,
-              ]}
-              pointerEvents="none"
-            >
-              {children}
-            </Animated.View>
-          </View>
-        ) : (
-          <View style={styles.fallback} pointerEvents="box-none">
+        <View style={styles.stage} pointerEvents="box-none">
+          <Animated.View
+            style={[
+              hasLayout
+                ? { width: metrics.baseWidth, height: metrics.baseHeight }
+                : styles.mediaFill,
+              mediaStyle,
+            ]}
+            pointerEvents="none"
+          >
             {children}
-          </View>
-        )}
+          </Animated.View>
+        </View>
       </View>
     </GestureDetector>
   );
@@ -293,9 +259,8 @@ const styles = StyleSheet.create({
     flex: 1,
     overflow: 'hidden',
   },
-  fallback: {
-    flex: 1,
-    width: '100%',
+  mediaFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   stage: {
     flex: 1,

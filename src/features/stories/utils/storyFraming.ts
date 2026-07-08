@@ -13,12 +13,14 @@ export type StoryFraming = {
   mediaHeight: number;
 };
 
+/** Otomatik çerçeveleme: kartı tam doldur (cover). */
+export const STORY_AUTO_FRAME_ZOOM = 1;
+
 export const DEFAULT_STORY_FRAMING: StoryFraming = {
-  /** Başlangıçta sığdır; createStoryFramingForMedia ile güncellenir */
-  zoom: 1,
+  zoom: STORY_AUTO_FRAME_ZOOM,
   translateXNorm: 0,
   translateYNorm: 0,
-  backgroundColor: '#0a0a0a',
+  backgroundColor: '#000',
   mediaWidth: 1080,
   mediaHeight: 1920,
 };
@@ -99,19 +101,14 @@ export function computeStoryFitZoom(
   return computeStoryFramingMetrics(mediaW, mediaH, containerW, containerH).minZoom;
 }
 
-/** Yeni medya için varsayılan çerçeve: tamamı görünür, arka plan rengiyle letterbox. */
+/** Yeni medya için varsayılan çerçeve: kartı cover ile doldurur (yuvarlak köşeler dahil). */
 export function createStoryFramingForMedia(
   mediaWidth: number,
   mediaHeight: number,
-  options?: { backgroundColor?: string; containerAspect?: number },
+  options?: { backgroundColor?: string },
 ): StoryFraming {
-  const aspect = options?.containerAspect ?? STORY_CARD_MEDIA_ASPECT;
-  const refHeight = 1000;
-  const refWidth = refHeight * aspect;
-  const fitZoom = computeStoryFitZoom(mediaWidth, mediaHeight, refWidth, refHeight);
-
   return {
-    zoom: fitZoom,
+    zoom: STORY_AUTO_FRAME_ZOOM,
     translateXNorm: 0,
     translateYNorm: 0,
     backgroundColor: options?.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor,
@@ -182,10 +179,27 @@ export function serializeStoryFraming(framing: StoryFraming): Record<string, unk
 
 export function probeImageSize(uri: string): Promise<{ width: number; height: number }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error('Image probe timeout'));
+    }, PROBE_TIMEOUT_MS);
+
     Image.getSize(
       uri,
-      (width, height) => resolve({ width, height }),
-      (error) => reject(error),
+      (width, height) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve({ width, height });
+      },
+      (error) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        reject(error);
+      },
     );
   });
 }

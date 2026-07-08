@@ -18,6 +18,8 @@ export default function StoryPublishRoute() {
   const mediaType = draft?.mediaType ?? params.mediaType;
   const durationSec =
     draft?.durationSec ?? (params.durationSec ? Number(params.durationSec) : undefined);
+  const mediaWidth = draft?.mediaWidth;
+  const mediaHeight = draft?.mediaHeight;
   const trimmedInStudio =
     draft?.trimmedInStudio ??
     (params.trimmedInStudio === '1' || params.trimmedInStudio === 'true');
@@ -39,6 +41,8 @@ export default function StoryPublishRoute() {
       mediaType={mediaType}
       durationSec={durationSec}
       trimmedInStudio={trimmedInStudio}
+      mediaWidth={mediaWidth}
+      mediaHeight={mediaHeight}
     />
   );
 }

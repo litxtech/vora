@@ -4,6 +4,8 @@ export type StoryPublishDraft = {
   mediaUri: string;
   mediaType: 'image' | 'video';
   durationSec?: number;
+  mediaWidth?: number;
+  mediaHeight?: number;
   /** VORA Studio'da kırpıldıysa paylaşım ekranı tekrar kırpmaya yönlendirmez. */
   trimmedInStudio?: boolean;
 };

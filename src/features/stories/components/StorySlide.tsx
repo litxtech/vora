@@ -96,7 +96,7 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
       <StorySlideOverlays
         sticker={sticker}
         locationLabel={item.location?.label ?? null}
-        textOverlays={[]}
+        textOverlays={item.textOverlays}
       />
     </View>
   );

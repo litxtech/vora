@@ -747,7 +747,11 @@ export function StoryPublishScreen({
     playing: mediaType === 'image' && musicPlaysOnStory,
   });
 
-  const framingEnabled = !publishing && !musicEditing && !textEditing;
+  // Medya ağacı her zaman mount kalır; metin/müzik modunda sadece jestler kapanır (IG gibi).
+  const framingEnabled = !publishing;
+  const mediaGesturesEnabled =
+    framingEnabled && !textTransformActive && !musicEditing && !textEditing;
+  const linkEditorEnabled = !publishing && !musicEditing && !textEditing;
   const overlayEditable = !publishing && !musicEditing;
   const hasText = displayTextOverlays.some((item) => item.text.trim());
   const showTextLayer =
@@ -816,8 +820,7 @@ export function StoryPublishScreen({
                 mediaWidth={previewFraming.mediaWidth}
                 mediaHeight={previewFraming.mediaHeight}
                 enabled={framingEnabled}
-                mediaGesturesEnabled={!textTransformActive && !musicEditing && !textEditing}
-                interactive={!musicEditing && !textEditing}
+                mediaGesturesEnabled={mediaGesturesEnabled}
               >
                 {mediaPreviewNode}
               </StoryFramingEditor>
@@ -860,7 +863,7 @@ export function StoryPublishScreen({
               </View>
             ) : null}
 
-            <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={framingEnabled} />
+            <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={linkEditorEnabled} />
 
             {musicSelection && musicEditing ? (
               <StoryMusicTrimCard

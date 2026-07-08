@@ -1,40 +1,70 @@
-import { useCallback, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import { DraggableTextOverlay } from '@/features/vora-studio/components/DraggableTextOverlay';
+import { Platform, StyleSheet, Text as RNText, View } from 'react-native';
 import type { StudioTextOverlay } from '@/features/vora-studio/types';
+import { STORY_TEXT_BOUNDS } from '@/features/stories/utils/storyTextOverlays';
 
 type StoryTextOverlayViewProps = {
   overlays: StudioTextOverlay[];
 };
 
+/** Yayınlanmış hikâyede metin katmanı. */
 export function StoryTextOverlayView({ overlays }: StoryTextOverlayViewProps) {
-  const [layout, setLayout] = useState({ width: 0, height: 0 });
-
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      setLayout({ width, height });
-    }
-  }, []);
-
-  if (overlays.length === 0) return null;
+  const visible = overlays.filter((item) => item.text.trim());
+  if (visible.length === 0) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill} onLayout={onLayout} pointerEvents="none">
-      {layout.width > 0
-        ? overlays.map((item) => (
-            <DraggableTextOverlay
-              key={item.id}
-              overlay={item}
-              containerWidth={layout.width}
-              containerHeight={layout.height}
-              editable={false}
-              visible
-              selected={false}
-              chrome="minimal"
-            />
-          ))
-        : null}
+    <View style={styles.layer} pointerEvents="none" collapsable={false}>
+      {visible.map((item) => {
+        const label = item.text.trim();
+        const textColor = item.color === '#000000' ? '#FFFFFF' : item.color || '#FFFFFF';
+        const x = Math.min(Math.max(item.x, STORY_TEXT_BOUNDS.minX), STORY_TEXT_BOUNDS.maxX);
+        const y = Math.min(Math.max(item.y, STORY_TEXT_BOUNDS.minY), STORY_TEXT_BOUNDS.maxY);
+
+        return (
+          <View
+            key={item.id}
+            style={[
+              styles.wrap,
+              {
+                left: `${x * 100}%`,
+                top: `${y * 100}%`,
+              },
+            ]}
+            collapsable={false}
+          >
+            <RNText
+              style={[
+                styles.text,
+                {
+                  fontSize: item.fontSize,
+                  lineHeight: Math.round(item.fontSize * 1.28),
+                  color: textColor,
+                  fontWeight: item.fontFamily === 'bold' ? '800' : '600',
+                },
+              ]}
+              numberOfLines={8}
+            >
+              {label}
+            </RNText>
+          </View>
+        );
+      })}
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  layer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 30,
+    elevation: 30,
+    overflow: 'hidden',
+  },
+  wrap: {
+    position: 'absolute',
+    maxWidth: '88%',
+  },
+  text: {
+    textAlign: 'center',
+    ...Platform.select({ android: { includeFontPadding: false } }),
+  },
+});

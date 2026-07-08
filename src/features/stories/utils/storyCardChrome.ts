@@ -11,7 +11,7 @@ export const storyCardFrameStyle = StyleSheet.create({
     overflow: 'hidden',
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: STORY_CARD_BORDER_COLOR,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#000',
     ...Platform.select({
       ios: {
         shadowColor: '#000',
