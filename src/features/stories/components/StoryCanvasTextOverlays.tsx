@@ -1,6 +1,5 @@
 import { useCallback, useMemo } from 'react';
 import {
-  Platform,
   StyleSheet,
   Text as RNText,
   View,
@@ -160,7 +159,5 @@ const styles = StyleSheet.create({
   layer: {
     width: '100%',
     height: '100%',
-    zIndex: 200,
-    ...Platform.select({ android: { elevation: 200 } }),
   },
 });

@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import Animated, {
+import {
   runOnJS,
-  useAnimatedStyle,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -31,6 +30,8 @@ type StoryFramingEditorProps = {
    * Ağaç aynı kalır — interactive flip ile remount / siyah ekran olmaz (IG tarzı).
    */
   interactive?: boolean;
+  /** true = yalnızca jest katmanı; medya altta StoryFramedMediaView ile render edilir */
+  overlayOnly?: boolean;
 };
 
 export function StoryFramingEditor({
@@ -42,6 +43,7 @@ export function StoryFramingEditor({
   enabled = true,
   mediaGesturesEnabled = true,
   interactive = true,
+  overlayOnly = false,
 }: StoryFramingEditorProps) {
   const [layout, setLayout] = useState({ width: 0, height: 0 });
   const autoFitMediaKeyRef = useRef('');
@@ -147,29 +149,34 @@ export function StoryFramingEditor({
     onFramingChange,
   ]);
 
-  const gestureActive = enabled && mediaGesturesEnabled && interactive;
+  const gestureActive = enabled && mediaGesturesEnabled && interactive && !overlayOnly;
+  const overlayGesturesEnabled = enabled && mediaGesturesEnabled && overlayOnly;
+  const gesturesEnabled = gestureActive || overlayGesturesEnabled;
 
   const pinch = useMemo(
     () =>
       Gesture.Pinch()
-        .enabled(gestureActive)
+        .enabled(gesturesEnabled)
         .onStart(() => {
           savedScale.value = scale.value;
         })
         .onUpdate((e) => {
           const next = savedScale.value * e.scale;
           scale.value = Math.min(metrics.maxZoom, Math.max(metrics.minZoom, next));
+          if (overlayOnly) {
+            runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
+          }
         })
         .onEnd(() => {
           runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         }),
-    [commitFraming, gestureActive, metrics.maxZoom, metrics.minZoom, savedScale, scale, translateX, translateY],
+    [commitFraming, gesturesEnabled, metrics.maxZoom, metrics.minZoom, overlayOnly, savedScale, scale, translateX, translateY],
   );
 
   const pan = useMemo(
     () =>
       Gesture.Pan()
-        .enabled(gestureActive)
+        .enabled(gesturesEnabled)
         .minPointers(1)
         .maxPointers(1)
         .onStart(() => {
@@ -179,17 +186,20 @@ export function StoryFramingEditor({
         .onUpdate((e) => {
           translateX.value = savedTranslateX.value + e.translationX;
           translateY.value = savedTranslateY.value + e.translationY;
+          if (overlayOnly) {
+            runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
+          }
         })
         .onEnd(() => {
           runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         }),
-    [commitFraming, gestureActive, savedTranslateX, savedTranslateY, scale, translateX, translateY],
+    [commitFraming, gesturesEnabled, overlayOnly, savedTranslateX, savedTranslateY, scale, translateX, translateY],
   );
 
   const doubleTap = useMemo(
     () =>
       Gesture.Tap()
-        .enabled(gestureActive)
+        .enabled(gesturesEnabled)
         .numberOfTaps(2)
         .onEnd(() => {
           const atFit = Math.abs(savedScale.value - metrics.minZoom) < 0.06;
@@ -204,7 +214,7 @@ export function StoryFramingEditor({
         }),
     [
       commitFraming,
-      gestureActive,
+      gesturesEnabled,
       metrics.minZoom,
       savedScale,
       savedTranslateX,
@@ -217,18 +227,27 @@ export function StoryFramingEditor({
 
   const composed = useMemo(() => Gesture.Simultaneous(pinch, pan, doubleTap), [doubleTap, pan, pinch]);
 
-  const mediaStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateX: translateX.value },
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
-  }));
-
   const hasLayout = layout.width > 0 && layout.height > 0;
 
-  // Tek stabil ağaç: Text/Müzik modunda remount yok → Image/Video siyah ekrana düşmez.
-  // Layout hazır olmasa da aynı Animated.View altında render — fallback ↔ stage swap yok.
+  if (overlayOnly) {
+    return (
+      <GestureDetector gesture={composed}>
+        <View
+          style={[styles.root, styles.overlayRoot]}
+          onLayout={onLayout}
+          collapsable={false}
+        >
+          <View style={styles.gestureFill} pointerEvents="box-none">
+            {children}
+          </View>
+        </View>
+      </GestureDetector>
+    );
+  }
+
+  // Tek stabil ağaç: medya transformu statik View ile (Animated yerine) — yerel görsel kaybını önler.
+  const zoom = Math.max(0.05, pixels.zoom);
+
   return (
     <GestureDetector gesture={composed}>
       <View
@@ -237,17 +256,26 @@ export function StoryFramingEditor({
         collapsable={false}
       >
         <View style={styles.stage} pointerEvents="box-none">
-          <Animated.View
-            style={[
-              hasLayout
-                ? { width: metrics.baseWidth, height: metrics.baseHeight }
-                : styles.mediaFill,
-              mediaStyle,
-            ]}
-            pointerEvents="none"
-          >
-            {children}
-          </Animated.View>
+          {hasLayout ? (
+            <View
+              style={{
+                width: metrics.baseWidth,
+                height: metrics.baseHeight,
+                transform: [
+                  { translateX: pixels.translateX },
+                  { translateY: pixels.translateY },
+                  { scale: zoom },
+                ],
+              }}
+              pointerEvents="none"
+            >
+              {children}
+            </View>
+          ) : (
+            <View style={styles.fallback} pointerEvents="none">
+              {children}
+            </View>
+          )}
         </View>
       </View>
     </GestureDetector>
@@ -258,6 +286,16 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     overflow: 'hidden',
+  },
+  overlayRoot: {
+    backgroundColor: 'transparent',
+  },
+  gestureFill: {
+    flex: 1,
+  },
+  fallback: {
+    flex: 1,
+    width: '100%',
   },
   mediaFill: {
     ...StyleSheet.absoluteFillObject,

@@ -22,8 +22,7 @@ type StoryTextPanelProps = {
   visible: boolean;
   overlay: StudioTextOverlay | null;
   onUpdate: (id: string, patch: Partial<StudioTextOverlay>) => void;
-  onDraftChange?: (draft: { id: string; text: string }) => void;
-  onDone: (pending?: { id: string; text: string }) => void;
+  onDone: () => void;
   onAdd?: () => void;
 };
 
@@ -34,7 +33,6 @@ export function StoryTextPanel({
   visible,
   overlay,
   onUpdate,
-  onDraftChange,
   onDone,
   onAdd,
 }: StoryTextPanelProps) {
@@ -43,14 +41,12 @@ export function StoryTextPanel({
 
   useEffect(() => {
     if (!visible || !overlay) return;
-    const next = overlay.text ?? '';
-    setDraft(next);
-    onDraftChange?.({ id: overlay.id, text: next });
-  }, [overlay?.id, onDraftChange, overlay, visible]);
+    setDraft(overlay.text ?? '');
+  }, [overlay?.id, overlay, visible]);
 
   useEffect(() => {
     if (!visible) return;
-    const timer = setTimeout(() => inputRef.current?.focus(), 200);
+    const timer = setTimeout(() => inputRef.current?.focus(), 400);
     return () => clearTimeout(timer);
   }, [visible, overlay?.id]);
 
@@ -59,8 +55,7 @@ export function StoryTextPanel({
     inputRef.current?.blur();
     const text = draft;
     onUpdate(overlay.id, { text });
-    onDraftChange?.({ id: overlay.id, text });
-    onDone({ id: overlay.id, text });
+    onDone();
   };
 
   if (!visible || !overlay) return null;
@@ -84,7 +79,6 @@ export function StoryTextPanel({
               onChangeText={(text) => {
                 setDraft(text);
                 onUpdate(overlay.id, { text });
-                onDraftChange?.({ id: overlay.id, text });
               }}
               multiline
               maxLength={120}

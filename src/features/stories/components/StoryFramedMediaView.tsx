@@ -43,8 +43,12 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
       onLayout={onLayout}
       collapsable={false}
     >
-      {hasLayout ? (
-        <View style={styles.stage}>
+      {!hasLayout ? (
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {children}
+        </View>
+      ) : (
+        <View style={styles.stage} pointerEvents="none">
           <View
             style={{
               width: metrics.baseWidth,
@@ -59,8 +63,6 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
             {children}
           </View>
         </View>
-      ) : (
-        <View style={styles.fallback}>{children}</View>
       )}
     </View>
   );
@@ -71,10 +73,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: '100%',
     overflow: 'hidden',
-  },
-  fallback: {
-    flex: 1,
-    width: '100%',
   },
   stage: {
     flex: 1,

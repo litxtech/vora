@@ -2,19 +2,14 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  LayoutChangeEvent,
   Pressable,
   StyleSheet,
-  useWindowDimensions,
   View,
   type View as RNView,
 } from 'react-native';
-import * as Haptics from 'expo-haptics';
-import { Image } from 'expo-image';
 import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
 import { Text } from '@/components/ui/Text';
 import { MediaEditorLocationSheet } from '@/features/compose/components/MediaEditorLocationSheet';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
@@ -25,7 +20,8 @@ import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { musicSelectionToManifest } from '@/features/stories/utils/storyManifest';
 import { PHOTO_POST_MUSIC_DURATION_SEC } from '@/features/music/constants';
-import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
+import { StoryPublishCanvas } from '@/features/stories/components/StoryPublishCanvas';
+import { useStoryPublishText } from '@/features/stories/hooks/useStoryPublishText';
 import { StoryLinkEditor } from '@/features/stories/components/StoryLinkEditor';
 import { StoryLinkSheet } from '@/features/stories/components/StoryLinkSheet';
 import { StoryMusicBadge } from '@/features/stories/components/StoryMusicBadge';
@@ -39,20 +35,10 @@ import { MediaEditorTrashZone } from '@/features/compose/components/MediaEditorT
 import {
   createOverlayDragDeleteHandlers,
 } from '@/features/compose/store/mediaEditorDragStore';
-import { StoryCanvasTextOverlays } from '@/features/stories/components/StoryCanvasTextOverlays';
 import { StoryTextPanel } from '@/features/stories/components/StoryTextPanel';
-import {
-  createStoryTextOverlay,
-  serializeStoryTextOverlays,
-} from '@/features/stories/utils/storyTextOverlays';
-import {
-  commitStoryTextDraft,
-  mergeStoryTextDraftIntoOverlays,
-} from '@/features/stories/utils/commitStoryTextDraft';
-import type { StudioTextOverlay } from '@/features/vora-studio/types';
+import { serializeStoryTextOverlays } from '@/features/stories/utils/storyTextOverlays';
 import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFramedImage';
 import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
-import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/stories/services/routeStoryVideo';
 import { useStoryUploadStore } from '@/features/stories/store/storyUploadStore';
 import { documentDirectory } from 'expo-file-system/legacy';
@@ -66,7 +52,6 @@ import {
   probeImageSize,
   probeVideoSize,
   createStoryFramingForMedia,
-  STORY_CARD_MEDIA_ASPECT,
   type StoryFraming,
 } from '@/features/stories/utils/storyFraming';
 import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
@@ -107,7 +92,6 @@ export function StoryPublishScreen({
   const normalizedDurationSec = normalizeIncomingDurationSec(durationSec);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const { width: windowWidth } = useWindowDimensions();
   const { user, profile } = useAuth();
   const regionId = useFeedStore((s) => s.regionId);
   const startStoryPublish = useStoryUploadStore((s) => s.startPublish);
@@ -115,9 +99,6 @@ export function StoryPublishScreen({
     (s) => s.status === 'uploading' || (s.status === 'success' && s.videoUploadActive),
   );
   const captureRef = useRef<RNView>(null);
-  const textOverlaysRef = useRef<StudioTextOverlay[]>([]);
-  const textDraftRef = useRef<{ id: string; text: string } | null>(null);
-  const activeTextOverlayRef = useRef<StudioTextOverlay | null>(null);
 
   const musicSelection = useMusicSelectionStore((s) => s.selection);
   const setMusicSelection = useMusicSelectionStore((s) => s.setSelection);
@@ -142,50 +123,26 @@ export function StoryPublishScreen({
   const [videoMuted, setVideoMuted] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
   const [links, setLinks] = useState<StoryLinkManifest[]>([]);
-  const [textOverlays, setTextOverlays] = useState<StudioTextOverlay[]>([]);
-  const [textEditing, setTextEditing] = useState(false);
-  const [selectedTextId, setSelectedTextId] = useState<string | null>(null);
   const [textTransformActive, setTextTransformActive] = useState(false);
-  const [previewLayout, setPreviewLayout] = useState({ width: 0, height: 0 });
   const [hideOverlaysForCapture, setHideOverlaysForCapture] = useState(false);
-  const [textDraft, setTextDraft] = useState<{ id: string; text: string } | null>(null);
 
-  const activeTextOverlay = useMemo(
-    () =>
-      textOverlays.find((item) => item.id === selectedTextId) ??
-      textOverlays[textOverlays.length - 1] ??
-      null,
-    [textOverlays, selectedTextId],
-  );
-
-  const displayTextOverlays = useMemo(() => {
-    let next = mergeStoryTextDraftIntoOverlays(textOverlays, textDraft);
-    if (textEditing && activeTextOverlay && !next.some((item) => item.id === activeTextOverlay.id)) {
-      next = [
-        ...next,
-        {
-          ...activeTextOverlay,
-          text: textDraft?.id === activeTextOverlay.id ? textDraft.text : activeTextOverlay.text,
-        },
-      ];
-    }
-    return next;
-  }, [activeTextOverlay, textDraft, textEditing, textOverlays]);
-
-  useEffect(() => {
-    textOverlaysRef.current = textOverlays;
-  }, [textOverlays]);
-
-  useEffect(() => {
-    activeTextOverlayRef.current = activeTextOverlay;
-  }, [activeTextOverlay]);
-
-  const onPreviewLayout = useCallback((event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      setPreviewLayout({ width, height });
-    }
-  }, []);
+  const {
+    textOverlays,
+    textEditing,
+    selectedTextId,
+    activeOverlay,
+    hasText,
+    setTextEditing,
+    setSelectedTextId,
+    updateOverlay: updateTextOverlay,
+    startEditing: startTextEditing,
+    finishEditing: finishTextEditing,
+    addOverlay: addTextOverlay,
+    removeOverlay: removeTextOverlay,
+    selectOverlay: handleSelectTextOverlay,
+    commitForPublish,
+    closeEditing: closeTextEditing,
+  } = useStoryPublishText();
 
   const storyVideoClipSec =
     normalizedDurationSec != null && normalizedDurationSec > 0
@@ -273,11 +230,14 @@ export function StoryPublishScreen({
             : await probeVideoSize(publishUri);
         if (cancelled) return;
         setMediaSize(size);
-        setFraming((prev) =>
-          createStoryFramingForMedia(size.width, size.height, {
+        setFraming((prev) => {
+          if (prev.mediaWidth === size.width && prev.mediaHeight === size.height) {
+            return prev;
+          }
+          return createStoryFramingForMedia(size.width, size.height, {
             backgroundColor: prev.backgroundColor,
-          }),
-        );
+          });
+        });
       } catch {
         if (!cancelled) {
           setMediaSize(fallback);
@@ -388,9 +348,8 @@ export function StoryPublishScreen({
     setMusicOpen(false);
     setMusicEditing(false);
     setActiveTool(null);
-    setTextEditing(false);
-    setSelectedTextId(null);
-  }, []);
+    closeTextEditing();
+  }, [closeTextEditing]);
 
   const handleToggleVideoAudio = useCallback(() => {
     if (musicSelection) {
@@ -405,77 +364,6 @@ export function StoryPublishScreen({
   }, [musicSelection, setMusicSelection]);
 
   const overlayDragDelete = useMemo(() => createOverlayDragDeleteHandlers(), []);
-
-  const addTextOverlay = useCallback(() => {
-    const overlay = createStoryTextOverlay(undefined, textOverlays.length);
-    setTextOverlays((prev) => {
-      const next = [...prev, overlay];
-      textOverlaysRef.current = next;
-      return next;
-    });
-    setSelectedTextId(overlay.id);
-    setTextEditing(true);
-    setActiveTool('text');
-  }, [textOverlays.length]);
-
-  const updateTextOverlay = useCallback((id: string, patch: Partial<StudioTextOverlay>) => {
-    setTextOverlays((prev) => {
-      const next = prev.map((item) => (item.id === id ? { ...item, ...patch } : item));
-      textOverlaysRef.current = next;
-      return next;
-    });
-  }, []);
-
-  const handleTextDraftChange = useCallback((draft: { id: string; text: string }) => {
-    textDraftRef.current = draft;
-    setTextDraft(draft);
-  }, []);
-
-  const removeTextOverlay = useCallback(
-    (id: string) => {
-      setTextOverlays((prev) => {
-        const next = prev.filter((item) => item.id !== id);
-        textOverlaysRef.current = next;
-        if (next.length === 0) {
-          setTextEditing(false);
-          setActiveTool(null);
-          setSelectedTextId(null);
-        }
-        return next;
-      });
-      setSelectedTextId((current) => (current === id ? null : current));
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    },
-    [],
-  );
-
-  const finishTextEditing = useCallback((pending?: { id: string; text: string }) => {
-    const commit = pending ?? textDraftRef.current;
-    const next = commitStoryTextDraft(
-      textOverlaysRef.current,
-      commit,
-      activeTextOverlayRef.current,
-    );
-    textOverlaysRef.current = next;
-    setTextOverlays(next);
-    setSelectedTextId(next.length > 0 ? next[next.length - 1].id : null);
-    textDraftRef.current = null;
-    setTextDraft(null);
-    setTextEditing(false);
-    setActiveTool(null);
-  }, []);
-
-  const handleSelectTextOverlay = useCallback(
-    (id: string) => {
-      if (!textEditing && selectedTextId === id) {
-        setTextEditing(true);
-        setActiveTool('text');
-        return;
-      }
-      setSelectedTextId(id);
-    },
-    [selectedTextId, textEditing],
-  );
 
   const handleDeleteTextOverlay = useCallback(
     (id: string) => {
@@ -495,7 +383,7 @@ export function StoryPublishScreen({
         }
         setActiveTool('text');
         if (textOverlays.length === 0) {
-          addTextOverlay();
+          startTextEditing();
           return;
         }
         setTextEditing(true);
@@ -540,7 +428,7 @@ export function StoryPublishScreen({
         setActiveTool(activeTool === 'location' ? null : 'location');
       }
     },
-    [activeTool, addTextOverlay, closeOtherTools, finishTextEditing, handleToggleVideoAudio, musicSelection, selectedTextId, textEditing, textOverlays.length],
+    [activeTool, closeOtherTools, finishTextEditing, handleToggleVideoAudio, musicSelection, selectedTextId, setTextEditing, setSelectedTextId, startTextEditing, textEditing, textOverlays.length],
   );
 
   const handleMusicSelect = useCallback(
@@ -624,37 +512,31 @@ export function StoryPublishScreen({
   }, [activeTool, finishTextEditing, musicEditing, musicInfoOpen, musicOpen, selectedTextId, textEditing]);
 
   const handlePublish = useCallback(async () => {
-    if (!user?.id || publishing || !mediaSize) return;
-    if (mediaType === 'video' && stabilizing) return;
+    if (!user?.id || publishing) return;
+    if (!publishUri && !mediaUri) return;
+    if (mediaType === 'video' && (!mediaSize || stabilizing)) return;
     if (storyUploadBusy) {
       Alert.alert('Yükleniyor', 'Önceki hikâye yüklemesi bitene kadar bekleyin.');
       return;
     }
 
-    if (textEditing || textDraftRef.current?.text.trim()) {
-      const committed = commitStoryTextDraft(
-        textOverlaysRef.current,
-        textDraftRef.current,
-        activeTextOverlayRef.current,
-      );
-      textOverlaysRef.current = committed;
-      setTextOverlays(committed);
-      textDraftRef.current = null;
-      setTextDraft(null);
-      setTextEditing(false);
-      setActiveTool(null);
-    }
+    const publishedTextOverlays =
+      textEditing || textOverlays.some((item) => item.text.trim())
+        ? commitForPublish()
+        : (serializeStoryTextOverlays(textOverlays) ?? []);
 
     setPublishing(true);
     setUploadMessage(mediaType === 'image' ? 'Görsel hazırlanıyor…' : null);
 
-    let uploadUri = publishUri;
+    let uploadUri = publishUri || mediaUri;
     let uploadFraming: StoryFraming | null = null;
 
     if (mediaType === 'image') {
       try {
         setHideOverlaysForCapture(true);
-        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
         uploadUri = await bakeStoryFramedImage(captureRef.current);
       } catch (err) {
         setPublishing(false);
@@ -668,16 +550,13 @@ export function StoryPublishScreen({
       } finally {
         setHideOverlaysForCapture(false);
       }
-    } else {
+    } else if (mediaSize) {
       uploadFraming = {
         ...framing,
         mediaWidth: mediaSize.width,
         mediaHeight: mediaSize.height,
       };
     }
-
-    const publishedTextOverlays =
-      serializeStoryTextOverlays(textOverlaysRef.current) ?? [];
 
     startStoryPublish(
       {
@@ -720,17 +599,19 @@ export function StoryPublishScreen({
     regionId,
     selectedLocation,
     links,
-    textOverlays,
+    commitForPublish,
+    textEditing,
     stabilizing,
     startStoryPublish,
     storyUploadBusy,
     trimmedInStudio,
     user,
     videoMuted,
+    mediaUri,
   ]);
 
-  const canEditFraming = mediaSize != null;
-  const canShowMediaPreview = canEditFraming || Boolean(publishUri);
+  const displayUri = publishUri || mediaUri;
+  const canShowMediaPreview = Boolean(displayUri);
   const previewMusicConfig = musicSelection
     ? {
         audioUrl: musicSelection.audioUrl,
@@ -747,21 +628,13 @@ export function StoryPublishScreen({
     playing: mediaType === 'image' && musicPlaysOnStory,
   });
 
-  // Medya ağacı her zaman mount kalır; metin/müzik modunda sadece jestler kapanır (IG gibi).
-  const framingEnabled = !publishing;
-  const mediaGesturesEnabled =
-    framingEnabled && !textTransformActive && !musicEditing && !textEditing;
+  const framingGesturesEnabled =
+    !publishing && !textTransformActive && !musicEditing && !textEditing;
   const linkEditorEnabled = !publishing && !musicEditing && !textEditing;
   const overlayEditable = !publishing && !musicEditing;
-  const hasText = displayTextOverlays.some((item) => item.text.trim());
   const showTextLayer =
     !hideOverlaysForCapture &&
-    (textEditing || displayTextOverlays.some((item) => item.text.trim()));
-  const activeTextSelectedId =
-    textEditing && activeTextOverlay ? activeTextOverlay.id : selectedTextId;
-
-  const cardWidth = windowWidth - STORY_CARD_HORIZONTAL_INSET * 2;
-  const cardHeight = Math.round(cardWidth / STORY_CARD_MEDIA_ASPECT);
+    (textEditing || textOverlays.some((item) => item.text.trim()));
 
   const previewFraming = useMemo(
     (): StoryFraming => ({
@@ -771,27 +644,6 @@ export function StoryPublishScreen({
     }),
     [framing, mediaHeight, mediaSize, mediaWidth],
   );
-
-  const mediaPreviewNode =
-    mediaType === 'image' ? (
-      <Image
-        source={{ uri: publishUri }}
-        style={styles.mediaFill}
-        contentFit="cover"
-        pointerEvents="none"
-      />
-    ) : (
-      <View style={styles.mediaFill} pointerEvents="none">
-        <CapturedVideoPreview
-          uri={publishUri}
-          style={StyleSheet.absoluteFill}
-          contentFit="cover"
-          music={musicPlaysOnStory ? musicSelection : null}
-          videoMuted={videoOriginalMuted}
-          muted={videoOriginalMuted}
-        />
-      </View>
-    );
 
   return (
     <View style={[styles.root, { backgroundColor: '#000', paddingTop: insets.top }]}>
@@ -806,30 +658,29 @@ export function StoryPublishScreen({
       </View>
 
       <View style={styles.previewStage}>
-        <View style={styles.previewStack}>
-          <View
-            ref={captureRef}
-            collapsable={false}
-            style={[storyCardFrameStyle.frame, styles.previewWrap]}
-            onLayout={onPreviewLayout}
+        {canShowMediaPreview ? (
+          <StoryPublishCanvas
+            captureRef={captureRef}
+            displayUri={displayUri}
+            mediaType={mediaType}
+            framing={previewFraming}
+            onFramingChange={handleFramingChange}
+            framingGesturesEnabled={framingGesturesEnabled}
+            music={musicSelection}
+            musicPlaysOnStory={musicPlaysOnStory}
+            videoMuted={videoOriginalMuted}
+            textOverlays={textOverlays}
+            textEditing={textEditing}
+            plainMediaPreview={textEditing || musicEditing}
+            selectedTextId={selectedTextId}
+            overlaysEditable={overlayEditable}
+            showTextLayer={showTextLayer}
+            onUpdateText={updateTextOverlay}
+            onSelectText={handleSelectTextOverlay}
+            onDeleteText={handleDeleteTextOverlay}
+            dragDelete={overlayDragDelete}
+            onTextTransformActiveChange={setTextTransformActive}
           >
-            {canShowMediaPreview ? (
-              <StoryFramingEditor
-                framing={framing}
-                onFramingChange={handleFramingChange}
-                mediaWidth={previewFraming.mediaWidth}
-                mediaHeight={previewFraming.mediaHeight}
-                enabled={framingEnabled}
-                mediaGesturesEnabled={mediaGesturesEnabled}
-              >
-                {mediaPreviewNode}
-              </StoryFramingEditor>
-            ) : (
-              <View style={styles.previewLoading}>
-                <ActivityIndicator color={colors.primary} size="large" />
-              </View>
-            )}
-
             {musicSelection && !musicEditing ? (
               <StoryMusicBadge
                 title={musicSelection.displayTitle}
@@ -883,31 +734,12 @@ export function StoryPublishScreen({
                 onDone={() => setMusicEditing(false)}
               />
             ) : null}
-
-            {showTextLayer && (previewLayout.width > 0 && previewLayout.height > 0 || textEditing) ? (
-              <View
-                pointerEvents="box-none"
-                style={StyleSheet.absoluteFillObject}
-                collapsable={false}
-              >
-                <StoryCanvasTextOverlays
-                  overlays={displayTextOverlays}
-                  layoutWidth={previewLayout.width > 0 ? previewLayout.width : cardWidth}
-                  layoutHeight={previewLayout.height > 0 ? previewLayout.height : cardHeight}
-                  selectedId={activeTextSelectedId}
-                  editable={overlayEditable}
-                  textEditing={textEditing}
-                  showPlaceholder={textEditing}
-                  onUpdate={updateTextOverlay}
-                  onSelect={handleSelectTextOverlay}
-                  onDelete={handleDeleteTextOverlay}
-                  dragDelete={overlayDragDelete}
-                  onTextTransformActiveChange={setTextTransformActive}
-                />
-              </View>
-            ) : null}
+          </StoryPublishCanvas>
+        ) : (
+          <View style={styles.previewLoading}>
+            <ActivityIndicator color={colors.primary} size="large" />
           </View>
-        </View>
+        )}
       </View>
 
       {!musicEditing && !textEditing && activeTool !== 'location' && activeTool !== 'link' ? (
@@ -927,10 +759,9 @@ export function StoryPublishScreen({
 
       <StoryTextPanel
         visible={textEditing}
-        overlay={activeTextOverlay}
+        overlay={activeOverlay}
         onUpdate={updateTextOverlay}
-        onDraftChange={handleTextDraftChange}
-        onDone={finishTextEditing}
+        onDone={() => finishTextEditing()}
         onAdd={addTextOverlay}
       />
 
@@ -947,11 +778,11 @@ export function StoryPublishScreen({
               styles.publishBtn,
               {
                 backgroundColor: colors.primary,
-                opacity: publishing || !mediaSize || stabilizing || musicEditing ? 0.5 : 1,
+                opacity: publishing || !displayUri || stabilizing || musicEditing ? 0.5 : 1,
               },
             ]}
             onPress={() => void handlePublish()}
-            disabled={publishing || !mediaSize || stabilizing || musicEditing}
+            disabled={publishing || !displayUri || stabilizing || musicEditing}
           >
             {publishing ? (
               <View style={styles.publishingRow}>
