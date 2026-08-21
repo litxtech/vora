@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, View, StyleSheet } from 'react-native';
+import { Alert, View, StyleSheet } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { AuthHeader } from '@/components/auth/AuthHeader';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -12,14 +13,11 @@ import {
 } from '@/features/job-seekers/services/seekerData';
 import { getOrCreateDirectConversation } from '@/features/messaging/services/conversationData';
 import { openChat } from '@/features/messaging/services/messagingNavigation';
-import { PERSONNEL_ACCENT } from '@/features/personnel-center/constants';
 import { spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
-import { useTheme } from '@/providers/ThemeProvider';
 
 export function JobSeekerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { colors } = useTheme();
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
   const [profile, setProfile] = useState<PublicJobSeekerProfile | null>(null);
@@ -54,13 +52,7 @@ export function JobSeekerDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={PERSONNEL_ACCENT} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !profile) {

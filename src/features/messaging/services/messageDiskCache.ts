@@ -3,6 +3,7 @@ import type { ChatMessage } from '@/features/messaging/types';
 import { capMessageList } from '@/features/messaging/utils/messageWindow';
 import { CHAT_MESSAGE_PAGE_SIZE } from '@/features/messaging/constants';
 import { useMessagingStore } from '@/features/messaging/store/messagingStore';
+import { getInboxDiskHydrateLimit } from '@/lib/device/androidPerfProfile';
 
 const INDEX_KEY = (userId: string) => `messaging:disk-index:v1:${userId}`;
 const MSG_KEY = (userId: string, conversationId: string) =>
@@ -125,7 +126,7 @@ export async function hydrateMessageDiskCache(
   userId: string,
   conversationIds: string[],
 ): Promise<void> {
-  const targets = conversationIds.slice(0, 10);
+  const targets = conversationIds.slice(0, getInboxDiskHydrateLimit());
   await Promise.all(
     targets.map(async (conversationId) => {
       if (useMessagingStore.getState().getCachedMessages(conversationId).length > 0) {

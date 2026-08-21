@@ -1,7 +1,13 @@
-import { router, type Href } from 'expo-router';
+import { type Href } from 'expo-router';
+import { pushRoute, replaceRoute } from '@/lib/navigation/pushRoute';
+import { prefetchChatRoute } from '@/lib/navigation/lazyRouteScreens';
 import { supabase } from '@/lib/supabase/client';
+import { isAndroid } from '@/lib/device/androidPerfProfile';
 import { markConversationRead } from './messageData';
-import { prefetchConversationForOpen } from './conversationOpenPrefetch';
+import {
+  prefetchConversationForOpen,
+  primeConversationMessagesFromDisk,
+} from './conversationOpenPrefetch';
 import { refreshMessagingUnreadFromServer } from './messagingUnreadRefresh';
 import { useMessagingStore } from '../store/messagingStore';
 
@@ -17,6 +23,29 @@ export type OpenChatOptions = {
  * Sohbete tıklanınca tek giriş noktası:
  * rozet + bildirim anında kalkar, sunucuda okundu işaretlenir.
  */
+export function prefetchChatNavigation(): void {
+  prefetchChatRoute();
+}
+
+function buildChatHref(conversationId: string, options?: OpenChatOptions): Href {
+  const base =
+    options?.from === 'izdivac'
+      ? `/chat/${conversationId}?from=izdivac`
+      : `/chat/${conversationId}`;
+  if (!options?.messageId) return base as Href;
+  const join = base.includes('?') ? '&' : '?';
+  return `${base}${join}messageId=${encodeURIComponent(options.messageId)}` as Href;
+}
+
+function navigateToChat(conversationId: string, options?: OpenChatOptions) {
+  const href = buildChatHref(conversationId, options);
+  if (options?.replace) {
+    replaceRoute(href);
+    return;
+  }
+  pushRoute(href);
+}
+
 export function openChat(conversationId: string, options?: OpenChatOptions) {
   const store = useMessagingStore.getState();
   const unread =
@@ -26,30 +55,35 @@ export function openChat(conversationId: string, options?: OpenChatOptions) {
   store.enterConversation(conversationId, unread > 0 ? unread : undefined);
 
   const userIdHint = options?.userId;
+  const hasMemory = store.getCachedMessages(conversationId).length > 0;
+
+  // Android: disk prime bitmeden push etme — boş sohbet flash'ını keser.
+  if (isAndroid() && userIdHint && !hasMemory) {
+    void (async () => {
+      await primeConversationMessagesFromDisk(conversationId, userIdHint);
+      void prefetchConversationForOpen(conversationId, userIdHint);
+      navigateToChat(conversationId, options);
+      void markConversationRead(conversationId, userIdHint);
+      void refreshMessagingUnreadFromServer(userIdHint);
+    })();
+    return;
+  }
+
   if (userIdHint) {
+    void primeConversationMessagesFromDisk(conversationId, userIdHint);
     void prefetchConversationForOpen(conversationId, userIdHint);
   }
 
   void (async () => {
     const userId = userIdHint ?? (await supabase.auth.getUser()).data.user?.id;
     if (!userId) return;
-    if (!userIdHint) void prefetchConversationForOpen(conversationId, userId);
+    if (!userIdHint) {
+      void primeConversationMessagesFromDisk(conversationId, userId);
+      void prefetchConversationForOpen(conversationId, userId);
+    }
     void markConversationRead(conversationId, userId);
     void refreshMessagingUnreadFromServer(userId);
   })();
 
-  const href = (() => {
-    const base =
-      options?.from === 'izdivac'
-        ? `/chat/${conversationId}?from=izdivac`
-        : `/chat/${conversationId}`;
-    if (!options?.messageId) return base;
-    const join = base.includes('?') ? '&' : '?';
-    return `${base}${join}messageId=${encodeURIComponent(options.messageId)}`;
-  })() as Href;
-  if (options?.replace) {
-    router.replace(href);
-    return;
-  }
-  router.push(href);
+  navigateToChat(conversationId, options);
 }

@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useIsFocused } from 'expo-router';
 import {
-  ActivityIndicator,
   Dimensions,
   FlatList,
   Pressable,
@@ -32,14 +31,11 @@ import { useReelsViewerStore } from '@/features/reels/store/reelsViewerStore';
 import type { ReelItem } from '@/features/reels/types';
 import { Text } from '@/components/ui/Text';
 import { spacing } from '@/constants/theme';
-import { getAndroidReelsFlatListPerfProps, isAndroid, shouldDeferHeavyFocusWork } from '@/lib/device/androidPerfProfile';
+import { getAndroidReelsFlatListPerfProps, isAndroid, shouldDeferHeavyFocusWork, getReelsIdleReleaseMs } from '@/lib/device/androidPerfProfile';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { subscribeMuxVideoReady } from '@/services/video/muxReadyEvents';
 
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
-
-/** Reels sekmesinden çıkıp bu süre dönülmezse video/müzik havuzları serbest bırakılır. */
-const REELS_IDLE_RELEASE_MS = 20_000;
 
 const IOS_REELS_LIST_PERF = {
   initialNumToRender: 1,
@@ -190,7 +186,7 @@ export function ReelsFeed() {
         resetReelWarmup();
         clearReelVideoPreloadPool();
         clearReelMusicPool();
-      }, REELS_IDLE_RELEASE_MS);
+      }, getReelsIdleReleaseMs());
 
       return () => clearTimeout(idleRelease);
     }
@@ -426,9 +422,6 @@ export function ReelsFeed() {
             <View style={styles.headerSide} />
           </View>
         </View>
-        <View style={styles.center}>
-          <ActivityIndicator color="#fff" size="large" />
-        </View>
       </View>
     );
   }
@@ -515,7 +508,6 @@ export function ReelsFeed() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  center: { flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
   header: {
     position: 'absolute',
     top: 0,

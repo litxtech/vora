@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -8,18 +8,36 @@ import { Screen } from '@/components/ui/Screen';
 import { Text } from '@/components/ui/Text';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
-import { useAuth } from '@/providers/AuthProvider';
-import { useTheme } from '@/providers/ThemeProvider';
-import { CallHistoryList } from '@/features/messaging/components/CallHistoryList';
-import { ContactsList } from '@/features/messaging/components/ContactsList';
 import { ConversationInbox } from '@/features/messaging/components/ConversationInbox';
-import { MessageRequestsInbox } from '@/features/messaging/components/MessageRequestsInbox';
-import { FriendsList } from '@/features/messaging/components/FriendsList';
-import { ChannelsInbox } from '@/features/channels/components/ChannelsInbox';
 import { MessagesTabBar } from '@/features/messaging/components/MessagesTabBar';
 import { useTabMessagingBadge } from '@/features/messaging/hooks/useTabMessagingBadge';
 import type { MessagesTab } from '@/features/messaging/types';
 import { radius, spacing } from '@/constants/theme';
+import { useAuth } from '@/providers/AuthProvider';
+import { useTheme } from '@/providers/ThemeProvider';
+
+const CallHistoryList = lazy(() =>
+  import('@/features/messaging/components/CallHistoryList').then((m) => ({ default: m.CallHistoryList })),
+);
+const ContactsList = lazy(() =>
+  import('@/features/messaging/components/ContactsList').then((m) => ({ default: m.ContactsList })),
+);
+const MessageRequestsInbox = lazy(() =>
+  import('@/features/messaging/components/MessageRequestsInbox').then((m) => ({
+    default: m.MessageRequestsInbox,
+  })),
+);
+const FriendsList = lazy(() =>
+  import('@/features/messaging/components/FriendsList').then((m) => ({ default: m.FriendsList })),
+);
+const ChannelsInbox = lazy(() =>
+  import('@/features/channels/components/ChannelsInbox').then((m) => ({ default: m.ChannelsInbox })),
+);
+
+/** Spinner yok — alt sekmeler sessizce doldurulur. */
+function LazyMessagesPanel({ children }: { children: ReactNode }) {
+  return <Suspense fallback={<View style={styles.tabFallback} />}>{children}</Suspense>;
+}
 
 export default function MessagesScreen() {
   const { user } = useAuth();
@@ -79,11 +97,31 @@ export default function MessagesScreen() {
 
       <View style={styles.body}>
         {tab === 'chats' ? <ConversationInbox /> : null}
-        {tab === 'channels' ? <ChannelsInbox /> : null}
-        {tab === 'requests' ? <MessageRequestsInbox /> : null}
-        {tab === 'contacts' ? <ContactsList /> : null}
-        {tab === 'friends' ? <FriendsList /> : null}
-        {tab === 'calls' ? <CallHistoryList /> : null}
+        {tab === 'channels' ? (
+          <LazyMessagesPanel>
+            <ChannelsInbox />
+          </LazyMessagesPanel>
+        ) : null}
+        {tab === 'requests' ? (
+          <LazyMessagesPanel>
+            <MessageRequestsInbox />
+          </LazyMessagesPanel>
+        ) : null}
+        {tab === 'contacts' ? (
+          <LazyMessagesPanel>
+            <ContactsList />
+          </LazyMessagesPanel>
+        ) : null}
+        {tab === 'friends' ? (
+          <LazyMessagesPanel>
+            <FriendsList />
+          </LazyMessagesPanel>
+        ) : null}
+        {tab === 'calls' ? (
+          <LazyMessagesPanel>
+            <CallHistoryList />
+          </LazyMessagesPanel>
+        ) : null}
       </View>
     </Screen>
   );
@@ -129,5 +167,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.xs,
+  },
+  tabFallback: {
+    flex: 1,
   },
 });

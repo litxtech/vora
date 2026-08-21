@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -13,6 +12,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -242,13 +242,7 @@ export function StaffDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={PERSONNEL_ACCENT} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !listing) {

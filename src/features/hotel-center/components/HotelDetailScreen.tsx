@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -227,13 +227,7 @@ export function HotelDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={HOTEL_ACCENT} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !hotel) {

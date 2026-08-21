@@ -87,12 +87,12 @@ export function getFeedProcessingVideoPollMultiplier(): number {
 
 /** Drawer açılış süresi (ms) — 0 = anında. */
 export function getFeedDrawerOpenDurationMs(): number {
-  return isAndroidTablet() ? 0 : 400;
+  return isAndroidTablet() ? 0 : 280;
 }
 
 /** Drawer kapanış süresi (ms). */
 export function getFeedDrawerCloseDurationMs(): number {
-  return isAndroidTablet() ? 0 : 340;
+  return isAndroidTablet() ? 0 : 240;
 }
 
 /** Akış üstü carousel — tablet dahil ertelenir, liste önce etkileşilebilir. */
@@ -255,8 +255,8 @@ export function shouldShowBootSplashVisual(): boolean {
   return !isAndroid();
 }
 
-/** Android telefon: akış + profil eager. */
-const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'profile', 'discover', 'messages']);
+/** Android telefon: yalnızca akış + profil eager — keşfet/mesaj ilk açılışta lazy. */
+const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'profile']);
 
 /** Android tablet: yalnızca akış eager — profil/keşfet lazy. */
 const ANDROID_TABLET_EAGER_TAB_NAMES = new Set(['index']);
@@ -267,11 +267,16 @@ function shouldEagerMountAndroidTab(tabName: string): boolean {
   return ANDROID_EAGER_TAB_NAMES.has(tabName);
 }
 
+/** iOS swipe komşuları: yalnızca akış + keşfet eager. Reels/Mesaj/Profil lazy (ilk açılış placeholder). */
+const IOS_SWIPE_EAGER_TAB_NAMES = new Set(['index', 'discover']);
+
 function shouldEagerMountTabForSwipe(tabName: string): boolean {
   if (!MAIN_TAB_SWIPE_ROUTES.has(tabName as MainTabRoute)) {
     return shouldEagerMountAndroidTab(tabName);
   }
-  if (!isAndroid()) return true;
+  if (!isAndroid()) {
+    return IOS_SWIPE_EAGER_TAB_NAMES.has(tabName);
+  }
   if (isAndroidTablet()) {
     return tabName === 'index';
   }
@@ -280,21 +285,39 @@ function shouldEagerMountTabForSwipe(tabName: string): boolean {
 
 export function getAndroidTabLazyOption(
   tabName: string,
-): { lazy: boolean; lazyPlaceholder?: () => null } {
+): { lazy: boolean } {
   if (shouldEagerMountTabForSwipe(tabName)) {
     return { lazy: false };
   }
-  return {
-    lazy: true,
-    lazyPlaceholder: () => null,
-  };
+  return { lazy: true };
 }
 
-/** Pasif sekmeleri bellekten ayır — tablet/Android swipe yok, bellek baskısını azalt. */
+/** Pasif sekmeleri bellekten ayır — swipe kapalıyken (Android) bellek/JS baskısını azalt. */
 export function shouldDetachInactiveTabScreens(): boolean {
+  // Komşu önizleme için pasif sahneler mount kalmalı.
   if (shouldUseMainTabSwipeGesture()) return false;
-  if (isAndroidTablet()) return true;
-  return Platform.OS === 'ios';
+  return true;
+}
+
+/** Inbox açılışında AsyncStorage mesaj hydrate üst sınırı. */
+export function getInboxDiskHydrateLimit(): number {
+  if (isAndroidTablet()) return 4;
+  if (isAndroid()) return 8;
+  return 12;
+}
+
+/** Sohbet odası ilk ağ sayfası — Android'de daha küçük = daha hızlı ilk boya. */
+export function getChatOpenPageSize(): number {
+  if (isAndroidTablet()) return 24;
+  if (isAndroid()) return 28;
+  return 50;
+}
+
+/** Reels sekmesinden çıkınca video/müzik havuzu serbest bırakma (ms). */
+export function getReelsIdleReleaseMs(): number {
+  if (isAndroidTablet()) return 6_000;
+  if (isAndroid()) return 8_000;
+  return 20_000;
 }
 
 export { getHeavyFeatureBootDelayMs as getAndroidHeavyFeatureBootDelayMs } from '@/lib/boot/heavyFeatureDelay';
@@ -460,8 +483,8 @@ export function shouldAnimateChatBubbles(): boolean {
 
 /** Sohbet ilk render satır sayısı. */
 export function getChatInitialRenderCount(): number {
-  if (isAndroidTablet()) return 8;
-  if (isAndroid()) return 10;
+  if (isAndroidTablet()) return 10;
+  if (isAndroid()) return 14;
   return 18;
 }
 

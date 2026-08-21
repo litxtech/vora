@@ -5,6 +5,7 @@ import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
 import type { FeatureId } from '@/features/feature-flags/types';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
+import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import type { MessagesTab } from '../types';
 
 const TABS: { id: MessagesTab; label: string; featureId?: FeatureId }[] = [
@@ -60,6 +61,7 @@ export function MessagesTabBar({ active, onChange, unreadCount = 0 }: MessagesTa
               },
             ]}
             onPress={() => onChange(tab.id)}
+            {...getAndroidInstantPressableProps()}
           >
             <Text
               variant="caption"

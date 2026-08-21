@@ -36,9 +36,11 @@ import { HeyetChatBanner } from '@/features/heyet/components/HeyetChatBanner';
 import { IzdivacChatBanner } from '@/features/izdivac/components/IzdivacChatBanner';
 import { fetchHeyetCaseForConversation } from '@/features/heyet/services/heyetData';
 import type { HeyetCase } from '@/features/heyet/types';
+import { CapsPickerSheet, capMediaUrl, recordCapUsage, toCapMessageMetadata } from '@/features/caps';
+import type { Cap } from '@/features/caps/types';
 import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
-import { getAndroidFlatListPerfProps, getChatInitialRenderCount, getChatReadMarkIntervalMs, shouldAnimateChatBubbles } from '@/lib/device/androidPerfProfile';
+import { getAndroidFlatListPerfProps, getChatInitialRenderCount, getChatOpenPageSize, getChatReadMarkIntervalMs, shouldAnimateChatBubbles } from '@/lib/device/androidPerfProfile';
 import { supabase } from '@/lib/supabase/client';
 import { subscribeSupabaseChannel } from '@/lib/supabase/realtimeChannel';
 import { useChatBackgroundSync } from '../hooks/useChatBackgroundSync';
@@ -48,6 +50,8 @@ import { useTypingIndicator } from '../hooks/useTypingIndicator';
 import { fetchConversationDetail } from '../services/conversationData';
 import {
   awaitConversationOpenPrefetch,
+  emptyConversationOpenSnapshot,
+  primeConversationMessagesFromDisk,
   readConversationOpenSnapshot,
 } from '../services/conversationOpenPrefetch';
 import {
@@ -72,6 +76,7 @@ import {
   uploadMessageVideo,
 } from '../services/messageVideoUpload';
 import { uploadMessageMedia } from '../services/messageMediaUpload';
+import { prepareStoryVideoPreviewUri } from '@/features/stories/services/prepareStoryVideoPreview';
 import type { ChatMessage, ConversationDetail } from '../types';
 import {
   buildLocationPayloadFromGeocode,
@@ -249,18 +254,27 @@ export function ChatScreen() {
   const pendingScrollMessageIdRef = useRef<string | null>(null);
   const pendingJumpMessageIdRef = useRef<string | null>(null);
   const handledDeepLinkMessageIdRef = useRef<string | null>(null);
+  const jumpInFlightRef = useRef(false);
 
   const audioRecorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const recorderState = useAudioRecorderState(audioRecorder);
   const recordingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const [conversation, setConversation] = useState<ConversationDetail | null>(null);
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  /** İlk boya: cache/disk snapshot — boş FlatList flash'ını keser. */
+  const [bootSnapshot] = useState(() =>
+    id ? readConversationOpenSnapshot(id, user?.id) : emptyConversationOpenSnapshot(),
+  );
+  const [conversation, setConversation] = useState<ConversationDetail | null>(
+    () => bootSnapshot.conversation,
+  );
+  const [messages, setMessages] = useState<ChatMessage[]>(() => bootSnapshot.messages);
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
   const [editingMessage, setEditingMessage] = useState<ChatMessage | null>(null);
-  const [detailResolved, setDetailResolved] = useState(false);
+  const [detailResolved, setDetailResolved] = useState(
+    () => bootSnapshot.messages.length > 0 || bootSnapshot.conversation != null,
+  );
   const [loadingMore, setLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
+  const [hasMore, setHasMore] = useState(() => bootSnapshot.hasMore);
   const [otherUserRestricted, setOtherUserRestricted] = useState(false);
   const [blockStatus, setBlockStatus] = useState<DirectBlockStatus | null>(null);
   const [heyetCase, setHeyetCase] = useState<HeyetCase | null>(null);
@@ -273,8 +287,11 @@ export function ChatScreen() {
   const [galleryVisible, setGalleryVisible] = useState(false);
   const [quickCaptureVisible, setQuickCaptureVisible] = useState(false);
   const [quickSnapEphemeral, setQuickSnapEphemeral] = useState(true);
+  const [capsPickerOpen, setCapsPickerOpen] = useState(false);
   const [imageSendConfirm, setImageSendConfirm] = useState<{
+    mediaType: 'image' | 'video';
     uris: string[];
+    durationSec?: number;
     ephemeral: boolean;
   } | null>(null);
   const [ephemeralViewedAt, setEphemeralViewedAt] = useState<Record<string, number>>({});
@@ -288,7 +305,7 @@ export function ChatScreen() {
     messageType: 'image' | 'video';
     assets: ImagePicker.ImagePickerAsset[];
   } | null>(null);
-  const otherLastReadAtRef = useRef<string | null>(null);
+  const otherLastReadAtRef = useRef<string | null>(bootSnapshot.otherLastReadAt);
   const readChannelGenRef = useRef(0);
   const presenceChannelGenRef = useRef(0);
   const screenFocusedRef = useRef(true);
@@ -300,6 +317,7 @@ export function ChatScreen() {
   const syncInFlightRef = useRef(false);
   const syncPendingRef = useRef(false);
   const enteredMessageIdsRef = useRef(new Set<string>());
+  const layoutConversationIdRef = useRef<string | undefined>(undefined);
   messagesRef.current = messages;
   conversationRef.current = conversation;
   activeConversationIdRef.current = id;
@@ -410,25 +428,50 @@ export function ChatScreen() {
 
   useLayoutEffect(() => {
     if (!id) return;
-    handledDeepLinkMessageIdRef.current = null;
-    pendingJumpMessageIdRef.current = null;
-    enteredMessageIdsRef.current.clear();
+
+    const conversationChanged = layoutConversationIdRef.current !== id;
+    layoutConversationIdRef.current = id;
+
+    if (conversationChanged) {
+      handledDeepLinkMessageIdRef.current = null;
+      pendingJumpMessageIdRef.current = null;
+      enteredMessageIdsRef.current.clear();
+    }
+
     const snapshot = readConversationOpenSnapshot(id, user?.id);
     markMessagesEntered(snapshot.messages);
-    setMessages(snapshot.messages);
-    setConversation(snapshot.conversation);
-    setPendingAttachment(null);
-    otherLastReadAtRef.current = snapshot.otherLastReadAt;
-    setHasMore(snapshot.hasMore);
-    setDetailResolved(snapshot.messages.length > 0 || snapshot.conversation != null);
+
+    if (conversationChanged) {
+      setMessages(snapshot.messages);
+      setConversation(snapshot.conversation);
+      setPendingAttachment(null);
+      otherLastReadAtRef.current = snapshot.otherLastReadAt;
+      setHasMore(snapshot.hasMore);
+      setDetailResolved(snapshot.messages.length > 0 || snapshot.conversation != null);
+    } else {
+      setMessages((prev) => {
+        if (prev.length === 0) return snapshot.messages;
+        if (snapshot.messages.length === 0) return prev;
+        return mergeMessagesForConversationLoad(snapshot.messages, prev, []);
+      });
+      if (!conversation && snapshot.conversation) {
+        setConversation(snapshot.conversation);
+      }
+      if (snapshot.otherLastReadAt) {
+        otherLastReadAtRef.current = snapshot.otherLastReadAt;
+      }
+    }
 
     if (snapshot.messages.length === 0 && user?.id) {
       void readPersistedMessages(user.id, id).then((disk) => {
         if (!disk?.length || activeConversationIdRef.current !== id) return;
         markMessagesEntered(disk);
         const capped = capMessageList(disk);
-        setMessages(capped);
-        setHasMore(capped.length >= PAGE_SIZE);
+        setMessages((prev) => {
+          if (prev.length === 0) return capped;
+          return mergeMessagesForConversationLoad(capped, prev, []);
+        });
+        setHasMore((prev) => prev || capped.length >= PAGE_SIZE);
         setDetailResolved(true);
         useMessagingStore.getState().setCachedMessages(id, capped);
       });
@@ -501,7 +544,24 @@ export function ChatScreen() {
     }
 
     const store = useMessagingStore.getState();
+    const openPageSize = getChatOpenPageSize();
 
+    // Disk → bellek (ağdan önce). pressIn ile yarışır; ilk boyayı doldurur.
+    if (store.getCachedMessages(conversationId).length === 0) {
+      const diskMessages = await primeConversationMessagesFromDisk(conversationId, user.id);
+      if (
+        diskMessages.length > 0 &&
+        conversationId === activeConversationIdRef.current &&
+        messagesRef.current.length === 0
+      ) {
+        markMessagesEntered(diskMessages);
+        setMessages(capMessageList(diskMessages));
+        setHasMore(diskMessages.length >= openPageSize);
+        setDetailResolved(true);
+      }
+    }
+
+    // Prefetch ağını arka planda sürdür; cache varsa UI'ı bekletme.
     if (store.getCachedMessages(conversationId).length === 0) {
       await awaitConversationOpenPrefetch(conversationId);
     } else {
@@ -514,7 +574,7 @@ export function ChatScreen() {
     if (cached.length > 0) {
       markMessagesEntered(cached);
       setMessages((prev) => (prev.length > 0 ? prev : capMessageList(cached)));
-      setHasMore(cached.length >= PAGE_SIZE);
+      setHasMore(cached.length >= openPageSize);
 
       if (cachedDetail) {
         otherLastReadAtRef.current = cachedDetail.otherLastReadAt;
@@ -575,7 +635,7 @@ export function ChatScreen() {
     try {
       const [fetchedDetail, fetchedMessages] = await Promise.all([
         fetchConversationDetail(conversationId, user.id),
-        fetchMessages(conversationId, user.id, null, PAGE_SIZE),
+        fetchMessages(conversationId, user.id, null, openPageSize),
       ]);
       detail = fetchedDetail;
       initialMessages = fetchedDetail
@@ -613,7 +673,7 @@ export function ChatScreen() {
     setMessages((prev) =>
       mergeMessagesForConversationLoad(initialMessages, prev, queuedMessages),
     );
-    setHasMore(initialMessages.length >= PAGE_SIZE);
+    setHasMore(initialMessages.length >= openPageSize);
 
     void showConversation(conversationId);
     void markConversationRead(conversationId, user.id);
@@ -728,26 +788,28 @@ export function ChatScreen() {
 
   const handleNewMessage = useCallback(
     (message: ChatMessage) => {
-      const locallyEnriched = enrichIncomingMessage(message, {
-        conversation: conversationRef.current,
-        existingMessages: messagesRef.current,
-      });
-
-      const enriched =
-        user?.id && locallyEnriched.senderId === user.id
-          ? {
-              ...locallyEnriched,
-              localStatus: resolveOutgoingDeliveryStatus(
-                locallyEnriched.createdAt,
-                user.id,
-                locallyEnriched.senderId,
-                otherLastReadAtRef.current,
-              ),
-            }
-          : locallyEnriched;
-
       let appended = false;
+      let hydratedMessage: ChatMessage | null = null;
+
       setMessages((prev) => {
+        const locallyEnriched = enrichIncomingMessage(message, {
+          conversation: conversationRef.current,
+          existingMessages: prev,
+        });
+
+        const enriched =
+          user?.id && locallyEnriched.senderId === user.id
+            ? {
+                ...locallyEnriched,
+                localStatus: resolveOutgoingDeliveryStatus(
+                  locallyEnriched.createdAt,
+                  user.id,
+                  locallyEnriched.senderId,
+                  otherLastReadAtRef.current,
+                ),
+              }
+            : locallyEnriched;
+
         if (prev.some((m) => m.id === enriched.id)) return prev;
 
         const withoutLocal = prev.filter(
@@ -755,12 +817,13 @@ export function ChatScreen() {
         );
 
         appended = true;
+        hydratedMessage = enriched;
         return capMessageList([...withoutLocal, enriched]);
       });
 
-      if (appended) {
+      if (appended && hydratedMessage) {
         pinToBottom();
-        scheduleMessageHydration(enriched);
+        scheduleMessageHydration(hydratedMessage);
         if (user?.id && message.senderId !== user.id && id) {
           void markConversationRead(id, user.id);
         }
@@ -1521,15 +1584,6 @@ export function ChatScreen() {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
   }, []);
 
-  const handleConfirmImageSend = useCallback(() => {
-    if (!imageSendConfirm) return;
-    const { uris, ephemeral } = imageSendConfirm;
-    setImageSendConfirm(null);
-    for (const uri of uris) {
-      handleQuickCaptureResult(uri, ephemeral);
-    }
-  }, [handleQuickCaptureResult, imageSendConfirm]);
-
   const handleEphemeralExpired = useCallback((messageId: string) => {
     setMessages((prev) =>
       prev.map((m) =>
@@ -1702,6 +1756,80 @@ export function ChatScreen() {
     [id, updateLocalMessage, user?.id],
   );
 
+  const handleQuickCaptureVideoResult = useCallback(
+    (uri: string, durationSec: number, ephemeral: boolean) => {
+      if (!user?.id || !id) return;
+      if (blockStatus?.cannotCommunicate) {
+        Alert.alert('Mesaj gönderilemedi', blockStatus.bannerMessage ?? 'Bu sohbete mesaj gönderemezsiniz.');
+        return;
+      }
+
+      if (durationSec > CHAT_VIDEO_MAX_DURATION_SEC) {
+        Alert.alert(
+          'Video çok uzun',
+          `Sohbet videoları en fazla ${Math.floor(CHAT_VIDEO_MAX_DURATION_SEC / 60)} dakika olabilir.`,
+        );
+        return;
+      }
+
+      broadcastActivity('picking_video');
+      const asset: ImagePicker.ImagePickerAsset = {
+        uri,
+        width: 0,
+        height: 0,
+        duration: durationSec * 1000,
+        mimeType: 'video/mp4',
+      };
+      const metadata = ephemeral
+        ? buildEphemeralImageMetadata(CHAT_EPHEMERAL_DEFAULT_DURATION_SEC)
+        : null;
+      const localId = createLocalId();
+      const etaSec = estimateInitialVideoEtaSec(undefined, durationSec * 1000);
+
+      pinToBottom();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: localId,
+          conversationId: id,
+          senderId: user.id,
+          content: '',
+          mediaUrl: uri,
+          messageType: 'video',
+          replyToId: null,
+          editedAt: null,
+          deletedForAll: false,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          localStatus: 'sending',
+          localOnly: true,
+          localMediaUri: uri,
+          metadata,
+          uploadStage: 'compressing',
+          uploadProgress: 0,
+          uploadEtaSec: etaSec,
+        },
+      ]);
+      void processVideoSend(localId, asset, '', metadata);
+    },
+    [blockStatus, broadcastActivity, id, pinToBottom, processVideoSend, user?.id],
+  );
+
+  const handleConfirmImageSend = useCallback(() => {
+    if (!imageSendConfirm) return;
+    const { uris, ephemeral, mediaType, durationSec } = imageSendConfirm;
+    setImageSendConfirm(null);
+    if (mediaType === 'video') {
+      const uri = uris[0];
+      if (!uri) return;
+      handleQuickCaptureVideoResult(uri, durationSec ?? 0, ephemeral);
+      return;
+    }
+    for (const uri of uris) {
+      handleQuickCaptureResult(uri, ephemeral);
+    }
+  }, [handleQuickCaptureResult, handleQuickCaptureVideoResult, imageSendConfirm]);
+
   const handlePickVideo = async () => {
     if (!user?.id || !id) return;
     broadcastActivity('picking_video');
@@ -1726,8 +1854,17 @@ export function ChatScreen() {
       return;
     }
 
-    setPendingAttachment({ messageType: 'video', assets: [asset] });
-    pinToBottom();
+    try {
+      const playableUri = await prepareStoryVideoPreviewUri(asset.uri);
+      setImageSendConfirm({
+        mediaType: 'video',
+        uris: [playableUri],
+        durationSec: durationMs > 0 ? durationMs / 1000 : undefined,
+        ephemeral: quickSnapEphemeral,
+      });
+    } catch {
+      Alert.alert('Video hazırlanamadı', 'Lütfen başka bir video seçin veya tekrar deneyin.');
+    }
   };
 
   const handlePickFile = async () => {
@@ -2003,6 +2140,63 @@ export function ChatScreen() {
     }
   };
 
+  const handleSendCap = async (cap: Cap) => {
+    if (!user || !id) return;
+    if (blockStatus?.cannotCommunicate || heyetComposerLocked) return;
+
+    const reply = replyTo;
+    const metadata = toCapMessageMetadata(cap);
+    const mediaUrl = capMediaUrl(cap);
+    const content = '';
+    const localId = createLocalId();
+    const optimistic: ChatMessage = {
+      id: localId,
+      conversationId: id,
+      senderId: user.id,
+      content,
+      mediaUrl,
+      messageType: 'cap',
+      replyToId: reply?.id ?? null,
+      editedAt: null,
+      deletedForAll: false,
+      isRead: false,
+      createdAt: new Date().toISOString(),
+      metadata,
+      localStatus: 'sending',
+      localOnly: true,
+      replyTo: reply
+        ? {
+            id: reply.id,
+            content: reply.content,
+            senderId: reply.senderId,
+            messageType: reply.messageType,
+            sender: reply.sender,
+          }
+        : undefined,
+    };
+
+    setMessages((prev) => [...prev, optimistic]);
+    setReplyTo(null);
+
+    const { message, error } = await sendMessage(id, user.id, content, {
+      messageType: 'cap',
+      mediaUrl,
+      replyToId: reply?.id ?? null,
+      metadata,
+    });
+
+    if (error || !message) {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === localId ? { ...m, localStatus: 'failed' } : m)),
+      );
+      Alert.alert('Caps gönderilemedi', error ?? 'Bilinmeyen hata');
+      return;
+    }
+
+    void recordCapUsage(cap.id);
+    setMessages((prev) => prev.map((m) => (m.id === localId ? { ...message, localStatus: 'sent' } : m)));
+  };
+
   const toggleSelection = (messageId: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -2266,63 +2460,75 @@ export function ChatScreen() {
   }, [displayMessages, scrollRequest]);
 
   const jumpToMessage = useCallback(
-    async (target: ChatMessage) => {
-      if (!id || !user?.id) return;
+    async (target: ChatMessage): Promise<boolean> => {
+      if (!id || !user?.id || !target.id) return false;
 
       const targetId = target.id;
       const currentMessages = messagesRef.current;
 
       if (scrollToMessage(currentMessages, targetId)) {
         pendingJumpMessageIdRef.current = null;
-        return;
+        return true;
       }
 
-      let list = [...currentMessages];
-      let before = list[0]?.createdAt;
-
-      while (!list.some((m) => m.id === targetId)) {
-        const older = await fetchMessages(
-          id,
-          user.id,
-          otherLastReadAtRef.current,
-          PAGE_SIZE,
-          before,
-        );
-        if (older.length === 0) break;
-
-        const existing = new Set(list.map((m) => m.id));
-        list = [...older.filter((m) => !existing.has(m.id)), ...list];
-        before = older[0]?.createdAt;
-        if (older.length < PAGE_SIZE) break;
+      // Sohbet henüz yüklenmedi — mesajlar gelince tekrar dene (yanlış alert gösterme).
+      if (!detailResolved || currentMessages.length === 0) {
+        pendingJumpMessageIdRef.current = targetId;
+        return false;
       }
 
-      if (!list.some((m) => m.id === targetId)) {
-        if (currentMessages.length === 0 && !detailResolved) {
-          pendingJumpMessageIdRef.current = targetId;
-          return;
+      if (jumpInFlightRef.current) {
+        pendingJumpMessageIdRef.current = targetId;
+        return false;
+      }
+      jumpInFlightRef.current = true;
+
+      try {
+        let list = [...currentMessages];
+        let before = list[0]?.createdAt;
+
+        while (!list.some((m) => m.id === targetId)) {
+          const older = await fetchMessages(
+            id,
+            user.id,
+            otherLastReadAtRef.current,
+            PAGE_SIZE,
+            before,
+          );
+          if (older.length === 0) break;
+
+          const existing = new Set(list.map((m) => m.id));
+          list = [...older.filter((m) => !existing.has(m.id)), ...list];
+          before = older[0]?.createdAt;
+          if (older.length < PAGE_SIZE) break;
         }
-        Alert.alert('Mesaj bulunamadı', 'Mesaj silinmiş veya yüklenemiyor olabilir.');
-        pendingJumpMessageIdRef.current = null;
-        return;
-      }
 
-      pendingJumpMessageIdRef.current = null;
-      setMessages(capMessageList(list, [targetId]));
-      markMessagesEntered(list);
-      setHasMore(list.length >= PAGE_SIZE);
-      scrollToMessage(list, targetId);
+        if (!list.some((m) => m.id === targetId)) {
+          // Silinmiş / erişilemeyen mesaj — sohbet açık kalsın, alert gösterme.
+          pendingJumpMessageIdRef.current = null;
+          return false;
+        }
+
+        pendingJumpMessageIdRef.current = null;
+        setMessages(capMessageList(list, [targetId]));
+        markMessagesEntered(list);
+        setHasMore(list.length >= PAGE_SIZE);
+        scrollToMessage(list, targetId);
+        return true;
+      } finally {
+        jumpInFlightRef.current = false;
+      }
     },
     [id, user?.id, detailResolved, scrollToMessage, markMessagesEntered],
   );
 
   const jumpToMessageById = useCallback(
-    async (messageId: string) => {
+    async (messageId: string): Promise<boolean> => {
       const existing = messagesRef.current.find((m) => m.id === messageId);
       if (existing) {
-        await jumpToMessage(existing);
-        return;
+        return jumpToMessage(existing);
       }
-      await jumpToMessage({
+      return jumpToMessage({
         id: messageId,
         conversationId: id ?? '',
         senderId: '',
@@ -2342,20 +2548,34 @@ export function ChatScreen() {
   useEffect(() => {
     const pendingId = pendingJumpMessageIdRef.current;
     if (!pendingId || !id || !user?.id) return;
-    if (!messagesRef.current.some((m) => m.id === pendingId)) return;
-    pendingJumpMessageIdRef.current = null;
+    if (!detailResolved && messagesRef.current.length === 0) return;
     void jumpToMessageById(pendingId);
-  }, [messages, id, user?.id, jumpToMessageById]);
+  }, [messages, detailResolved, id, user?.id, jumpToMessageById]);
 
   useEffect(() => {
     if (!deepLinkMessageId || !id || !user?.id) return;
     if (handledDeepLinkMessageIdRef.current === deepLinkMessageId) return;
+
     if (!detailResolved && messagesRef.current.length === 0) {
       pendingJumpMessageIdRef.current = deepLinkMessageId;
       return;
     }
-    handledDeepLinkMessageIdRef.current = deepLinkMessageId;
-    void jumpToMessageById(deepLinkMessageId);
+
+    let cancelled = false;
+    void (async () => {
+      const ok = await jumpToMessageById(deepLinkMessageId);
+      if (cancelled) return;
+      if (ok || (detailResolved && messagesRef.current.length > 0)) {
+        handledDeepLinkMessageIdRef.current = deepLinkMessageId;
+        pendingJumpMessageIdRef.current = null;
+        return;
+      }
+      pendingJumpMessageIdRef.current = deepLinkMessageId;
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [deepLinkMessageId, detailResolved, id, jumpToMessageById, messages.length, user?.id]);
 
   const renderMessage = useCallback(
@@ -2459,7 +2679,9 @@ export function ChatScreen() {
     const androidPerf = getAndroidFlatListPerfProps();
     const initialCount = getChatInitialRenderCount();
     return {
-      ...(Platform.OS === 'android' ? androidPerf : {}),
+      ...(Platform.OS === 'android'
+        ? { ...androidPerf, removeClippedSubviews: false }
+        : {}),
       windowSize: Platform.OS === 'android' ? (androidPerf.windowSize ?? 4) : 15,
       initialNumToRender: Math.min(displayMessages.length || initialCount, initialCount),
       maxToRenderPerBatch:
@@ -2625,6 +2847,7 @@ export function ChatScreen() {
                   onSend={handleSend}
                   onTyping={() => broadcastActivity('typing')}
                   onAttach={showAttachmentMenu}
+                  onCaps={() => setCapsPickerOpen(true)}
                   onQuickCapture={handleQuickCapture}
                   onQuickCaptureModeToggle={handleQuickCaptureModeToggle}
                   quickCaptureEphemeral={quickSnapEphemeral}
@@ -2717,6 +2940,14 @@ export function ChatScreen() {
         </Pressable>
       </Modal>
 
+      <CapsPickerSheet
+        visible={capsPickerOpen}
+        onClose={() => setCapsPickerOpen(false)}
+        onSelect={(cap) => {
+          void handleSendCap(cap);
+        }}
+      />
+
       {reportMessageId ? (
         <ReportSheet
           visible={!!reportMessageId}
@@ -2743,15 +2974,22 @@ export function ChatScreen() {
         ephemeral={quickSnapEphemeral}
         onEphemeralChange={setQuickSnapEphemeral}
         onClose={() => setQuickCaptureVisible(false)}
-        onPreview={({ uri, ephemeral }) => {
+        onPreview={({ uri, mediaType, durationSec, ephemeral }) => {
           setQuickSnapEphemeral(ephemeral);
-          setImageSendConfirm({ uris: [uri], ephemeral });
+          setImageSendConfirm({
+            mediaType,
+            uris: [uri],
+            durationSec,
+            ephemeral,
+          });
         }}
       />
 
       <ChatImageSendConfirm
         visible={Boolean(imageSendConfirm)}
+        mediaType={imageSendConfirm?.mediaType ?? 'image'}
         uris={imageSendConfirm?.uris ?? []}
+        durationSec={imageSendConfirm?.durationSec}
         ephemeral={imageSendConfirm?.ephemeral ?? true}
         onEphemeralChange={(ephemeral) =>
           setImageSendConfirm((prev) => (prev ? { ...prev, ephemeral } : null))

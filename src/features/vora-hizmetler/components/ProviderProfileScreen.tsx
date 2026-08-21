@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
@@ -58,16 +59,7 @@ export function ProviderProfileScreen() {
   const showManage = useFeatureVisible(VORA_HIZMETLER_FEATURE.providerManage);
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.loadingWrap}>
-          <ActivityIndicator color={VORA_HIZMETLER_ACCENT} size="large" />
-          <Text secondary variant="caption">
-            Usta profili yükleniyor…
-          </Text>
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (!provider) {

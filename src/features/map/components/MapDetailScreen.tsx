@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
+import { Alert, Image, Pressable, ScrollView, Share, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FeedMediaPreview } from '@/components/media/FeedMediaPreview';
@@ -7,6 +7,7 @@ import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer'
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -318,13 +319,7 @@ export function MapDetailScreen({ type }: MapDetailScreenProps) {
   const maybeCount = attendees.filter((a) => a.status === 'maybe').length;
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !record) {

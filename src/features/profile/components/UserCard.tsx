@@ -13,13 +13,14 @@ import { Text } from '@/components/ui/Text';
 import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import { BADGE_CONFIG as ROLE_BADGE } from '@/features/feed/constants';
 import { BADGE_CONFIG, getTrustScoreColor, REPORTER_LEVELS } from '@/features/profile/constants';
-import { navigateToAuthorProfile } from '@/features/feed/services/feedNavigation';
+import { navigateToAuthorProfile, prefetchAuthorProfile } from '@/features/feed/services/feedNavigation';
 import { isBadgeHidden, roleBadgeKey } from '@/features/profile/services/badgeVisibility';
 import type { FeedAuthor } from '@/features/feed/types';
 import type { BadgeType } from '@/features/profile/types';
 import { FollowButton } from '@/features/feed/components/FollowButton';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/providers/AuthProvider';
 
 export type UserCardStats = {
   trustScore: number;
@@ -49,6 +50,7 @@ export function UserCard({
   const { height: screenHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
+  const { user } = useAuth();
   const maxCardHeight = screenHeight - insets.top - insets.bottom - spacing.lg * 2;
   const hidden = author.hiddenBadges;
   const roleBadge = ROLE_BADGE[author.role];
@@ -69,6 +71,7 @@ export function UserCard({
       setIzdivacBadges([]);
       return;
     }
+    prefetchAuthorProfile(author, user?.id ?? null);
     let active = true;
     void fetchIzdivacAppBadges(author.id).then((badges) => {
       if (active) setIzdivacBadges(badges);
@@ -76,11 +79,11 @@ export function UserCard({
     return () => {
       active = false;
     };
-  }, [visible, author.id]);
+  }, [visible, author.id, author.businessId, user?.id]);
 
   const openProfile = () => {
     onClose();
-    navigateToAuthorProfile(author);
+    navigateToAuthorProfile(author, user?.id ?? null);
   };
 
   const statItems = [

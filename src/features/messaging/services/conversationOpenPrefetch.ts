@@ -5,13 +5,15 @@ import {
   findCachedConversationListItem,
 } from '../utils';
 import { capMessageList } from '../utils/messageWindow';
-import { readMemoryPersistedMessages } from './messageDiskCache';
+import { readMemoryPersistedMessages, readPersistedMessages } from './messageDiskCache';
 import { useMessagingStore } from '../store/messagingStore';
 import { getCachedConversationList } from './conversationListCache';
 import { fetchConversationDetail } from './conversationData';
 import { fetchMessages } from './messageData';
+import { getChatOpenPageSize } from '@/lib/device/androidPerfProfile';
 
 const inflight = new Map<string, Promise<void>>();
+const diskPrimeInflight = new Map<string, Promise<ChatMessage[]>>();
 
 export type ConversationOpenSnapshot = {
   messages: ChatMessage[];
@@ -20,6 +22,18 @@ export type ConversationOpenSnapshot = {
   otherLastReadAt: string | null;
 };
 
+const EMPTY_SNAPSHOT: ConversationOpenSnapshot = {
+  messages: [],
+  conversation: null,
+  hasMore: true,
+  otherLastReadAt: null,
+};
+
+export function emptyConversationOpenSnapshot(): ConversationOpenSnapshot {
+  return EMPTY_SNAPSHOT;
+}
+
+/** Bellek + liste cache — senkron; ilk boyada boş ekranı önler. */
 export function readConversationOpenSnapshot(
   conversationId: string,
   userId: string | undefined,
@@ -55,6 +69,48 @@ export function readConversationOpenSnapshot(
   };
 }
 
+/**
+ * AsyncStorage → bellek cache. pressIn / load sırasında ağdan önce çağrılır;
+ * ChatScreen mount olduğunda snapshot dolu olur.
+ */
+export function primeConversationMessagesFromDisk(
+  conversationId: string,
+  userId: string,
+): Promise<ChatMessage[]> {
+  const store = useMessagingStore.getState();
+  const memory = store.getCachedMessages(conversationId);
+  if (memory.length > 0) return Promise.resolve(memory);
+
+  const fromRam = readMemoryPersistedMessages(userId, conversationId);
+  if (fromRam?.length) {
+    const capped = capMessageList(fromRam);
+    store.setCachedMessages(conversationId, capped);
+    return Promise.resolve(capped);
+  }
+
+  const existing = diskPrimeInflight.get(conversationId);
+  if (existing) return existing;
+
+  const task = (async () => {
+    try {
+      const disk = await readPersistedMessages(userId, conversationId);
+      if (!disk?.length) return [];
+      const capped = capMessageList(disk);
+      if (store.getCachedMessages(conversationId).length === 0) {
+        store.setCachedMessages(conversationId, capped);
+      }
+      return capped;
+    } catch {
+      return [];
+    } finally {
+      diskPrimeInflight.delete(conversationId);
+    }
+  })();
+
+  diskPrimeInflight.set(conversationId, task);
+  return task;
+}
+
 export function prefetchConversationForOpen(conversationId: string, userId: string): Promise<void> {
   const existing = inflight.get(conversationId);
   if (existing) return existing;
@@ -67,19 +123,27 @@ export function prefetchConversationForOpen(conversationId: string, userId: stri
     return Promise.resolve();
   }
 
+  const pageSize = getChatOpenPageSize();
+
   const task = (async () => {
     try {
-      const needDetail = !cachedDetail;
-      const needMessages = cachedMessages.length === 0;
+      // Disk önce — ağ beklenmeden UI mesaj gösterebilir.
+      if (cachedMessages.length === 0) {
+        await primeConversationMessagesFromDisk(conversationId, userId);
+      }
+
+      const afterDisk = store.getCachedMessages(conversationId);
+      const needDetail = !store.getCachedConversationDetail(conversationId);
+      const needMessages = afterDisk.length === 0;
 
       if (!needDetail && !needMessages) return;
 
-      let detail = cachedDetail;
+      let detail = store.getCachedConversationDetail(conversationId);
 
       if (needDetail && needMessages) {
         const [fetchedDetail, messages] = await Promise.all([
           fetchConversationDetail(conversationId, userId),
-          fetchMessages(conversationId, userId, null, CHAT_MESSAGE_PAGE_SIZE),
+          fetchMessages(conversationId, userId, null, pageSize),
         ]);
         detail = fetchedDetail;
         if (detail) {
@@ -97,16 +161,39 @@ export function prefetchConversationForOpen(conversationId: string, userId: stri
         store.setCachedConversationDetail(conversationId, detail);
       }
 
-      if (needMessages && detail) {
+      if (needMessages) {
+        const resolvedDetail = detail ?? store.getCachedConversationDetail(conversationId);
         const messages = await fetchMessages(
           conversationId,
           userId,
-          detail.otherLastReadAt,
-          CHAT_MESSAGE_PAGE_SIZE,
+          resolvedDetail?.otherLastReadAt ?? null,
+          pageSize,
         );
         if (messages.length > 0) {
           store.setCachedMessages(conversationId, capMessageList(messages));
         }
+      } else if (afterDisk.length > 0) {
+        // Disk var — taze mesajları arka planda çek (UI bloklamadan).
+        void (async () => {
+          try {
+            const resolvedDetail =
+              store.getCachedConversationDetail(conversationId) ??
+              (await fetchConversationDetail(conversationId, userId));
+            if (!resolvedDetail) return;
+            store.setCachedConversationDetail(conversationId, resolvedDetail);
+            const messages = await fetchMessages(
+              conversationId,
+              userId,
+              resolvedDetail.otherLastReadAt,
+              pageSize,
+            );
+            if (messages.length > 0) {
+              store.setCachedMessages(conversationId, capMessageList(messages));
+            }
+          } catch {
+            // ChatScreen sync yedek
+          }
+        })();
       }
     } catch {
       // ChatScreen load() yedek yol

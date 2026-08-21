@@ -1,13 +1,30 @@
 import type { FeedAuthor, FeedSourceType } from '@/features/feed/types';
 import { prefetchMapDetail } from '@/features/map/services/mapDetailCache';
 import type { MapDetailType } from '@/features/map/types';
-import { navigateToPublicProfile } from '@/features/profile/services/profileNavigation';
+import { navigateToPublicProfile, prefetchPublicProfile } from '@/features/profile/services/profileNavigation';
 import { type Href, router } from 'expo-router';
+import { pushRoute } from '@/lib/navigation/pushRoute';
+import { prefetchPostDetailRoute } from '@/lib/navigation/lazyRouteScreens';
 
 /** Yazar profiline gider — işletme hesaplarında kurumsal detaya yönlendirir. */
-export function navigateToAuthorProfile(author: Pick<FeedAuthor, 'id' | 'username' | 'businessId'>) {
+export function navigateToAuthorProfile(
+  author: Pick<FeedAuthor, 'id' | 'username' | 'businessId'>,
+  viewerId?: string | null,
+) {
   if (author.id.startsWith('demo-')) return;
-  navigateToPublicProfile({ userId: author.id, businessId: author.businessId });
+  navigateToPublicProfile({
+    userId: author.id,
+    businessId: author.businessId,
+    viewerId: viewerId ?? null,
+  });
+}
+
+export function prefetchAuthorProfile(
+  author: Pick<FeedAuthor, 'id' | 'businessId'>,
+  viewerId?: string | null,
+) {
+  if (author.id.startsWith('demo-') || author.businessId) return;
+  prefetchPublicProfile({ userId: author.id, viewerId: viewerId ?? null });
 }
 
 const DETAIL_PATHS: Partial<Record<FeedSourceType, (id: string) => string>> = {
@@ -28,7 +45,32 @@ const FEED_SOURCE_TO_MAP_DETAIL: Partial<Record<FeedSourceType, MapDetailType>> 
   lost_found: 'lost_found',
 };
 
+function buildFeedDetailHref(
+  sourceType: FeedSourceType,
+  sourceId: string,
+  isDemo = false,
+  options?: { focusVideo?: boolean; mediaIndex?: number },
+): Href | null {
+  const build = DETAIL_PATHS[sourceType];
+  if (!build) return null;
+  const params = new URLSearchParams();
+  if (isDemo) params.set('demo', '1');
+  if (options?.focusVideo) params.set('focusVideo', '1');
+  if (options?.mediaIndex != null && options.mediaIndex > 0) {
+    params.set('mediaIndex', String(options.mediaIndex));
+  }
+  const qs = params.toString();
+  return `${build(sourceId)}${qs ? `?${qs}` : ''}` as Href;
+}
+
 export function prefetchFeedDetail(sourceType: FeedSourceType, sourceId: string): void {
+  const href = buildFeedDetailHref(sourceType, sourceId);
+  if (href) router.prefetch(href);
+
+  if (sourceType === 'post') {
+    prefetchPostDetailRoute();
+  }
+
   const mapType = FEED_SOURCE_TO_MAP_DETAIL[sourceType];
   if (mapType) prefetchMapDetail(mapType, sourceId);
 }
@@ -39,15 +81,7 @@ export function navigateToFeedDetail(
   isDemo = false,
   options?: { focusVideo?: boolean; mediaIndex?: number },
 ) {
-  const build = DETAIL_PATHS[sourceType];
-  if (!build) return;
-  const params = new URLSearchParams();
-  if (isDemo) params.set('demo', '1');
-  if (options?.focusVideo) params.set('focusVideo', '1');
-  if (options?.mediaIndex != null && options.mediaIndex > 0) {
-    params.set('mediaIndex', String(options.mediaIndex));
-  }
-  const qs = params.toString();
-  const href = `${build(sourceId)}${qs ? `?${qs}` : ''}` as Href;
-  router.push(href);
+  const href = buildFeedDetailHref(sourceType, sourceId, isDemo, options);
+  if (!href) return;
+  pushRoute(href);
 }

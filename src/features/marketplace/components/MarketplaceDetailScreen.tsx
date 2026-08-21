@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { MarketplaceGridCard } from '@/features/marketplace/components/MarketplaceGridCard';
@@ -513,15 +514,15 @@ export function MarketplaceDetailScreen() {
     ]);
   };
 
-  if (loading || !listing) {
+  if (loading) {
+    return <DetailLoadingShell gradient />;
+  }
+
+  if (!listing) {
     return (
       <GradientBackground>
         <View style={styles.center}>
-          {loading ? (
-            <ActivityIndicator color={MARKETPLACE_ACCENT} />
-          ) : (
-            <Text secondary>İlan bulunamadı.</Text>
-          )}
+          <Text secondary>İlan bulunamadı.</Text>
         </View>
       </GradientBackground>
     );

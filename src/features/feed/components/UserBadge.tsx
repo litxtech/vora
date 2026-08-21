@@ -14,11 +14,12 @@ import {
   authorPublicName,
 } from '@/features/profile/services/businessIdentity';
 import { isBadgeHidden, roleBadgeKey } from '@/features/profile/services/badgeVisibility';
-import { navigateToAuthorProfile } from '@/features/feed/services/feedNavigation';
+import { navigateToAuthorProfile, prefetchAuthorProfile } from '@/features/feed/services/feedNavigation';
 import type { FeedAuthor } from '@/features/feed/types';
 import { useUserCardOptional } from '@/providers/UserCardProvider';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
+import { useAuth } from '@/providers/AuthProvider';
 
 type UserBadgeProps = {
   author: FeedAuthor;
@@ -48,6 +49,7 @@ export function UserBadge({
   onBeforeNavigate,
 }: UserBadgeProps) {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const userCard = useUserCardOptional();
   const hidden = author.hiddenBadges;
   const roleBadge = BADGE_CONFIG[author.role];
@@ -66,6 +68,11 @@ export function UserBadge({
     (badge) => !isBadgeHidden(hidden, badge),
   );
 
+  const warmProfile = () => {
+    if (!tappable || author.id.startsWith('demo-')) return;
+    prefetchAuthorProfile(author, user?.id ?? null);
+  };
+
   const openProfile = () => {
     if (!tappable || author.id.startsWith('demo-')) return;
     onBeforeNavigate?.();
@@ -73,7 +80,7 @@ export function UserBadge({
       userCard.openUserCard(author, isFollowing);
       return;
     }
-    navigateToAuthorProfile(author);
+    navigateToAuthorProfile(author, user?.id ?? null);
   };
 
   const avatar = <FeedAuthorAvatar author={author} size={AVATAR_SIZE} />;
@@ -139,7 +146,7 @@ export function UserBadge({
   if (!tappable || author.id.startsWith('demo-')) return content;
 
   return (
-    <Pressable onPress={openProfile} style={styles.pressable}>
+    <Pressable onPress={openProfile} onPressIn={warmProfile} style={styles.pressable}>
       {content}
     </Pressable>
   );

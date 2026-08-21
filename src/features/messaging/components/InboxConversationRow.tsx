@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
 import { useAuth } from '@/providers/AuthProvider';
-import { openChat } from '../services/messagingNavigation';
-import { prefetchConversationForOpen } from '../services/conversationOpenPrefetch';
+import { openChat, prefetchChatNavigation } from '../services/messagingNavigation';
+import { prefetchConversationForOpen, primeConversationMessagesFromDisk } from '../services/conversationOpenPrefetch';
 import { showConversationActions } from '../utils/conversationActions';
 import { useMessagingStore } from '../store/messagingStore';
 import type { ConversationListItem } from '../types';
@@ -25,7 +25,9 @@ export const InboxConversationRow = memo(function InboxConversationRow({
   const unread = useMessagingStore((s) => s.getDisplayUnread(item.id, item.unreadCount));
 
   const handlePressIn = useCallback(() => {
+    prefetchChatNavigation();
     if (user?.id) {
+      void primeConversationMessagesFromDisk(item.id, user.id);
       void prefetchConversationForOpen(item.id, user.id);
     }
   }, [item.id, user?.id]);

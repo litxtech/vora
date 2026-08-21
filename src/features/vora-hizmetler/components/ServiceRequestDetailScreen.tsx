@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
@@ -251,11 +252,7 @@ export function ServiceRequestDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <ActivityIndicator color={VORA_HIZMETLER_ACCENT} style={styles.loader} />
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (!listing) {

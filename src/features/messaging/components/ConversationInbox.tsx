@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, TextInput, View } from 'react-native';
-import { router, useFocusEffect, useIsFocused } from 'expo-router';
+import { router, useFocusEffect } from 'expo-router';
 import { useMainTabPrefetchActive } from '@/features/navigation/hooks/useMainTabScreenActive';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
@@ -22,7 +22,6 @@ import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisi
 import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
 
 export function ConversationInbox() {
-  const isFocused = useIsFocused();
   const isScreenActive = useMainTabPrefetchActive('messages');
   const { colors } = useTheme();
   const showNewChat = useFeatureVisible(MESSAGING_FEATURE.newChat);
@@ -38,35 +37,68 @@ export function ConversationInbox() {
   const [query, setQuery] = useState('');
   const [restrictedIds, setRestrictedIds] = useState<Set<string>>(new Set());
   const [archivedCount, setArchivedCount] = useState(0);
+  const skipNextFocusRefreshRef = useRef(true);
 
   const pullRefresh = useCallback(() => {
     void refresh();
   }, [refresh]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id || !isScreenActive) return;
     let cancelled = false;
-    void fetchRestrictedUserIds(user.id).then((ids) => {
-      if (!cancelled) setRestrictedIds(ids);
-    });
+
+    const run = () => {
+      void fetchRestrictedUserIds(user.id).then((ids) => {
+        if (!cancelled) setRestrictedIds(ids);
+      });
+    };
+
+    if (shouldDeferHeavyFocusWork()) {
+      const task = deferBackgroundWork(run);
+      return () => {
+        cancelled = true;
+        task.cancel();
+      };
+    }
+
+    run();
     return () => {
       cancelled = true;
     };
-  }, [user?.id, conversations.length]);
+  }, [user?.id, isScreenActive]);
 
   useEffect(() => {
-    if (showArchived) return;
+    if (showArchived || !isScreenActive) return;
     let cancelled = false;
-    void fetchConversationList(true).then((list) => {
-      if (!cancelled) setArchivedCount(list.length);
-    });
+
+    const run = () => {
+      void fetchConversationList(true).then((list) => {
+        if (!cancelled) setArchivedCount(list.length);
+      });
+    };
+
+    if (shouldDeferHeavyFocusWork()) {
+      const task = deferBackgroundWork(run);
+      return () => {
+        cancelled = true;
+        task.cancel();
+      };
+    }
+
+    run();
     return () => {
       cancelled = true;
     };
-  }, [showArchived, conversations.length]);
+  }, [showArchived, isScreenActive]);
 
   useFocusEffect(
     useCallback(() => {
+      // İlk focus: useConversationList zaten yüklüyor — çift RPC Android'de açılışı geciktirir.
+      if (skipNextFocusRefreshRef.current) {
+        skipNextFocusRefreshRef.current = false;
+        return undefined;
+      }
+
       const run = () => {
         void refreshSilent();
       };

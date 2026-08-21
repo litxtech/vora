@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -13,6 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Input } from '@/components/ui/Input';
@@ -449,28 +449,21 @@ export function TripDetailScreen() {
     Alert.alert('Sohbet', 'Trip sohbeti henüz oluşturulamadı. Onaylı rezervasyon sonrası tekrar deneyin.');
   };
 
-  if (loading || !trip) {
+  if (loading) {
+    return <DetailLoadingShell gradient />;
+  }
+
+  if (!trip) {
     return (
       <GradientBackground>
         <View style={[styles.center, { paddingTop: insets.top + spacing.md, paddingHorizontal: spacing.lg, alignItems: 'stretch' }]}>
           <ScreenBackButton style={{ marginBottom: spacing.md }} />
-          {loading ? (
-            <>
-              <ActivityIndicator color={RIDES_ACCENT} />
-              <Text secondary style={{ marginTop: spacing.sm }}>
-                Yükleniyor…
-              </Text>
-            </>
-          ) : (
-            <>
-              <Text secondary>Yolculuk bulunamadı</Text>
-              <Pressable onPress={() => load()} style={styles.retry}>
-                <Text variant="label" style={{ color: RIDES_ACCENT }}>
-                  Tekrar dene
-                </Text>
-              </Pressable>
-            </>
-          )}
+          <Text secondary>Yolculuk bulunamadı</Text>
+          <Pressable onPress={() => load()} style={styles.retry}>
+            <Text variant="label" style={{ color: RIDES_ACCENT }}>
+              Tekrar dene
+            </Text>
+          </Pressable>
         </View>
       </GradientBackground>
     );

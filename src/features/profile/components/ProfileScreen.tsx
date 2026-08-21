@@ -6,6 +6,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GradientBackground } from '@/components/ui/GradientBackground';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { Text } from '@/components/ui/Text';
 import { ProfileActionChip } from '@/features/profile/components/shared/ProfileActionChip';
 import { ProfileEmptyState } from '@/features/profile/components/shared/ProfileEmptyState';
@@ -21,9 +22,10 @@ import { openReelsViewer } from '@/features/reels/services/reelsNavigation';
 import { BoostCampaignDisplay } from '@/features/profile/components/BoostCampaignDisplay';
 import { ProfileHeader } from '@/features/profile/components/ProfileHeader';
 import { ProfileReelGrid } from '@/features/profile/components/ProfileReelGrid';
-import { SoundProfileStats } from '@/features/sounds/components/SoundProfileStats';
 import { ProfileHeaderDetails } from '@/features/profile/components/ProfileHeaderDetails';
 import { ProfileOwnActionsBar } from '@/features/profile/components/ProfileOwnActionsBar';
+import { TrustStatsCard } from '@/features/profile/components/TrustStatsCard';
+import { SoundProfileStats } from '@/features/sounds/components/SoundProfileStats';
 import { ProfileVerifyAccountNudge } from '@/features/profile/components/ProfileVerifyAccountNudge';
 import { hasPremiumEntitlement } from '@/features/profile/services/premiumAccess';
 import { ProfileShopSection } from '@/features/profile/components/ProfileShopSection';
@@ -173,6 +175,7 @@ export function ProfileScreen({
   );
   const [reelViewerIndex, setReelViewerIndex] = useState<number | null>(null);
   const [adminSheetOpen, setAdminSheetOpen] = useState(false);
+  const [soundStatsOpen, setSoundStatsOpen] = useState(false);
   const [messaging, setMessaging] = useState(false);
   const [loading, setLoading] = useState(
     () => !(warmEntry?.bundle?.profile && warmEntry?.bundle?.stats),
@@ -463,13 +466,7 @@ export function ProfileScreen({
   );
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.centered}>
-          <ProfileEmptyState loading />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient showBack={!isOwnProfile} />;
   }
 
   if (!profile || !stats) {
@@ -594,11 +591,13 @@ export function ProfileScreen({
           <ProfileOwnActionsBar
             isPremium={profile.isPremium}
             onInsightsPress={handleViewersPress}
+            onSoundStatsPress={() => setSoundStatsOpen((open) => !open)}
+            soundStatsActive={soundStatsOpen}
           />
         </View>
       ) : null}
 
-      {isOwnProfile && !isDeletedProfile ? (
+      {isOwnProfile && !isDeletedProfile && soundStatsOpen ? (
         <SoundProfileStats userId={profile.id} />
       ) : null}
 

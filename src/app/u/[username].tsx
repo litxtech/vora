@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { Screen } from '@/components/ui/Screen';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
-import { ProfileEmptyState } from '@/features/profile/components/shared/ProfileEmptyState';
 import { ProfileScreen } from '@/features/profile/components/ProfileScreen';
 import { getCachedUserIdByUsername } from '@/features/profile/services/profileSessionCache';
 import { resolveUsernameToUserId } from '@/features/profile/services/profileSessionLoad';
@@ -63,13 +63,7 @@ export default function UsernameProfileRoute() {
   }
 
   if (!userId) {
-    return (
-      <Screen>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <ProfileEmptyState loading />
-        </View>
-      </Screen>
-    );
+    return <DetailLoadingShell gradient showBack />;
   }
 
   return (

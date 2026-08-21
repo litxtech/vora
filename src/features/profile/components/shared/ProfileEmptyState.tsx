@@ -1,4 +1,4 @@
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Text } from '@/components/ui/Text';
@@ -20,15 +20,9 @@ export function ProfileEmptyState({
 }: ProfileEmptyStateProps) {
   const { colors } = useTheme();
 
+  // Spinner yok — sayfa anında açılmış gibi; içerik gelince dolar.
   if (loading) {
-    return (
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.primary} size="large" />
-        <Text secondary variant="caption">
-          Yükleniyor...
-        </Text>
-      </View>
-    );
+    return <View style={styles.loadingShell} />;
   }
 
   return (
@@ -45,7 +39,7 @@ export function ProfileEmptyState({
 }
 
 const styles = StyleSheet.create({
-  centered: { paddingVertical: spacing.xl, alignItems: 'center', gap: spacing.md },
+  loadingShell: { flex: 1, minHeight: 120 },
   card: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
   iconWrap: {
     width: 56,

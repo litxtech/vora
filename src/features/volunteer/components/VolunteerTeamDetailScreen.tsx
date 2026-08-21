@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
-import { HELP_CENTER_ACCENT } from '@/features/help/constants';
 import { HELP_FEATURE } from '@/features/help/featureFlags';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { VOLUNTEER_CATEGORIES } from '@/features/volunteer/constants';
@@ -85,13 +85,7 @@ export function VolunteerTeamDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
-          <ActivityIndicator color={HELP_CENTER_ACCENT} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (!team) {

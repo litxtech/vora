@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Input } from '@/components/ui/Input';
 import { Text } from '@/components/ui/Text';
@@ -182,13 +183,7 @@ export function VoraNeedDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.centered}>
-          <Text secondary>Yükleniyor...</Text>
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (!listing) {

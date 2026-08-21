@@ -1,6 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import {
-  ActivityIndicator,
   Alert,
   Image,
   Pressable,
@@ -26,6 +25,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
@@ -292,13 +292,7 @@ export function BusinessDetailScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={BUSINESS_ACCENT} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !business) {

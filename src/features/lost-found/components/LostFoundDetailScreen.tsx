@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { FeedMediaPreview } from '@/components/media/FeedMediaPreview';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
 import { GlassCard } from '@/components/ui/GlassCard';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -288,13 +289,7 @@ export function LostFoundDetailScreen() {
   const locationValue = record?.fields.find((f) => f.label === 'Konum' && f.value !== '—')?.value;
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={styles.center}>
-          <ActivityIndicator color={LOST_CENTER_DEF.accent} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !record) {

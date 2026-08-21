@@ -42,7 +42,8 @@ import { fetchFeaturedProfiles, type FeaturedProfileCard } from '@/features/prof
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
 import { radius, spacing } from '@/constants/theme';
-import { getAndroidFlatListPerfProps, getDiscoveryEstimatedItemSize, getMarketplaceGridColumns, isAndroid } from '@/lib/device/androidPerfProfile';
+import { getAndroidFlatListPerfProps, getDiscoveryEstimatedItemSize, getMarketplaceGridColumns, isAndroid, shouldDeferHeavyFocusWork } from '@/lib/device/androidPerfProfile';
+import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { useFeatureTabFilter } from '@/features/feature-flags/hooks/useFeatureTabFilter';
@@ -133,7 +134,7 @@ const DiscoveryRowItem = memo(function DiscoveryRowItem({
               Trend
             </Text>
           </View>
-          <FeedPostCard item={item.payload} isScreenFocused={isFocused} onUpdate={onNoopUpdate} />
+          <FeedPostCard item={item.payload} isScreenFocused={isFocused} isRouteFocused={isFocused} onUpdate={onNoopUpdate} />
         </View>
       );
     case 'reel':
@@ -221,7 +222,26 @@ export function DiscoveryScreen() {
       setFeaturedProfiles([]);
       return;
     }
-    void fetchFeaturedProfiles(regionId, { excludeUserId: user?.id, limit: 8 }).then(setFeaturedProfiles);
+
+    let cancelled = false;
+    const run = () => {
+      void fetchFeaturedProfiles(regionId, { excludeUserId: user?.id, limit: 8 }).then((rows) => {
+        if (!cancelled) setFeaturedProfiles(rows);
+      });
+    };
+
+    if (shouldDeferHeavyFocusWork()) {
+      const task = deferBackgroundWork(run);
+      return () => {
+        cancelled = true;
+        task.cancel();
+      };
+    }
+
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [regionId, user?.id, refreshing, showFeaturedCarousel]);
 
   const noopUpdate = useCallback(() => {}, []);
@@ -315,9 +335,7 @@ export function DiscoveryScreen() {
     ListHeaderComponent: listHeader,
     ListEmptyComponent:
       loading && !result ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
+        <View style={styles.center} />
       ) : error && !result ? (
         <GlassCard style={styles.empty}>
           <Text secondary>{error}</Text>

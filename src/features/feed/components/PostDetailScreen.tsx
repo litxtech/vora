@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -11,9 +11,11 @@ import { CommentSheet } from '@/features/feed/components/CommentSheet';
 import { FeedPostCard } from '@/features/feed/components/FeedPostCard';
 import { PostShareSheet } from '@/features/feed/components/PostShareSheet';
 import { fetchFeedPostById } from '@/features/feed/services/feedData';
+import { readCachedFeedItemBySource } from '@/features/feed/services/feedCache';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { FEED_FEATURE } from '@/features/feed/featureFlags';
 import type { FeedItem } from '@/features/feed/types';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -28,8 +30,9 @@ export function PostDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const [item, setItem] = useState<FeedItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const cachedItem = id && demo !== '1' ? readCachedFeedItemBySource('post', id) : null;
+  const [item, setItem] = useState<FeedItem | null>(cachedItem);
+  const [loading, setLoading] = useState(!cachedItem);
   const [error, setError] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [showShare, setShowShare] = useState(false);
@@ -43,7 +46,13 @@ export function PostDetailScreen() {
       return;
     }
 
-    setLoading(true);
+    const cachedPost = readCachedFeedItemBySource('post', id);
+    if (cachedPost) {
+      setItem(cachedPost);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     const post = await fetchFeedPostById(id, user?.id ?? null);
     if (!post) {
@@ -75,13 +84,7 @@ export function PostDetailScreen() {
   const parsedMediaIndex = mediaIndex ? Math.max(0, Number.parseInt(mediaIndex, 10) || 0) : 0;
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (error || !item) {
@@ -138,6 +141,7 @@ export function PostDetailScreen() {
             item={item}
             mode="detail"
             isScreenFocused
+            isRouteFocused
             isRowVisible
             focusVideo={focusVideo === '1'}
             initialMediaIndex={parsedMediaIndex}
@@ -206,11 +210,6 @@ function StatChip({ icon, label }: { icon: keyof typeof Ionicons.glyphMap; label
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   page: {
     paddingHorizontal: spacing.lg,
     gap: spacing.md,

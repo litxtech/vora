@@ -19,6 +19,26 @@ import {
   resolveSilentRefreshDebounceMs,
   shouldUseSilentListRefresh,
 } from '@/lib/ui/listRefresh';
+import {
+  getInboxDiskHydrateLimit,
+  shouldDeferHeavyFocusWork,
+} from '@/lib/device/androidPerfProfile';
+import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
+
+function scheduleInboxDiskHydrate(userId: string, conversationIds: string[]) {
+  const targets = conversationIds.slice(0, getInboxDiskHydrateLimit());
+  if (targets.length === 0) return;
+
+  const run = () => {
+    void hydrateMessageDiskCache(userId, targets);
+  };
+
+  if (shouldDeferHeavyFocusWork()) {
+    deferBackgroundWork(run);
+    return;
+  }
+  run();
+}
 
 export function useConversationList(enabled = true, archivedOnly = false) {
   const { user } = useAuth();
@@ -61,7 +81,10 @@ export function useConversationList(enabled = true, archivedOnly = false) {
         setConversations(list);
         if (!archivedOnly) {
           setUnreadFromConversations(list);
-          void hydrateMessageDiskCache(userId, list.map((item) => item.id));
+          scheduleInboxDiskHydrate(
+            userId,
+            list.map((item) => item.id),
+          );
         }
       } catch (err) {
         setError(String(err));
@@ -109,8 +132,8 @@ export function useConversationList(enabled = true, archivedOnly = false) {
   scheduleSilentRefreshRef.current = scheduleSilentRefresh;
 
   useEffect(() => {
-    if (!userId) {
-      setConversations([]);
+    if (!enabled || !userId) {
+      if (!userId) setConversations([]);
       return;
     }
 
@@ -118,14 +141,17 @@ export function useConversationList(enabled = true, archivedOnly = false) {
     if (cached?.length) {
       setConversations(cached);
       if (!archivedOnly) {
-        void hydrateMessageDiskCache(userId, cached.map((item) => item.id));
+        scheduleInboxDiskHydrate(
+          userId,
+          cached.map((item) => item.id),
+        );
       }
       void refreshRef.current(true);
       return;
     }
 
     void refreshRef.current(true);
-  }, [userId, archivedOnly]);
+  }, [userId, archivedOnly, enabled]);
 
   const prevActiveConversationRef = useRef<string | null>(null);
   useEffect(() => {
