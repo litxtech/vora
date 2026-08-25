@@ -303,6 +303,7 @@ const config: ExpoConfig = {
     ],
     './plugins/withStripApplePayEntitlement',
     './plugins/withIosProductionSigning',
+    './plugins/withIosAgoraCocoaPods',
   ],
   experiments: {
     typedRoutes: true,

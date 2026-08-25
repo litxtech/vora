@@ -10,3 +10,19 @@ index e097841..c8f47ff 100644
    api 'io.agora.rtc:iris-rtc:4.5.3-build.1'
    /// dependencies end
  }
+diff --git a/node_modules/react-native-agora/react-native-agora.podspec b/node_modules/react-native-agora/react-native-agora.podspec
+index cf8dc1a..8cbb8f4 100644
+--- a/node_modules/react-native-agora/react-native-agora.podspec
++++ b/node_modules/react-native-agora/react-native-agora.podspec
+@@ -40,11 +40,6 @@ Pod::Spec.new do |s|
+     end
+   end
+ 
+-  #dependencies start
+-  s.dependency 'AgoraRtcEngine_Special_iOS', '4.5.3.70'
+-  s.dependency 'AgoraIrisRTC_iOS', '4.5.3-build.1'
+-  #dependencies end
+-
+   s.libraries = 'stdc++'
+   s.framework = 'ReplayKit'
+ end

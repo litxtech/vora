@@ -21,6 +21,12 @@
     "production": {
       "env": {
         "EXPO_USE_PRECOMPILED_MODULES": "0"
+      },
+      "cache": {
+        "key": "cocoapods-specs-v1",
+        "paths": [
+          "/Users/expo/.cocoapods/repos"
+        ]
       }
     }
   },
