@@ -79,7 +79,7 @@ const config: ExpoConfig = {
   name: APP_NAME,
   slug: APP_SLUG,
   owner: 'voralive',
-  version: '2.4.4',
+  version: '2.4.5',
   orientation: 'default',
   icon: './assets/icon-ios.png',
   scheme: APP_SCHEME,
@@ -90,7 +90,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     bundleIdentifier: APP_BUNDLE_ID,
     appleTeamId: APPLE_TEAM_ID,
-    buildNumber: '19',
+    buildNumber: '20',
     associatedDomains: [`applinks:${APP_DOMAIN}`],
     entitlements: {
       'aps-environment': apnsEnvironment,
@@ -116,7 +116,7 @@ const config: ExpoConfig = {
     ...(fs.existsSync(googleServicesFile) ? { googleServicesFile: './google-services.json' } : {}),
     icon: './assets/icon-android.png',
     package: APP_ANDROID_PACKAGE,
-    versionCode: 18,
+    versionCode: 19,
     backgroundColor: '#F1F5F9',
     softwareKeyboardLayoutMode: 'resize',
     blockedPermissions: [

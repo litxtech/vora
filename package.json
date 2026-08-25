@@ -1,6 +1,6 @@
 {
   "name": "vora",
-  "version": "2.4.2",
+  "version": "2.4.5",
   "main": "expo-router/entry",
   "dependencies": {
     "@expo/vector-icons": "^15.0.2",
@@ -62,6 +62,7 @@
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "4.25.2",
     "react-native-svg": "15.15.4",
+    "react-native-video-trim": "^8.2.1",
     "react-native-view-shot": "5.1.0",
     "react-native-webview": "13.16.1",
     "react-native-worklets": "0.8.3",
@@ -72,6 +73,7 @@
     "@types/react": "~19.2.2",
     "expo-nse-plugin": "^2.2.1",
     "patch-package": "^8.0.1",
+    "sharp": "^0.35.3",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -81,6 +83,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "ensure:google-services": "node scripts/ensure-google-services.mjs",
+    "fit-android-icon": "node scripts/fit-android-icon.mjs",
     "postinstall": "patch-package",
     "db:push": "supabase db push",
     "db:reset": "supabase db reset"
