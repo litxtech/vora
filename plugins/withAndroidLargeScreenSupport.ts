@@ -43,9 +43,12 @@ function applyLargeScreenManifestChanges(
 
   const application = AndroidConfig.Manifest.getMainApplicationOrThrow(manifest);
   application.$['android:resizeableActivity'] = 'true';
+  // Medya ağır JS/native heap baskısını azaltır — GC spike ve jank düşer.
+  application.$['android:largeHeap'] = 'true';
 
   const mainActivity = AndroidConfig.Manifest.getMainActivityOrThrow(manifest);
   mainActivity.$['android:resizeableActivity'] = 'true';
+  mainActivity.$['android:hardwareAccelerated'] = 'true';
 
   for (const activityName of ORIENTATION_RESTRICTED_ACTIVITIES) {
     upsertActivityOrientationRemoval(application, activityName);

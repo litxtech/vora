@@ -13,14 +13,14 @@ export type HeavyFeatureBootKey =
   | 'proximity';
 
 const ANDROID_PHONE_DELAYS_MS: Record<HeavyFeatureBootKey, number> = {
-  default: 900,
-  'feature-flags': 450,
-  appearance: 500,
-  notifications: 650,
-  'auth-profile': 750,
-  calls: 850,
-  vora: 950,
-  proximity: 1_100,
+  default: 320,
+  'feature-flags': 120,
+  appearance: 180,
+  notifications: 280,
+  'auth-profile': 320,
+  calls: 420,
+  vora: 520,
+  proximity: 650,
 };
 
 /** Tablet: kısa aralıklarla sırayla — hepsi 0 olunca JS thread spike yapıyordu. */

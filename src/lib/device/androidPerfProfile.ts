@@ -38,7 +38,7 @@ export function shouldDeferFeedRichHeader(): boolean {
 
 /** Üst zengin header gecikmesi (ms). */
 export function getFeedRichHeaderDelayMs(): number {
-  return isAndroidTablet() ? 3_500 : 0;
+  return isAndroidTablet() ? 1_500 : 0;
 }
 
 /** Tablet: spotlight carousel (etkinlik/kayıp) — ilk açılışta atla. */
@@ -58,15 +58,15 @@ export function shouldPollFeedProcessingVideos(): boolean {
 
 /** Hikâye halkası mount gecikmesi (ms). */
 export function getStoryRingMountDelayMs(): number {
-  if (isAndroidTablet()) return 4_500;
-  if (isAndroid()) return 1_200;
+  if (isAndroidTablet()) return 1_800;
+  if (isAndroid()) return 180;
   return 0;
 }
 
 /** Akış sayfa boyutu ve sıralama havuzu. */
 export function getFeedFetchLimits(): { pageSize: number; rankPoolMultiplier: number } {
   if (isAndroidTablet()) return { pageSize: 8, rankPoolMultiplier: 2 };
-  if (isAndroid()) return { pageSize: 12, rankPoolMultiplier: 2.5 };
+  if (isAndroid()) return { pageSize: 10, rankPoolMultiplier: 2 };
   return { pageSize: 15, rankPoolMultiplier: 3 };
 }
 
@@ -87,12 +87,12 @@ export function getFeedProcessingVideoPollMultiplier(): number {
 
 /** Drawer açılış süresi (ms) — 0 = anında. */
 export function getFeedDrawerOpenDurationMs(): number {
-  return isAndroidTablet() ? 0 : 280;
+  return isAndroidTablet() ? 0 : 160;
 }
 
 /** Drawer kapanış süresi (ms). */
 export function getFeedDrawerCloseDurationMs(): number {
-  return isAndroidTablet() ? 0 : 240;
+  return isAndroidTablet() ? 0 : 130;
 }
 
 /** Akış üstü carousel — tablet dahil ertelenir, liste önce etkileşilebilir. */
@@ -123,12 +123,15 @@ export function shouldUseFeedTabSwipeShell(): boolean {
 /** FlashList drawDistance çarpanı (tahmini satır yüksekliği ×). */
 export function getFeedFlashListDrawDistance(): number {
   const item = getFeedEstimatedItemSize();
-  return isAndroidTablet() ? Math.round(item * 0.75) : item * 2;
+  // Android telefon: daha dar ön-çizim — scroll sırasında decode/mount baskısı düşer.
+  if (isAndroidTablet()) return Math.round(item * 0.75);
+  if (isAndroid()) return Math.round(item * 1.35);
+  return item * 2;
 }
 
 /** Feed scroll durduktan sonra video seçimi gecikmesi. */
 export function getFeedScrollSettleMs(): number {
-  return isAndroidTablet() ? 200 : 120;
+  return isAndroidTablet() ? 180 : isAndroid() ? 80 : 120;
 }
 
 /** Reels sekmesinde hafif tab bar — tüm Android. */
@@ -158,10 +161,10 @@ type ListPerfProps = Partial<
 >;
 
 const ANDROID_FLAT_LIST_PERF: ListPerfProps = {
-  initialNumToRender: 4,
-  maxToRenderPerBatch: 3,
-  windowSize: 5,
-  updateCellsBatchingPeriod: 50,
+  initialNumToRender: 3,
+  maxToRenderPerBatch: 2,
+  windowSize: 4,
+  updateCellsBatchingPeriod: 60,
   removeClippedSubviews: true,
 };
 
@@ -255,8 +258,11 @@ export function shouldShowBootSplashVisual(): boolean {
   return !isAndroid();
 }
 
-/** Android telefon: ana tab bar sekmeleri eager — ilk tıklamada remount/lazy yok. */
-const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'discover', 'messages', 'reels', 'profile']);
+/**
+ * Android telefon: Akış + Keşfet + Mesajlar eager.
+ * Reels/Profil lazy — video/grid ilk açılışta JS spike yapmasın; warmup ile ısıtılır.
+ */
+const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'discover', 'messages']);
 
 /** Android tablet: yalnızca akış eager — profil/keşfet lazy (bellek). */
 const ANDROID_TABLET_EAGER_TAB_NAMES = new Set(['index']);
@@ -280,7 +286,7 @@ function shouldEagerMountTabForSwipe(tabName: string): boolean {
   if (isAndroidTablet()) {
     return tabName === 'index';
   }
-  return tabName === 'index' || tabName === 'discover' || ANDROID_EAGER_TAB_NAMES.has(tabName);
+  return ANDROID_EAGER_TAB_NAMES.has(tabName);
 }
 
 export function getAndroidTabLazyOption(
@@ -311,8 +317,8 @@ export function getInboxDiskHydrateLimit(): number {
 
 /** Sohbet odası ilk ağ sayfası — Android'de daha küçük = daha hızlı ilk boya. */
 export function getChatOpenPageSize(): number {
-  if (isAndroidTablet()) return 24;
-  if (isAndroid()) return 28;
+  if (isAndroidTablet()) return 20;
+  if (isAndroid()) return 22;
   return 50;
 }
 
@@ -351,11 +357,11 @@ export function getImageTargetWidth(tier: ImageSizeTier): number {
   }
   if (isAndroid()) {
     const phone: Record<ImageSizeTier, number> = {
-      thumb: 120,
-      feed: 720,
-      grid: 180,
-      avatar: 96,
-      full: 1200,
+      thumb: 96,
+      feed: 600,
+      grid: 160,
+      avatar: 80,
+      full: 960,
     };
     return phone[tier];
   }
@@ -380,12 +386,12 @@ export function getProfileGridLoadMoreBatch(): number {
 
 /** Supabase render kalitesi (0–100). */
 export function getImageRenderQuality(): number {
-  return isAndroidTablet() ? 62 : 78;
+  return isAndroidTablet() ? 58 : isAndroid() ? 68 : 78;
 }
 
 /** Decode üst sınırı (layout px × DPI). */
 export function getImageMaxDecodeWidth(): number {
-  return isAndroidTablet() ? 640 : 1200;
+  return isAndroidTablet() ? 640 : isAndroid() ? 960 : 1200;
 }
 
 /** Boot splash minimum süresi — tüm platformlarda sıfır. */
@@ -457,8 +463,8 @@ export function resolveModalAnimationType(
 
 /** Ardışık navigasyon kilidi — tablette minimum. */
 export function getNavigationRepeatGuardMs(): number {
-  if (isAndroidTablet()) return 80;
-  if (isAndroid()) return 100;
+  if (isAndroidTablet()) return 60;
+  if (isAndroid()) return 70;
   return 600;
 }
 
@@ -494,8 +500,8 @@ export function shouldAnimateChatBubbles(): boolean {
 
 /** Sohbet ilk render satır sayısı — videolu balonlar pahalı; Android'de dar tut. */
 export function getChatInitialRenderCount(): number {
-  if (isAndroidTablet()) return 8;
-  if (isAndroid()) return 10;
+  if (isAndroidTablet()) return 6;
+  if (isAndroid()) return 8;
   return 18;
 }
 

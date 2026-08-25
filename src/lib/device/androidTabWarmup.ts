@@ -5,7 +5,8 @@ import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 let warmed = false;
 
 function getMessageWarmupMs(): number {
-  return isAndroidTablet() ? 250 : 120;
+  // Akış ilk boyadan hemen sonra — Reels/Profil lazy olduğu için erken ısıt kritik.
+  return isAndroidTablet() ? 160 : 40;
 }
 
 async function prefetchInboxListCache(): Promise<void> {

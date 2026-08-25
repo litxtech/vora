@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { spacing } from '@/constants/theme';
+import { shouldUsePlainScreenBackground } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type DetailLoadingShellProps = {
@@ -20,6 +21,7 @@ export function DetailLoadingShell({
 }: DetailLoadingShellProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const useGradient = gradient && !shouldUsePlainScreenBackground();
 
   const body = (
     <View style={[styles.body, { paddingTop: insets.top + spacing.md }]}>
@@ -27,7 +29,7 @@ export function DetailLoadingShell({
     </View>
   );
 
-  if (gradient) {
+  if (useGradient) {
     return <GradientBackground>{body}</GradientBackground>;
   }
 
