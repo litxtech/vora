@@ -200,6 +200,8 @@ const config: ExpoConfig = {
         },
         ios: {
           useHermesV1: true,
+          // EAS SDK 56 precompiled modules bazı pod'larda duplicate source üretiyor.
+          usePrecompiledModules: false,
         },
       },
     ],
@@ -288,6 +290,7 @@ const config: ExpoConfig = {
     'expo-document-picker',
     'expo-image',
     'expo-sharing',
+    'expo-web-browser',
     'expo-screen-orientation',
     '@react-native-community/datetimepicker',
     [

@@ -7,12 +7,22 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
+      }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_USE_PRECOMPILED_MODULES": "0"
+      }
+    }
   },
   "submit": {
     "production": {
