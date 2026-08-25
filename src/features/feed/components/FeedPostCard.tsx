@@ -10,6 +10,7 @@ import { CommentSheet } from '@/features/feed/components/CommentSheet';
 import { FeedAuthorAvatar } from '@/features/feed/components/FeedAuthorAvatar';
 import { FollowButton } from '@/features/feed/components/FollowButton';
 import { HashtagText } from '@/features/feed/components/HashtagText';
+import { CommentLinkAttachment } from '@/features/richtext';
 import { MediaCarousel } from '@/features/feed/components/MediaCarousel';
 import { FeedPostMediaOverlay } from '@/features/feed/components/FeedPostMediaOverlay';
 import { PostActions } from '@/features/feed/components/PostActions';
@@ -21,6 +22,7 @@ import { CATEGORY_STYLES, FEED_DETAIL_VIDEO_MAX_HEIGHT } from '@/features/feed/c
 import { AdminPostActionsSheet } from '@/features/admin/components/shared/AdminPostActionsSheet';
 import { createQuotePost, deletePost } from '@/features/feed/services/engagement';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
+import { FeedFullscreenVideoViewer } from '@/features/feed/components/FeedFullscreenVideoViewer';
 import { useFeedMediaViewerStore } from '@/features/feed/store/feedMediaViewerStore';
 import { useFeedMusicSoundStore } from '@/features/feed/store/feedMusicSoundStore';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
@@ -42,6 +44,7 @@ import {
 } from '@/features/feed/services/feedNavigation';
 import { formatPinExpiry } from '@/features/feed/services/postPinning';
 import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
+import { ensureReelFeedAudioMode } from '@/features/music/services/audioPreview';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { focusMapOnCoordinate } from '@/features/map/services/mapNavigation';
 import type { FeedItem } from '@/features/feed/types';
@@ -57,6 +60,8 @@ type FeedPostCardProps = {
   preferDirectMediaPlayback?: boolean;
   /** Liste ekranından geçirilirse her kart ayrı useIsFocused aboneliği açmaz. */
   isScreenFocused?: boolean;
+  /** Liste tek useIsFocused ile geçirir — kart başına navigation aboneliği açılmaz. */
+  isRouteFocused?: boolean;
   /** Akış listesinde satır görünür mü (Android ses/video durdurma) */
   isRowVisible?: boolean;
   /** Detay sayfasında tam alıntı kartı ve kenarlıksız düzen */
@@ -71,32 +76,47 @@ type FeedPostCardProps = {
 const AVATAR_SIZE = 40;
 
 export function FeedPostCard(props: FeedPostCardProps) {
-  if (props.isScreenFocused !== undefined) {
-    return <FeedPostCardInnerMemo {...props} isScreenFocused={props.isScreenFocused} />;
+  if (props.isScreenFocused !== undefined && props.isRouteFocused !== undefined) {
+    return (
+      <FeedPostCardInnerMemo
+        {...props}
+        isScreenFocused={props.isScreenFocused}
+        isRouteFocused={props.isRouteFocused}
+      />
+    );
   }
   return <FeedPostCardWithRouteFocus {...props} />;
 }
 
-function FeedPostCardWithRouteFocus(props: Omit<FeedPostCardProps, 'isScreenFocused'>) {
-  const isScreenFocused = useIsFocused();
-  return <FeedPostCardInnerMemo {...props} isScreenFocused={isScreenFocused} />;
+function FeedPostCardWithRouteFocus(props: FeedPostCardProps) {
+  const routeFocused = useIsFocused();
+  return (
+    <FeedPostCardInnerMemo
+      {...props}
+      isScreenFocused={props.isScreenFocused ?? routeFocused}
+      isRouteFocused={props.isRouteFocused ?? routeFocused}
+    />
+  );
 }
 
 const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
   item,
   preferDirectMediaPlayback = false,
   isScreenFocused,
+  isRouteFocused,
   isRowVisible = true,
   mode = 'feed',
   focusVideo = false,
   initialMediaIndex = 0,
   onUpdate,
   onDeleted,
-}: FeedPostCardProps & { isScreenFocused: boolean }) {
+}: FeedPostCardProps & { isScreenFocused: boolean; isRouteFocused: boolean }) {
   const { colors } = useTheme();
   const { width: screenWidth } = useWindowDimensions();
   const { user, profile } = useAuth();
   const { requireAuth } = useRequireAuth();
+  /** Gerçek rota odağı — detay üstteyken feed kartlarında false; oynatmayı durdurur, unmount etmez. */
+  const routeFocused = isRouteFocused;
 
   const [showComments, setShowComments] = useState(false);
   const [showReport, setShowReport] = useState(false);
@@ -108,6 +128,8 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
   const [showSafety, setShowSafety] = useState(false);
   const [showMisinfo, setShowMisinfo] = useState(false);
   const [mediaViewerIndex, setMediaViewerIndex] = useState<number | null>(null);
+  /** Inline VideoView bırakılsın diye tam ekrandan bir kare önce false yapılır (Android codec). */
+  const [holdInlineVideo, setHoldInlineVideo] = useState(false);
   const [mediaSlideIndex, setMediaSlideIndex] = useState(initialMediaIndex);
   const [fullscreenMusicEnabled, setFullscreenMusicEnabled] = useState(false);
   const postId = item.sourceId;
@@ -116,7 +138,10 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
   const isFeedSoundOn = useFeedMusicSoundStore((s) => s.postId === postId);
   const isActiveVideoPost = useFeedVideoPlaybackStore((s) => s.activePostId === postId);
   const isVideoSoundOn = useFeedVideoPlaybackStore((s) => s.unmutedPostId === postId);
-  const isFeedScrolling = useFeedVideoPlaybackStore((s) => s.isScrolling);
+  // Yalnızca aktif video kartı isScrolling değişiminde re-render olur.
+  const isFeedScrolling = useFeedVideoPlaybackStore(
+    (s) => (s.activePostId === postId ? s.isScrolling : false),
+  );
   const dismissToken = useFeedMediaViewerStore((s) => s.dismissToken);
   const showPostMoreMenu = useFeatureVisible(FEED_FEATURE.postMoreMenu);
   const showPostCardFollow = useFeatureVisible(FEED_FEATURE.postCardFollow);
@@ -134,14 +159,16 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
 
   useEffect(() => {
     setMediaViewerIndex(null);
+    setHoldInlineVideo(false);
   }, [dismissToken]);
 
   useEffect(() => {
-    if (!isScreenFocused) {
+    if (!routeFocused) {
       setMediaViewerIndex(null);
+      setHoldInlineVideo(false);
       setFullscreenMusicEnabled(false);
     }
-  }, [isScreenFocused]);
+  }, [routeFocused]);
 
   useEffect(() => {
     if (isRowVisible) return;
@@ -181,9 +208,9 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
   };
 
   useEffect(() => {
-    if (!isScreenFocused || item.isDemo || item.sourceType !== 'post') return;
+    if (!routeFocused || item.isDemo || item.sourceType !== 'post') return;
     schedulePostView(item.sourceId);
-  }, [isScreenFocused, item.sourceId, item.isDemo, item.sourceType]);
+  }, [routeFocused, item.sourceId, item.isDemo, item.sourceType]);
 
   const regionName = REGIONS.find((r) => r.id === item.regionId)?.name;
   const locationParts = [item.locationLabel, item.district, regionName].filter(
@@ -203,14 +230,22 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
   const rowInScope = isScreenFocused && isRowVisible;
   const isTargetVideoPost = isDetail || focusVideo || isActiveVideoPost;
   // Tek VideoView — görünür satırlarda eşzamanlı decode/GPU yükünü önler (Reels modeli).
+  // Kaydırırken unmount ETME (önizleme kapanıp açılmasın); yalnızca videoActive ile duraklat.
+  // Tam ekran açılırken holdInlineVideo ile önce inline bırakılır (Android MediaCodec kilidi).
+  // Detay push'ta isScreenFocused true kalır (boş flash önlemi); oynatma routeFocused ile kesilir.
   const videoMounted =
-    hasVideo && rowInScope && isTargetVideoPost && (isDetail || focusVideo || !isFeedScrolling);
-  const videoActive = videoMounted && (isDetail || focusVideo || !isFeedScrolling);
+    hasVideo &&
+    rowInScope &&
+    isTargetVideoPost &&
+    !holdInlineVideo;
+  const videoActive =
+    videoMounted && routeFocused && (isDetail || focusVideo || !isFeedScrolling);
   const inFullscreen = mediaViewerIndex !== null;
   const musicUiEnabled = inFullscreen ? fullscreenMusicEnabled : isFeedSoundOn;
-  const musicScopeActive = rowInScope && hasPostMusic;
+  const musicScopeActive = rowInScope && hasPostMusic && routeFocused;
   const musicPlaying = musicScopeActive && musicUiEnabled;
-  const showMediaSoundToggle = hasPostMusic || hasVideo;
+  const videoOriginalMuted = hasVideo && !!item.videoOriginalMuted;
+  const showMediaSoundToggle = hasPostMusic || (hasVideo && !videoOriginalMuted);
   const mediaSoundEnabled = hasPostMusic ? musicUiEnabled : isVideoSoundOn;
   const detailVideoMedia =
     isDetail && hasVideo
@@ -252,13 +287,13 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
     Alert.alert('Paylaşıldı', 'Alıntın akışa eklendi.');
   };
 
+  const prefetchDetail = () => {
+    if (isDetail) return;
+    prefetchFeedDetail(item.sourceType, item.sourceId);
+  };
+
   const openDetail = () => {
     if (isDetail) return;
-    if (item.sourceType === 'post') {
-      navigateToFeedDetail('post', item.sourceId, item.isDemo);
-      return;
-    }
-    prefetchFeedDetail(item.sourceType, item.sourceId);
     navigateToFeedDetail(item.sourceType, item.sourceId, item.isDemo);
   };
 
@@ -276,28 +311,13 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
     const url = item.mediaUrls[index];
     const isVideo = url ? isVideoUrl(url) : false;
 
+    // Instagram gibi: medya → tam ekran (detay sayfası değil)
     if (isVideo) {
-      if (preferDirectMediaPlayback) {
+      // Inline VideoView'ı kısa süre kaldır (Android codec), sonra sosyal tam ekran
+      setHoldInlineVideo(true);
+      setTimeout(() => {
         setMediaViewerIndex(index);
-        return;
-      }
-      if (isDetail) {
-        setMediaViewerIndex(index);
-        return;
-      }
-      if (isPost) {
-        navigateToFeedDetail('post', item.sourceId, item.isDemo, { focusVideo: true, mediaIndex: index });
-        return;
-      }
-    }
-
-    if (isDetail) {
-      setMediaViewerIndex(index);
-      return;
-    }
-
-    if (isPost && hasVideo) {
-      openDetail();
+      }, 80);
       return;
     }
 
@@ -403,20 +423,27 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
           ) : null}
 
           {item.title ? (
-            <Pressable onPress={openDetail}>
+            <Pressable onPressIn={prefetchDetail} onPress={openDetail} {...getAndroidInstantPressableProps()}>
               <Text variant="label" style={styles.title}>
                 {item.title}
               </Text>
             </Pressable>
           ) : null}
 
-          <Pressable onPress={openDetail}>
+          <Pressable onPressIn={prefetchDetail} onPress={openDetail} {...getAndroidInstantPressableProps()}>
             <HashtagText content={item.content} />
           </Pressable>
+          <CommentLinkAttachment content={item.content} layout="compact" />
 
           {hasMedia ? (
             <SensitiveMediaWrapper isSensitive={!!item.isSensitive}>
-              <View style={[styles.mediaShell, detailVideoMedia]}>
+              <View
+                style={[
+                  styles.mediaShell,
+                  detailVideoMedia,
+                  inFullscreen && styles.mediaShellHidden,
+                ]}
+              >
                 <MediaCarousel
                   urls={item.mediaUrls}
                   variant="inline"
@@ -426,7 +453,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
                   inlineVideo={hasVideo}
                   videoMounted={videoMounted}
                   videoActive={videoActive}
-                  videoMuted={!isVideoSoundOn}
+                  videoMuted={!isVideoSoundOn || videoOriginalMuted}
                   onMediaPress={handleMediaPress}
                   onSlideIndexChange={setMediaSlideIndex}
                   overlay={
@@ -440,10 +467,17 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
                       musicSoundEnabled={mediaSoundEnabled}
                       onMusicSoundToggle={
                         showMediaSoundToggle
-                          ? () =>
-                              hasPostMusic
-                                ? toggleFeedSound(item.sourceId)
-                                : toggleVideoSound(item.sourceId)
+                          ? () => {
+                              if (hasPostMusic) {
+                                toggleFeedSound(item.sourceId);
+                                return;
+                              }
+                              // Video sesi — unmute ederken ses oturumunu hazırla
+                              if (!isVideoSoundOn) {
+                                void ensureReelFeedAudioMode();
+                              }
+                              toggleVideoSound(item.sourceId);
+                            }
                           : undefined
                       }
                     />
@@ -493,7 +527,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
               onQuotePress={() => setShowQuote(true)}
             />
           ) : (
-            <Button title="Detayı Gör" variant="outline" onPress={openDetail} />
+            <Button title="Detayı Gör" variant="outline" onPressIn={prefetchDetail} onPress={openDetail} />
           )}
 
           {isPost && item.viewCount > 0 ? (
@@ -512,7 +546,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
         </View>
       </View>
 
-      {isPost ? (
+      {isPost && showComments ? (
         <CommentSheet
           visible={showComments}
           postId={item.sourceId}
@@ -523,12 +557,14 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
         />
       ) : null}
 
-      <ReportSheet
-        visible={showReport}
-        targetType={item.sourceType === 'post' ? 'post' : item.sourceType === 'lost_found' ? 'lost_item' : 'post'}
-        targetId={item.sourceId}
-        onClose={() => setShowReport(false)}
-      />
+      {showReport ? (
+        <ReportSheet
+          visible={showReport}
+          targetType={item.sourceType === 'post' ? 'post' : item.sourceType === 'lost_found' ? 'lost_item' : 'post'}
+          targetId={item.sourceId}
+          onClose={() => setShowReport(false)}
+        />
+      ) : null}
 
       <Modal visible={showMenu && showPostMoreMenu} transparent animationType={resolveModalAnimationType('fade')} onRequestClose={() => setShowMenu(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowMenu(false)}>
@@ -580,7 +616,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
         </Pressable>
       </Modal>
 
-      {canModeratePost ? (
+      {canModeratePost && showAdminActions ? (
         <AdminPostActionsSheet
           visible={showAdminActions}
           onClose={() => setShowAdminActions(false)}
@@ -596,30 +632,54 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
         />
       ) : null}
 
-      <UserSafetySheet
-        visible={showSafety}
-        userId={item.author.id}
-        username={item.author.username}
-        onReport={() => setShowReport(true)}
-        onClose={() => setShowSafety(false)}
-      />
+      {showSafety ? (
+        <UserSafetySheet
+          visible={showSafety}
+          userId={item.author.id}
+          username={item.author.username}
+          onReport={() => setShowReport(true)}
+          onClose={() => setShowSafety(false)}
+        />
+      ) : null}
 
-      <MisinfoFlagSheet
-        visible={showMisinfo}
-        targetType="post"
-        targetId={item.sourceId}
-        onClose={() => setShowMisinfo(false)}
-      />
+      {showMisinfo ? (
+        <MisinfoFlagSheet
+          visible={showMisinfo}
+          targetType="post"
+          targetId={item.sourceId}
+          onClose={() => setShowMisinfo(false)}
+        />
+      ) : null}
 
-      <FullScreenMediaViewer
-        urls={item.mediaUrls}
-        visible={mediaViewerIndex !== null}
-        startIndex={mediaViewerIndex ?? 0}
-        onClose={() => setMediaViewerIndex(null)}
-        musicSoundEnabled={fullscreenMusicEnabled}
-        onMusicSoundToggle={hasPostMusic ? () => setFullscreenMusicEnabled((v) => !v) : undefined}
-      />
-
+      {mediaViewerIndex !== null && isVideoUrl(item.mediaUrls[mediaViewerIndex] ?? '') ? (
+        <FeedFullscreenVideoViewer
+          item={item}
+          visible
+          mediaIndex={mediaViewerIndex}
+          onClose={() => {
+            setMediaViewerIndex(null);
+            setHoldInlineVideo(false);
+          }}
+          onUpdate={onUpdate}
+          onQuotePress={() => {
+            setMediaViewerIndex(null);
+            setHoldInlineVideo(false);
+            setShowQuote(true);
+          }}
+        />
+      ) : (
+        <FullScreenMediaViewer
+          urls={item.mediaUrls}
+          visible={mediaViewerIndex !== null}
+          startIndex={mediaViewerIndex ?? 0}
+          onClose={() => {
+            setMediaViewerIndex(null);
+            setHoldInlineVideo(false);
+          }}
+          musicSoundEnabled={fullscreenMusicEnabled}
+          onMusicSoundToggle={hasPostMusic ? () => setFullscreenMusicEnabled((v) => !v) : undefined}
+        />
+      )}
       <Modal visible={showQuote} transparent animationType={resolveModalAnimationType('slide')} onRequestClose={() => setShowQuote(false)}>
         <Pressable style={styles.menuOverlay} onPress={() => setShowQuote(false)} accessibilityLabel="Kapat">
           <Pressable
@@ -725,6 +785,9 @@ const styles = StyleSheet.create({
   },
   mediaShell: {
     position: 'relative',
+  },
+  mediaShellHidden: {
+    opacity: 0,
   },
   quoteRibbon: {
     flexDirection: 'row',

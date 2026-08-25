@@ -117,3 +117,10 @@ export function prefetchProfileScreenRoute(): Promise<void> {
     () => undefined,
   );
 }
+
+export function prefetchBusinessDetailRoute(): Promise<void> {
+  return import('@/features/businesses/components/BusinessDetailScreen').then(
+    () => undefined,
+    () => undefined,
+  );
+}

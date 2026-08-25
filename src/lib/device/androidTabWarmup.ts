@@ -5,8 +5,7 @@ import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 let warmed = false;
 
 function getMessageWarmupMs(): number {
-  // Akış ilk boyadan hemen sonra — 900ms gecikme Mesajlar’ı soğuk bırakıyordu.
-  return isAndroidTablet() ? 250 : 160;
+  return isAndroidTablet() ? 250 : 120;
 }
 
 async function prefetchInboxListCache(): Promise<void> {
@@ -31,7 +30,7 @@ async function prefetchInboxListCache(): Promise<void> {
   }
 }
 
-/** Mesaj sekmesi modülü + inbox cache — akış etkileşilebilir olduktan sonra. */
+/** Ana sekme modülleri — akış etkileşilebilir olduktan sonra ısıt. */
 export function warmupAndroidTabModules(): { cancel: () => void } {
   if (!isAndroid() || warmed) {
     return { cancel: () => {} };
@@ -50,6 +49,9 @@ export function warmupAndroidTabModules(): { cancel: () => void } {
       void import('@/features/messaging/components/MessagesTabBar');
       void import('@/features/messaging/hooks/useConversationList');
       void import('@/features/compose/components/ComposeScreen');
+      void import('@/features/discovery/components/DiscoveryScreen');
+      void import('@/features/reels/components/ReelsFeed');
+      void import('@/features/profile/components/ProfileScreen');
       void prefetchInboxListCache();
     }, getMessageWarmupMs());
   });

@@ -5,12 +5,10 @@ import { router } from 'expo-router';
 import Animated, {
   cancelAnimation,
   Easing,
-  interpolate,
   runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -22,6 +20,16 @@ import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { useGuestMode } from '@/features/auth/hooks/useGuestMode';
 import { useAuth } from '@/providers/AuthProvider';
+import {
+  FEED_DRAWER_DISMISS_PROGRESS,
+  FEED_DRAWER_DISMISS_VELOCITY_X,
+  FEED_DRAWER_WIDTH_RATIO,
+} from '@/features/feed/constants/drawer';
+import {
+  feedDrawerExternallyOwned,
+  feedDrawerProgress,
+  feedDrawerWidthPx,
+} from '@/features/feed/store/feedDrawerProgress';
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { radius, spacing } from '@/constants/theme';
@@ -29,24 +37,22 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 
-const FEED_DRAWER_WIDTH_RATIO = 0.78;
 const DRAWER_INTERACTION_PROGRESS = 0.04;
-const DRAWER_DISMISS_PROGRESS = 0.45;
-const DRAWER_DISMISS_VELOCITY_X = -450;
 const DRAWER_AVATAR_SIZE = 48;
 
 const TABLET_INSTANT_DRAWER = isAndroidTablet();
 
-/** iOS stack push benzeri açılış — tablette anında. */
+/** X tarzı sade ease — tek timing, spring yok (titreme kaynağı). */
+const DRAWER_EASE = Easing.bezier(0.25, 0.1, 0.25, 1);
+
 const DRAWER_OPEN_TIMING = {
-  duration: TABLET_INSTANT_DRAWER ? 0 : 400,
-  easing: Easing.bezier(0.33, 1, 0.68, 1),
+  duration: TABLET_INSTANT_DRAWER ? 0 : 280,
+  easing: DRAWER_EASE,
 };
 
-/** Stack pop benzeri kapanış. */
 const DRAWER_CLOSE_TIMING = {
-  duration: TABLET_INSTANT_DRAWER ? 0 : 340,
-  easing: Easing.bezier(0.32, 0, 0.67, 0),
+  duration: TABLET_INSTANT_DRAWER ? 0 : 240,
+  easing: DRAWER_EASE,
 };
 
 function closeDrawerTiming() {
@@ -54,26 +60,16 @@ function closeDrawerTiming() {
   return DRAWER_CLOSE_TIMING;
 }
 
-function closeReleaseSpring(velocity: number) {
-  'worklet';
-  return {
-    damping: 32,
-    stiffness: 400,
-    mass: 0.72,
-    overshootClamping: true,
-    velocity,
-  };
-}
-
-function openReleaseSpring(velocity: number) {
+function releaseTiming(velocity: number, opening: boolean) {
   'worklet';
   if (TABLET_INSTANT_DRAWER) {
     return { duration: 0, easing: Easing.linear };
   }
   const speed = Math.min(Math.abs(velocity), 2.5);
+  const base = opening ? 280 : 240;
   return {
-    duration: Math.max(260, 400 - speed * 55),
-    easing: Easing.bezier(0.33, 1, 0.68, 1),
+    duration: Math.max(opening ? 180 : 160, base - speed * 40),
+    easing: DRAWER_EASE,
   };
 }
 
@@ -161,11 +157,10 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
   onClose,
   children,
 }: FeedDrawerAnimatorProps) {
-  const progress = useSharedValue(0);
-  const drawerWidthSv = useSharedValue(drawerWidth);
-  const dragStartProgress = useSharedValue(0);
+  const progress = feedDrawerProgress;
   const ownsProgress = useSharedValue(false);
   const drawerOpenSv = useSharedValue(0);
+  const dragStartProgress = useSharedValue(0);
   const feedInnerRef = useRef<RNView>(null);
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
@@ -183,12 +178,26 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 
   const finishGestureAnimation = useCallback(() => {
     ownsProgress.value = false;
+    feedDrawerExternallyOwned.value = false;
     applyFeedInteractionLocked(false);
   }, [ownsProgress, applyFeedInteractionLocked]);
 
   useEffect(() => {
-    drawerWidthSv.value = drawerWidth;
-  }, [drawerWidth, drawerWidthSv]);
+    const applyShellPointerEvents = (locked: boolean) => {
+      feedInnerRef.current?.setNativeProps?.({
+        pointerEvents: locked ? 'none' : 'auto',
+      });
+    };
+    useFeedDrawerStore.getState().setFeedShellLockHandler(applyShellPointerEvents);
+    applyShellPointerEvents(useFeedDrawerStore.getState().listInteractionLocked);
+    return () => {
+      useFeedDrawerStore.getState().setFeedShellLockHandler(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    feedDrawerWidthPx.value = drawerWidth;
+  }, [drawerWidth]);
 
   useEffect(() => {
     const initialOpen = useFeedDrawerStore.getState().open;
@@ -200,11 +209,25 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
       drawerOpenSv.value = state.open ? 1 : 0;
       if (state.open === previous.open) return;
 
+      // Jest / dış sürükleme progress'i yönetiyorsa store animasyonunu atla —
+      // cancel + yeniden withTiming titreme yaratıyordu.
+      if (feedDrawerExternallyOwned.value || ownsProgress.value) {
+        if (state.open) {
+          applyFeedInteractionLocked(true);
+        }
+        // Kapanış: ownership jestte — unlock reaction / safety / finishGesture ile.
+        return;
+      }
+
       cancelAnimation(progress);
 
       if (state.open) {
         ownsProgress.value = false;
         applyFeedInteractionLocked(true);
+        if (progress.value >= 0.98) {
+          progress.value = 1;
+          return;
+        }
         progress.value = withTiming(1, DRAWER_OPEN_TIMING);
         if (Platform.OS !== 'android') {
           void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -213,8 +236,14 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
       }
 
       ownsProgress.value = false;
+      if (progress.value <= 0.02) {
+        progress.value = 0;
+        applyFeedInteractionLocked(false);
+        return;
+      }
       progress.value = withTiming(0, DRAWER_CLOSE_TIMING, (finished) => {
-        if (!finished) return;
+        // Android: finished=false olsa bile kapalıysa kilidi çöz.
+        if (!finished && progress.value > 0.02) return;
         runOnJS(applyFeedInteractionLocked)(false);
       });
     });
@@ -223,20 +252,23 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
   useAnimatedReaction(
     () => progress.value,
     (value, previous) => {
-      if (value > 0.02 || drawerOpenSv.value === 1) return;
+      if (value > 0.02) return;
+      if (drawerOpenSv.value === 1) return;
       if ((previous ?? 1) <= 0.02) return;
+      // Ownership ne olursa olsun — tamamen kapanınca feed etkileşimini aç.
       ownsProgress.value = false;
+      feedDrawerExternallyOwned.value = false;
       runOnJS(applyFeedInteractionLocked)(false);
     },
   );
 
   const feedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: progress.value * drawerWidthSv.value }],
+    transform: [{ translateX: progress.value * feedDrawerWidthPx.value }],
   }));
 
   const scrimStyle = useAnimatedStyle(
     () => ({
-      opacity: interpolate(progress.value, [0, 0.45, 1], [0, scrimMaxOpacity * 0.72, scrimMaxOpacity]),
+      opacity: progress.value * scrimMaxOpacity,
     }),
     [scrimMaxOpacity],
   );
@@ -256,33 +288,36 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
       })
       .onStart(() => {
         ownsProgress.value = true;
+        feedDrawerExternallyOwned.value = false;
         cancelAnimation(progress);
         dragStartProgress.value = progress.value;
         runOnJS(applyFeedInteractionLocked)(true);
       })
       .onUpdate((event) => {
-        const width = Math.max(drawerWidthSv.value, 1);
+        const width = Math.max(feedDrawerWidthPx.value, 1);
         const next = dragStartProgress.value + event.translationX / width;
         progress.value = Math.min(1, Math.max(0, next));
       })
       .onEnd((event) => {
-        const width = Math.max(drawerWidthSv.value, 1);
+        const width = Math.max(feedDrawerWidthPx.value, 1);
         const velocity = event.velocityX / width;
         const shouldClose =
-          progress.value < DRAWER_DISMISS_PROGRESS || event.velocityX < DRAWER_DISMISS_VELOCITY_X;
+          progress.value < FEED_DRAWER_DISMISS_PROGRESS ||
+          event.velocityX < FEED_DRAWER_DISMISS_VELOCITY_X;
 
         ownsProgress.value = true;
 
         if (shouldClose) {
-          progress.value = withSpring(0, closeReleaseSpring(velocity), (finished) => {
-            if (!finished) return;
+          progress.value = withTiming(0, releaseTiming(velocity, false), (finished) => {
+            // Android iptalinde de kilidi bırak — aksi halde feed donuyor.
+            if (!finished && progress.value > 0.02) return;
             runOnJS(finishGestureAnimation)();
           });
           runOnJS(closeFromGesture)();
           return;
         }
 
-        progress.value = withTiming(1, openReleaseSpring(velocity), (finished) => {
+        progress.value = withTiming(1, releaseTiming(velocity, true), (finished) => {
           if (!finished) return;
           ownsProgress.value = false;
         });
@@ -293,7 +328,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
 
       ownsProgress.value = true;
       progress.value = withTiming(0, closeDrawerTiming(), (finished) => {
-        if (!finished) return;
+        if (!finished && progress.value > 0.02) return;
         runOnJS(finishGestureAnimation)();
       });
       runOnJS(closeFromGesture)();
@@ -303,7 +338,6 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
   }, [
     closeFromGesture,
     dragStartProgress,
-    drawerWidthSv,
     finishGestureAnimation,
     ownsProgress,
     progress,

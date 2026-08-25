@@ -583,9 +583,20 @@ export async function fetchUserPosts(
   }
 
   const postIds = rows.map((r) => r.id);
-  const state = await fetchEngagementState(postIds, viewerId);
-  const items = rows.map((row) => mapPostToFeedItem(row, state));
-  return enrichFeedAuthorsInItems(items);
+  const emptyState = { liked: new Set<string>(), saved: new Set<string>() };
+  const baseItems = rows.map((row) => mapPostToFeedItem(row, emptyState));
+
+  // Beğeni durumu + yazar zenginleştirme paralel — profil grid daha erken dolsun.
+  const [state, enriched] = await Promise.all([
+    fetchEngagementState(postIds, viewerId),
+    enrichFeedAuthorsInItems(baseItems),
+  ]);
+
+  return enriched.map((item) => ({
+    ...item,
+    isLiked: state.liked.has(item.sourceId),
+    isSaved: state.saved.has(item.sourceId),
+  }));
 }
 
 async function fetchPostsByIds(postIds: string[], viewerId: string | null): Promise<FeedItem[]> {

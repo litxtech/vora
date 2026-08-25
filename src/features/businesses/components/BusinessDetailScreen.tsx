@@ -180,11 +180,12 @@ export function BusinessDetailScreen() {
   const { requireAuth } = useRequireAuth();
   const { id, demo, fromShop } = useLocalSearchParams<{ id: string; demo?: string; fromShop?: string }>();
 
-  const [business, setBusiness] = useState<BusinessDetail | null>(null);
+  const [bootCached] = useState(() => (id ? getCachedBusinessDetail(id) : null));
+  const [business, setBusiness] = useState<BusinessDetail | null>(() => bootCached);
   const [campaigns, setCampaigns] = useState<BusinessCampaignPreview[]>([]);
   const [events, setEvents] = useState<BusinessEventPreview[]>([]);
   const [jobs, setJobs] = useState<BusinessJobPreview[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !bootCached);
   const [error, setError] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
   const [viewerUrls, setViewerUrls] = useState<string[]>([]);
@@ -210,7 +211,7 @@ export function BusinessDetailScreen() {
         const detail = await fetchBusinessDetail(id);
         if (cancelled) return;
         if (!detail) {
-          if (!cached) {
+          if (!cached && !getCachedBusinessDetail(id)) {
             setError('İşletme bulunamadı.');
             setBusiness(null);
           }
@@ -219,9 +220,11 @@ export function BusinessDetailScreen() {
 
         setCachedBusinessDetail(id, detail);
         setBusiness(detail);
+        setLoading(false);
 
         if (!detail.isDemo) {
           void incrementBusinessViewCount(detail.id);
+          // Kampanya/iş/etkinlik — header boyandıktan sonra.
           const [campaignRows, jobRows, eventRows] = await Promise.all([
             fetchBusinessCampaigns(detail.id),
             fetchBusinessJobs(detail.id),
@@ -233,7 +236,9 @@ export function BusinessDetailScreen() {
           setEvents(eventRows);
         }
       } catch {
-        if (!cancelled && !cached) setError('Detaylar yüklenemedi.');
+        if (!cancelled && !cached && !getCachedBusinessDetail(id)) {
+          setError('Detaylar yüklenemedi.');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -255,10 +255,10 @@ export function shouldShowBootSplashVisual(): boolean {
   return !isAndroid();
 }
 
-/** Android telefon: yalnızca akış + profil eager — keşfet/mesaj ilk açılışta lazy. */
-const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'profile']);
+/** Android telefon: ana tab bar sekmeleri eager — ilk tıklamada remount/lazy yok. */
+const ANDROID_EAGER_TAB_NAMES = new Set(['index', 'discover', 'messages', 'reels', 'profile']);
 
-/** Android tablet: yalnızca akış eager — profil/keşfet lazy. */
+/** Android tablet: yalnızca akış eager — profil/keşfet lazy (bellek). */
 const ANDROID_TABLET_EAGER_TAB_NAMES = new Set(['index']);
 
 function shouldEagerMountAndroidTab(tabName: string): boolean {
@@ -292,9 +292,12 @@ export function getAndroidTabLazyOption(
   return { lazy: true };
 }
 
-/** Pasif sekmeleri bellekten ayır — swipe kapalıyken (Android) bellek/JS baskısını azalt. */
+/** Pasif sekmeleri bellekten ayır.
+ * Android'de true = her sekme tıklamasında remount → belirgin gecikme.
+ * iOS swipe komşuları için zaten false.
+ */
 export function shouldDetachInactiveTabScreens(): boolean {
-  // Komşu önizleme için pasif sahneler mount kalmalı.
+  if (isAndroid()) return false;
   if (shouldUseMainTabSwipeGesture()) return false;
   return true;
 }
@@ -428,12 +431,20 @@ export function shouldUseMainTabSwipeGesture(): boolean {
 
 /** Android: dokunma gecikmesi ve sistem sesi kapalı — anında tepki. */
 export function getAndroidInstantPressableProps():
-  | { delayPressIn: number; android_disableSound: true }
+  | {
+      delayPressIn: number;
+      unstable_pressDelay: number;
+      android_disableSound: true;
+      android_ripple: null;
+    }
   | Record<string, never> {
   if (!isAndroid()) return {};
   return {
     delayPressIn: 0,
+    unstable_pressDelay: 0,
     android_disableSound: true,
+    // Ripple animasyonu tıklama hissini geciktirir — tab/aksiyonlarda kapalı.
+    android_ripple: null,
   };
 }
 
@@ -481,10 +492,10 @@ export function shouldAnimateChatBubbles(): boolean {
   return !isAndroid();
 }
 
-/** Sohbet ilk render satır sayısı. */
+/** Sohbet ilk render satır sayısı — videolu balonlar pahalı; Android'de dar tut. */
 export function getChatInitialRenderCount(): number {
-  if (isAndroidTablet()) return 10;
-  if (isAndroid()) return 14;
+  if (isAndroidTablet()) return 8;
+  if (isAndroid()) return 10;
   return 18;
 }
 

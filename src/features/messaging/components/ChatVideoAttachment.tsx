@@ -4,7 +4,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Text } from '@/components/ui/Text';
 import { radius } from '@/constants/theme';
 import { getMuxThumbnailUrl } from '@/lib/mux/client';
-import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { isProcessingVideoUrl } from '@/lib/media/videoProcessingUrl';
 import { CHAT_MEDIA_ASPECT, CHAT_MEDIA_MAX_HEIGHT, CHAT_MEDIA_WIDTH } from '../constants';
 import { useChatMediaViewer } from '../context/ChatMediaViewerContext';
@@ -26,7 +25,7 @@ function getMuxThumbnail(url: string): string | null {
 
 function resolvePlaybackUri(remoteUri: string, localUri?: string | null): string {
   if (isLocalMediaUri(remoteUri)) return remoteUri;
-  if (/^https?:\/\//i.test(remoteUri) && isVideoUrl(remoteUri) && !remoteUri.includes('.m3u8')) {
+  if (/^https?:\/\//i.test(remoteUri) && !remoteUri.includes('.m3u8')) {
     return remoteUri;
   }
   if (localUri && isLocalMediaUri(localUri)) return localUri;
@@ -61,10 +60,13 @@ export function ChatVideoAttachment({
   const previewUri = localMediaUri ?? uri;
   const playbackUri = resolvePlaybackUri(uri, localMediaUri);
   const isProcessing = isProcessingVideoUrl(uri);
-  const thumbnailUri = !isProcessing && (isLocalMediaUri(previewUri) || isVideoUrl(previewUri)) ? previewUri : null;
-  const generatedThumb = useLocalVideoThumbnail(getMuxThumbnail(uri) ? null : thumbnailUri);
-  const thumbnailUrl = !isProcessing ? getMuxThumbnail(uri) ?? generatedThumb : null;
-  const showVideoFrame = !thumbnailUrl && !isProcessing;
+  const muxThumb = getMuxThumbnail(uri);
+  // Uzak videoda getThumbnailAsync Android açılışını kilitler — yalnızca yerel + Mux poster.
+  const localThumbSource =
+    !isProcessing && !muxThumb && isLocalMediaUri(previewUri) ? previewUri : null;
+  const generatedThumb = useLocalVideoThumbnail(localThumbSource);
+  const thumbnailUrl = !isProcessing ? muxThumb ?? generatedThumb : null;
+  const awaitingLocalThumb = Boolean(localThumbSource) && !generatedThumb;
   const showUploadOverlay = Boolean(isUploading && uploadStage);
   const canOpen = !showUploadOverlay && !isProcessing && Boolean(playbackUri);
 
@@ -106,7 +108,7 @@ export function ChatVideoAttachment({
           resizeMode="cover"
           pointerEvents="none"
         />
-      ) : showVideoFrame ? (
+      ) : awaitingLocalThumb ? (
         <ChatVideoPreviewFrame />
       ) : (
         <View style={styles.fallbackBg} pointerEvents="none" />

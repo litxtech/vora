@@ -1,30 +1,47 @@
 import { useEffect, useState } from 'react';
-import { isVideoUrl } from '@/lib/media/isVideoUrl';
+import { InteractionManager } from 'react-native';
 import { captureThumbnail } from '@/features/vora-studio/services/videoThumbnails';
 
-function canThumbnail(uri: string): boolean {
-  if (uri.startsWith('file://') || uri.startsWith('content://')) return true;
-  return /^https?:\/\//i.test(uri) && isVideoUrl(uri);
+const thumbCache = new Map<string, string | null>();
+
+/** Yalnızca yerel URI — uzak HTTPS’te native frame extract Android sohbet açılışını kilitliyor. */
+function isLocalMediaUri(uri: string): boolean {
+  return uri.startsWith('file://') || uri.startsWith('content://');
 }
 
-/** Yerel veya uzak video URI'sinden önizleme karesi üretir. */
+/**
+ * Yerel video URI’sinden önizleme karesi.
+ * Uzak URL’ler için null döner (Mux poster / statik fallback kullanılır).
+ */
 export function useLocalVideoThumbnail(uri: string | null | undefined): string | null {
-  const [thumbnail, setThumbnail] = useState<string | null>(null);
+  const [thumbnail, setThumbnail] = useState<string | null>(() => {
+    if (!uri || !isLocalMediaUri(uri)) return null;
+    return thumbCache.get(uri) ?? null;
+  });
 
   useEffect(() => {
-    if (!uri || !canThumbnail(uri)) {
+    if (!uri || !isLocalMediaUri(uri)) {
       setThumbnail(null);
       return;
     }
 
-    let cancelled = false;
+    const cached = thumbCache.get(uri);
+    if (cached !== undefined) {
+      setThumbnail(cached);
+      return;
+    }
 
-    void captureThumbnail(uri, 0.5).then((thumb) => {
-      if (!cancelled) setThumbnail(thumb);
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      void captureThumbnail(uri, 0.5).then((thumb) => {
+        thumbCache.set(uri, thumb);
+        if (!cancelled) setThumbnail(thumb);
+      });
     });
 
     return () => {
       cancelled = true;
+      task.cancel?.();
     };
   }, [uri]);
 

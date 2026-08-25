@@ -16,6 +16,7 @@ import {
   mapStoredProfileToPublic,
 } from '@/features/profile/services/profileData';
 import {
+  buildProfileBundleKey,
   getCachedProfileBundle,
   getCachedTabPosts,
   getCachedTabReels,
@@ -28,8 +29,8 @@ import {
   setCachedTabReels,
   type ProfileScreenBundle,
 } from '@/features/profile/services/profileSessionCache';
-import type { ProfileRelationship, ProfileStats, ProfileTab } from '@/features/profile/types';
-import type { FeedItem } from '@/features/feed/types';
+import type { ProfileRelationship, ProfileStats, ProfileTab, PublicProfile } from '@/features/profile/types';
+import type { FeedAuthor, FeedItem } from '@/features/feed/types';
 import type { ReelItem } from '@/features/reels/types';
 import type { Database } from '@/types/database';
 
@@ -66,6 +67,100 @@ const EMPTY_STATS: ProfileStats = {
   profileViewCount: 0,
 };
 
+/** Aynı profil sekmesi için yarışan ağ çağrılarını tekilleştir. */
+const tabContentInflight = new Map<
+  string,
+  Promise<{ kind: 'posts'; items: FeedItem[] } | { kind: 'reels'; items: ReelItem[] }>
+>();
+
+function tabContentKey(
+  userId: string,
+  tab: ProfileTab,
+  viewerId: string | null,
+  force: boolean,
+): string {
+  return `${userId}:${tab}:${viewerId ?? 'anon'}:${force ? '1' : '0'}`;
+}
+
+/** Feed/karttan gelen anlık iskelet — gerçek bundle gelince silinir. */
+const seededBundleKeys = new Set<string>();
+
+export function isProfileSeedBundle(userId: string, viewerId: string | null): boolean {
+  return seededBundleKeys.has(buildProfileBundleKey(userId, viewerId));
+}
+
+export function buildAuthorProfileSkeleton(author: FeedAuthor): ProfileScreenBundle {
+  const displayName =
+    author.displayName?.trim() ||
+    author.fullName?.trim() ||
+    author.username;
+
+  const profile: PublicProfile = {
+    id: author.id,
+    username: author.username,
+    displayName,
+    legalName: author.fullName,
+    fullName: author.fullName,
+    avatarUrl: author.avatarUrl,
+    coverUrl: null,
+    bio: null,
+    occupation: null,
+    regionId: null,
+    regionName: null,
+    district: null,
+    role: author.role,
+    isVerified: author.isVerified,
+    isBusinessVerified: Boolean(author.isBusinessVerified),
+    businessId: author.businessId ?? null,
+    businessCategory: null,
+    businessCategoryLabel: null,
+    isPlatformCharm: Boolean(author.isPlatformCharm),
+    isPioneer: Boolean(author.isPioneer),
+    isPlatformSupporter: Boolean(author.isPlatformSupporter),
+    isPremium: false,
+    izdivacAccessGranted: Boolean(author.izdivacBadges?.length),
+    hiddenBadges: author.hiddenBadges ?? [],
+    gender: author.gender ?? null,
+    accountType: author.accountType ?? 'personal',
+    accountStatus: author.accountStatus ?? 'active',
+    deletedAt: null,
+    deletedBy: null,
+    deletionRequestedAt: null,
+    trustScore: 0,
+    reporterLevel: 1,
+    contributionScore: 0,
+    verifiedContentCount: 0,
+    profileVisibility: 'public',
+    showProfileViews: false,
+    showLikedPosts: false,
+    profileBoostedUntil: null,
+    profileBoostMessage: null,
+    createdAt: new Date(0).toISOString(),
+  };
+
+  return {
+    profile,
+    stats: EMPTY_STATS,
+    badges: [],
+    achievements: [],
+    relationship: EMPTY_OWN_RELATIONSHIP,
+    business: null,
+    links: [],
+  };
+}
+
+/** Feed’den tıklanınca header anında boyansın — gerçek veri prefetch ile gelir. */
+export function seedProfileFromAuthor(author: FeedAuthor, viewerId: string | null): void {
+  if (!author.id || author.id.startsWith('demo-')) return;
+  const key = buildProfileBundleKey(author.id, viewerId);
+  if (getCachedProfileBundle(author.id, viewerId) && !seededBundleKeys.has(key)) return;
+  if (seededBundleKeys.has(key)) return;
+
+  setCachedProfileBundle(author.id, viewerId, buildAuthorProfileSkeleton(author));
+  seededBundleKeys.add(key);
+  rememberUsernameId(author.username, author.id);
+}
+
 export function buildOwnProfileSkeleton(authProfile: StoredProfile): ProfileScreenBundle {
   return {
     profile: mapStoredProfileToPublic(authProfile),
@@ -86,6 +181,10 @@ function persistOwnProfileBundle(
   if (viewerId !== userId) return;
   const posts = getCachedTabPosts(userId, 'posts', viewerId) ?? [];
   void writeOwnProfileDiskCache(userId, bundle, posts);
+}
+
+function markBundleAsReal(userId: string, viewerId: string | null): void {
+  seededBundleKeys.delete(buildProfileBundleKey(userId, viewerId));
 }
 
 async function fetchProfileScreenBundleFromNetwork(
@@ -126,9 +225,6 @@ async function fetchProfileScreenBundleFromNetwork(
       ? enrichPublicProfile(resolvedProfile, business)
       : resolvedProfile;
 
-  // `fetchProfileStatsCore` etkileşim toplamlarını (görüntülenme/beğeni/yorum/alıntı)
-  // 0 döndürür; gerçek değerler `loadProfileEngagementStats` ile ayrıca yüklenir.
-  // Yeniden doğrulama sırasında sayaç sıfıra düşmesin diye son bilinen değerleri taşı.
   const cachedStats = getCachedProfileBundle(userId, viewerId)?.stats;
   const mergedStats: ProfileStats = cachedStats
     ? {
@@ -158,15 +254,17 @@ export async function loadProfileScreenBundle(
 ): Promise<ProfileScreenBundle | null> {
   if (options.force) {
     invalidateProfileSessionCache(userId);
+    seededBundleKeys.delete(buildProfileBundleKey(userId, viewerId));
   } else {
     const cached = getCachedProfileBundle(userId, viewerId);
-    if (cached) return cached;
+    if (cached && !isProfileSeedBundle(userId, viewerId)) return cached;
   }
 
   const bundle = await fetchProfileScreenBundleFromNetwork(userId, viewerId, options);
   if (!bundle) return null;
 
   setCachedProfileBundle(userId, viewerId, bundle);
+  markBundleAsReal(userId, viewerId);
   persistOwnProfileBundle(userId, viewerId, bundle);
   return bundle;
 }
@@ -176,7 +274,7 @@ export async function loadProfileEngagementStats(
   viewerId: string | null,
 ): Promise<ProfileScreenBundle['stats'] | null> {
   const cached = getCachedProfileBundle(userId, viewerId);
-  if (!cached) return null;
+  if (!cached || isProfileSeedBundle(userId, viewerId)) return null;
 
   const engagement = await fetchProfileEngagementTotals(userId);
   const stats = { ...cached.stats, ...engagement };
@@ -230,21 +328,34 @@ export async function loadProfileTabContent(
     }
   }
 
-  if (tab === 'reels') {
-    const items = await fetchUserReels(userId, viewerId);
-    setCachedTabReels(userId, viewerId, items);
-    return { kind: 'reels', items };
-  }
+  const key = tabContentKey(userId, tab, viewerId, Boolean(options.force));
+  const existing = tabContentInflight.get(key);
+  if (existing) return existing;
 
-  const items = await fetchUserPosts(userId, tab, viewerId);
-  setCachedTabPosts(userId, tab, viewerId, items);
+  const task = (async () => {
+    if (tab === 'reels') {
+      const items = await fetchUserReels(userId, viewerId);
+      setCachedTabReels(userId, viewerId, items);
+      return { kind: 'reels' as const, items };
+    }
 
-  if (viewerId === userId && tab === 'posts') {
-    const bundle = getCachedProfileBundle(userId, viewerId);
-    if (bundle) persistOwnProfileBundle(userId, viewerId, bundle);
-  }
+    const items = await fetchUserPosts(userId, tab, viewerId);
+    setCachedTabPosts(userId, tab, viewerId, items);
 
-  return { kind: 'posts', items };
+    if (viewerId === userId && tab === 'posts') {
+      const bundle = getCachedProfileBundle(userId, viewerId);
+      if (bundle && !isProfileSeedBundle(userId, viewerId)) {
+        persistOwnProfileBundle(userId, viewerId, bundle);
+      }
+    }
+
+    return { kind: 'posts' as const, items };
+  })().finally(() => {
+    tabContentInflight.delete(key);
+  });
+
+  tabContentInflight.set(key, task);
+  return task;
 }
 
 /** Önbellek gösterildikten sonra arka planda güncelle; yalnızca veri değiştiyse callback çağır. */
@@ -255,13 +366,17 @@ export async function revalidateProfileBundleInBackground(
   onUpdated: (bundle: ProfileScreenBundle) => void,
 ): Promise<void> {
   const previous = getCachedProfileBundle(userId, viewerId);
-  const previousFingerprint = previous ? profileBundleFingerprint(previous) : null;
+  const previousFingerprint =
+    previous && !isProfileSeedBundle(userId, viewerId)
+      ? profileBundleFingerprint(previous)
+      : null;
 
   const fresh = await fetchProfileScreenBundleFromNetwork(userId, viewerId, options);
   if (!fresh) return;
 
   const nextFingerprint = profileBundleFingerprint(fresh);
   setCachedProfileBundle(userId, viewerId, fresh);
+  markBundleAsReal(userId, viewerId);
   persistOwnProfileBundle(userId, viewerId, fresh);
 
   if (nextFingerprint !== previousFingerprint) {
@@ -325,16 +440,20 @@ export async function resolveUsernameToUserId(
   return profile.id;
 }
 
-/** Profil ekranına girmeden önce bundle önbelleğe al. */
+/** Profil ekranına girmeden önce bundle önbelleğe al (seed sayılmaz). */
 export function prefetchProfileBundle(userId: string, viewerId: string | null): void {
-  if (getCachedProfileBundle(userId, viewerId)) return;
+  if (getCachedProfileBundle(userId, viewerId) && !isProfileSeedBundle(userId, viewerId)) {
+    return;
+  }
   void loadProfileScreenBundle(userId, viewerId).catch(() => undefined);
+}
+
+/** Bundle + gönderiler — pressIn’de tam ziyaret ısıtması (tek Promise.all). */
+export function prefetchProfileVisit(userId: string, viewerId: string | null): void {
+  void loadProfileInitialVisit(userId, viewerId).catch(() => undefined);
 }
 
 /** Kendi profil sekmesi için bundle + gönderiler önbelleğe al. */
 export function prefetchOwnProfileScreen(userId: string): void {
-  prefetchProfileBundle(userId, userId);
-  if (!getCachedTabPosts(userId, 'posts', userId)) {
-    void loadProfileTabContent(userId, 'posts', userId).catch(() => undefined);
-  }
+  prefetchProfileVisit(userId, userId);
 }

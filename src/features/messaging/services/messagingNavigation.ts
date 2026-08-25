@@ -2,7 +2,6 @@ import { type Href } from 'expo-router';
 import { pushRoute, replaceRoute } from '@/lib/navigation/pushRoute';
 import { prefetchChatRoute } from '@/lib/navigation/lazyRouteScreens';
 import { supabase } from '@/lib/supabase/client';
-import { isAndroid } from '@/lib/device/androidPerfProfile';
 import { markConversationRead } from './messageData';
 import {
   prefetchConversationForOpen,
@@ -55,20 +54,9 @@ export function openChat(conversationId: string, options?: OpenChatOptions) {
   store.enterConversation(conversationId, unread > 0 ? unread : undefined);
 
   const userIdHint = options?.userId;
-  const hasMemory = store.getCachedMessages(conversationId).length > 0;
 
-  // Android: disk prime bitmeden push etme — boş sohbet flash'ını keser.
-  if (isAndroid() && userIdHint && !hasMemory) {
-    void (async () => {
-      await primeConversationMessagesFromDisk(conversationId, userIdHint);
-      void prefetchConversationForOpen(conversationId, userIdHint);
-      navigateToChat(conversationId, options);
-      void markConversationRead(conversationId, userIdHint);
-      void refreshMessagingUnreadFromServer(userIdHint);
-    })();
-    return;
-  }
-
+  // Disk/ağ ısıtması navigasyonu bekletmez — pressIn zaten başlatır;
+  // videolu sohbetlerde AsyncStorage + thumbnail yarışı açılışı donduruyordu.
   if (userIdHint) {
     void primeConversationMessagesFromDisk(conversationId, userIdHint);
     void prefetchConversationForOpen(conversationId, userIdHint);

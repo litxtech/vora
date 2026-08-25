@@ -75,10 +75,8 @@ export function CreateTabButton({
     void prefetchComposeRoute();
   };
 
-  const openCompose = async () => {
-    if (isAndroid()) {
-      await prefetchComposeRoute();
-    }
+  const openCompose = () => {
+    void prefetchComposeRoute();
     if (Platform.OS !== 'android') {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     }
@@ -87,13 +85,13 @@ export function CreateTabButton({
 
   const handlePress = () => {
     if (user && (!isGuest || guestProfileComplete)) {
-      void openCompose();
+      openCompose();
       return;
     }
 
     void (async () => {
       if (!(await requireAuth('Paylaşım'))) return;
-      await openCompose();
+      openCompose();
     })();
   };
 

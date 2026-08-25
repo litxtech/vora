@@ -8,7 +8,7 @@ import { prefetchPostDetailRoute } from '@/lib/navigation/lazyRouteScreens';
 
 /** Yazar profiline gider — işletme hesaplarında kurumsal detaya yönlendirir. */
 export function navigateToAuthorProfile(
-  author: Pick<FeedAuthor, 'id' | 'username' | 'businessId'>,
+  author: Pick<FeedAuthor, 'id' | 'username' | 'businessId'> & Partial<FeedAuthor>,
   viewerId?: string | null,
 ) {
   if (author.id.startsWith('demo-')) return;
@@ -16,15 +16,21 @@ export function navigateToAuthorProfile(
     userId: author.id,
     businessId: author.businessId,
     viewerId: viewerId ?? null,
+    author: author as FeedAuthor,
   });
 }
 
 export function prefetchAuthorProfile(
-  author: Pick<FeedAuthor, 'id' | 'businessId'>,
+  author: Pick<FeedAuthor, 'id' | 'businessId'> & Partial<FeedAuthor>,
   viewerId?: string | null,
 ) {
-  if (author.id.startsWith('demo-') || author.businessId) return;
-  prefetchPublicProfile({ userId: author.id, viewerId: viewerId ?? null });
+  if (author.id.startsWith('demo-')) return;
+  prefetchPublicProfile({
+    userId: author.id,
+    viewerId: viewerId ?? null,
+    author: author as FeedAuthor,
+    businessId: author.businessId,
+  });
 }
 
 const DETAIL_PATHS: Partial<Record<FeedSourceType, (id: string) => string>> = {

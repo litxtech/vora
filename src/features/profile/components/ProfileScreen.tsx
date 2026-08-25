@@ -34,8 +34,8 @@ import { ProfilePostGrid } from '@/features/profile/components/ProfilePostGrid';
 import { PROFILE_TABS } from '@/features/profile/constants';
 import {
   buildOwnProfileSkeleton,
+  isProfileSeedBundle,
   loadProfileEngagementStats,
-  loadProfileInitialVisit,
   loadProfileScreenBundle,
   loadProfileTabContent,
   revalidateProfileBundleInBackground,
@@ -229,6 +229,21 @@ export function ProfileScreen({
           setLoading(false);
           showedInstantData = true;
 
+          // Seed: gönderileri bundle'ı beklemeden hemen çek — grid boş kalmasın.
+          if (isProfileSeedBundle(userId, currentViewerId)) {
+            void loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions).then((posts) => {
+              if (posts.kind === 'posts') setTabItems(posts.items);
+            });
+            void loadProfileScreenBundle(userId, currentViewerId, loadOptions).then((bundle) => {
+              if (bundle) applyProfileBundle(bundle);
+            });
+            if (!isOwnProfile && user) void recordProfileView(userId);
+            void loadProfileEngagementStats(userId, currentViewerId).then((nextStats) => {
+              if (nextStats) setStats(nextStats);
+            });
+            return;
+          }
+
           void revalidateProfileBundleInBackground(userId, currentViewerId, loadOptions, applyProfileBundle);
           if (tabRef.current === 'posts') {
             void revalidateProfileTabInBackground(userId, 'posts', currentViewerId, (items, kind) => {
@@ -252,14 +267,21 @@ export function ProfileScreen({
       }
 
       try {
-        const visit = await loadProfileInitialVisit(userId, currentViewerId, loadOptions);
+        // Header + gönderiler birlikte — önce boş profil, sonra grid flash'ı yok.
+        const [bundle, posts] = await Promise.all([
+          loadProfileScreenBundle(userId, currentViewerId, loadOptions),
+          loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions),
+        ]);
 
-        if (!visit) {
+        if (!bundle) {
           return;
         }
 
-        applyProfileBundle(visit.bundle);
-        setTabItems(visit.initialTab.items);
+        applyProfileBundle(bundle);
+        if (posts.kind === 'posts') {
+          setTabItems(posts.items);
+        }
+        setLoading(false);
 
         if (!isOwnProfile && user) {
           void recordProfileView(userId);
@@ -272,7 +294,7 @@ export function ProfileScreen({
         setLoading(false);
       }
     },
-    [userId, user?.id, isOwnProfile, applyProfileBundle],
+    [userId, user?.id, isOwnProfile, applyProfileBundle, user],
   );
 
   const loadProfileRef = useRef(loadProfile);

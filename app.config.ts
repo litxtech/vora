@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import type { ExpoConfig } from 'expo/config';
 import {
+  APP_ANDROID_PACKAGE,
   APP_BUNDLE_ID,
   APP_DOMAIN,
   APP_NAME,
@@ -10,13 +11,29 @@ import {
   APP_SLUG,
   APPLE_TEAM_ID,
 } from './src/constants/app.js';
+import { SUBSCRIPTIONS_ENABLED } from './src/features/profile/constants/subscriptionsConfig.ts';
 
 const vendorAndroidMaven = path.join(__dirname, 'vendor', 'android-m2');
 const googleServicesFile = path.join(__dirname, 'google-services.json');
-const androidPackage = APP_BUNDLE_ID;
+const androidPackage = APP_ANDROID_PACKAGE;
 
 function ensureGoogleServicesJson(): void {
-  if (fs.existsSync(googleServicesFile)) return;
+  if (fs.existsSync(googleServicesFile)) {
+    try {
+      const existing = JSON.parse(fs.readFileSync(googleServicesFile, 'utf8')) as {
+        client?: { client_info?: { android_client_info?: { package_name?: string } } }[];
+      };
+      const pkg = existing.client?.[0]?.client_info?.android_client_info?.package_name;
+      if (pkg && pkg !== androidPackage) {
+        console.warn(
+          `[app.config] google-services.json paketi "${pkg}", Android paket "${androidPackage}" ile uyuşmuyor. Firebase'e ${androidPackage} ekleyip dosyayı yenileyin; aksi halde FCM/build düşer.`,
+        );
+      }
+    } catch {
+      // Mevcut dosya okunamazsa EAS/Google plugin kendi hatasını verir.
+    }
+    return;
+  }
 
   const apiKey = process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim();
   const projectId = process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID?.trim();
@@ -62,7 +79,7 @@ const config: ExpoConfig = {
   name: APP_NAME,
   slug: APP_SLUG,
   owner: 'voralive',
-  version: '2.4.2',
+  version: '2.4.4',
   orientation: 'default',
   icon: './assets/icon-ios.png',
   scheme: APP_SCHEME,
@@ -73,7 +90,7 @@ const config: ExpoConfig = {
     supportsTablet: false,
     bundleIdentifier: APP_BUNDLE_ID,
     appleTeamId: APPLE_TEAM_ID,
-    buildNumber: '17',
+    buildNumber: '19',
     associatedDomains: [`applinks:${APP_DOMAIN}`],
     entitlements: {
       'aps-environment': apnsEnvironment,
@@ -98,8 +115,8 @@ const config: ExpoConfig = {
   android: {
     ...(fs.existsSync(googleServicesFile) ? { googleServicesFile: './google-services.json' } : {}),
     icon: './assets/icon-android.png',
-    package: APP_BUNDLE_ID,
-    versionCode: 15,
+    package: APP_ANDROID_PACKAGE,
+    versionCode: 18,
     backgroundColor: '#F1F5F9',
     softwareKeyboardLayoutMode: 'resize',
     blockedPermissions: [
@@ -108,6 +125,9 @@ const config: ExpoConfig = {
       // full-screen-sharing-special kaldırıldı; yedek olarak manifest'ten de silinir.
       'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
       'android.permission.CAPTURE_VIDEO_OUTPUT',
+      // Arka planda medya çalma kullanmıyoruz; Play FGS beyanını tetiklemesin (expo-audio varsayılanı).
+      'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
+      ...(SUBSCRIPTIONS_ENABLED ? [] : ['com.android.vending.BILLING']),
     ],
     permissions: [
       'android.permission.CAMERA',
@@ -126,7 +146,7 @@ const config: ExpoConfig = {
       'android.permission.READ_MEDIA_AUDIO',
     ],
     adaptiveIcon: {
-      backgroundColor: '#1A1D26',
+      backgroundColor: '#FFFFFF',
       foregroundImage: './assets/android-icon-foreground.png',
       backgroundImage: './assets/android-icon-background.png',
       monochromeImage: './assets/android-icon-monochrome.png',
@@ -159,6 +179,7 @@ const config: ExpoConfig = {
   },
   plugins: [
     './plugins/withAndroidLargeScreenSupport',
+    './plugins/withVideoTrimAndroidFiles',
     [
       'expo-build-properties',
       {
@@ -183,7 +204,7 @@ const config: ExpoConfig = {
       },
     ],
     'expo-apple-authentication',
-    'expo-iap',
+    ...(SUBSCRIPTIONS_ENABLED ? (['expo-iap'] as const) : []),
     'expo-router',
     'expo-asset',
     [
@@ -299,7 +320,7 @@ const config: ExpoConfig = {
     EXPO_PUBLIC_IOS_APP_STORE_URL: process.env.EXPO_PUBLIC_IOS_APP_STORE_URL,
     EXPO_PUBLIC_ANDROID_PLAY_STORE_URL:
       process.env.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL ??
-      `https://play.google.com/store/apps/details?id=${APP_BUNDLE_ID}`,
+      `https://play.google.com/store/apps/details?id=${APP_ANDROID_PACKAGE}`,
     EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY,
   },
 };
