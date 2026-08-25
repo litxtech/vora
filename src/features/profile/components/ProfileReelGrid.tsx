@@ -4,10 +4,10 @@ import { Text } from '@/components/ui/Text';
 import { useProfileGridLayout } from '@/features/profile/hooks/useProfileGridLayout';
 import { formatCount } from '@/features/profile/constants';
 import type { ReelItem } from '@/features/reels/types';
-import { radius } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const GAP = 2;
+/** Instagram: 1px ara — yapışık dikey ızgara. */
+const GAP = 1;
 
 type ProfileReelGridProps = {
   reels: ReelItem[];
@@ -17,7 +17,9 @@ type ProfileReelGridProps = {
 
 export function ProfileReelGrid({ reels, showStats = false, onPressReel }: ProfileReelGridProps) {
   const { colors } = useTheme();
-  const { cellSize, onGridLayout } = useProfileGridLayout(GAP);
+  const { cellSize, pagePadding, containerWidth, onGridLayout } = useProfileGridLayout(GAP, {
+    fullBleed: true,
+  });
 
   if (reels.length === 0) {
     return <Text secondary style={styles.empty}>Henüz reel yok.</Text>;
@@ -28,21 +30,35 @@ export function ProfileReelGrid({ reels, showStats = false, onPressReel }: Profi
   };
 
   return (
-    <View style={[styles.grid, { gap: GAP }]} onLayout={handleGridLayout}>
+    <View
+      style={[
+        styles.grid,
+        {
+          gap: GAP,
+          marginHorizontal: -pagePadding,
+          width: containerWidth > 0 ? containerWidth : undefined,
+        },
+      ]}
+      onLayout={handleGridLayout}
+    >
       {reels.map((reel) => (
         <Pressable
           key={reel.id}
           style={[
             styles.cell,
             cellSize > 0
-              ? { width: cellSize, height: cellSize * 1.4 }
+              ? { width: cellSize, height: Math.round(cellSize * 1.25) }
               : styles.cellFallback,
             { backgroundColor: colors.surfaceElevated },
           ]}
           onPress={() => onPressReel?.(reel)}
         >
           {reel.thumbnailUrl ? (
-            <Image source={{ uri: reel.thumbnailUrl }} style={styles.thumb} />
+            <Image
+              source={{ uri: reel.thumbnailUrl }}
+              style={styles.thumb}
+              resizeMode="cover"
+            />
           ) : (
             <View style={[styles.thumb, styles.thumbPlaceholder]}>
               <Ionicons name="play-circle" size={32} color={colors.textMuted} />
@@ -69,17 +85,21 @@ export function ProfileReelGrid({ reels, showStats = false, onPressReel }: Profi
 
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { borderRadius: radius.sm, overflow: 'hidden' },
+  cell: { overflow: 'hidden', position: 'relative' },
   cellFallback: {
-    width: '31%',
-    aspectRatio: 1 / 1.4,
+    width: '33.333%',
+    aspectRatio: 1 / 1.25,
   },
-  thumb: { width: '100%', height: '100%' },
+  thumb: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   thumbPlaceholder: { alignItems: 'center', justifyContent: 'center', backgroundColor: '#1A2230' },
   overlay: {
     position: 'absolute',
-    bottom: 4,
-    left: 4,
+    bottom: 6,
+    left: 6,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 2,
@@ -87,8 +107,8 @@ const styles = StyleSheet.create({
   viewCount: { color: '#fff', fontSize: 11 },
   statsBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 6,
+    right: 6,
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 4,
     paddingVertical: 2,

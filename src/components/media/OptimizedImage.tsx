@@ -42,6 +42,7 @@ export const OptimizedImage = memo(function OptimizedImage({
       source={{ uri: source }}
       style={style}
       contentFit={contentFit}
+      contentPosition="center"
       cachePolicy="memory-disk"
       recyclingKey={recyclingKey ?? source}
       transition={transition}

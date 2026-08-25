@@ -22,10 +22,11 @@ import {
 import { useAuth } from '@/providers/AuthProvider';
 import { formatCount } from '@/features/profile/constants';
 import type { FeedItem } from '@/features/feed/types';
-import { radius, spacing } from '@/constants/theme';
+import { spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const GAP = 4;
+/** Instagram: 1px ara — yapışık kare ızgara. */
+const GAP = 1;
 
 type ProfilePostGridProps = {
   items: FeedItem[];
@@ -72,7 +73,6 @@ type GridCellProps = {
   item: FeedItem;
   index: number;
   cellSize: number;
-  borderColor: string;
   isDark: boolean;
   userId: string | null;
   onOpenViewer: (index: number) => void;
@@ -82,21 +82,17 @@ const ProfileGridCell = memo(function ProfileGridCell({
   item,
   index,
   cellSize,
-  borderColor,
   isDark,
   userId,
   onOpenViewer,
 }: GridCellProps) {
   const hasMedia = postHasGridMedia(item);
   const primaryMedia = item.mediaUrls.find((url) => url?.trim()) ?? null;
+  const sizeStyle = cellSize > 0 ? { width: cellSize, height: cellSize } : styles.cellFallback;
 
   return (
     <Pressable
-      style={[
-        styles.cell,
-        cellSize > 0 ? { width: cellSize, height: cellSize } : styles.cellFallback,
-        { borderColor },
-      ]}
+      style={[styles.cell, sizeStyle]}
       onPress={() => {
         void openFeedVideoItem(item, userId).then((openedInReels) => {
           if (!openedInReels) onOpenViewer(index);
@@ -137,12 +133,14 @@ const ProfileGridCell = memo(function ProfileGridCell({
 });
 
 export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridProps) {
-  const { colors, isDark } = useTheme();
+  const { isDark } = useTheme();
   const { user } = useAuth();
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(() => getProfileGridInitialBatch());
   const dismissToken = useFeedMediaViewerStore((s) => s.dismissToken);
-  const { cellSize, onGridLayout } = useProfileGridLayout(GAP);
+  const { cellSize, pagePadding, containerWidth, onGridLayout } = useProfileGridLayout(GAP, {
+    fullBleed: true,
+  });
 
   useEffect(() => {
     setViewerIndex(null);
@@ -186,14 +184,23 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
 
   return (
     <>
-      <View style={[styles.grid, { gap: GAP }]} onLayout={handleGridLayout}>
+      <View
+        style={[
+          styles.grid,
+          {
+            gap: GAP,
+            marginHorizontal: -pagePadding,
+            width: containerWidth > 0 ? containerWidth : undefined,
+          },
+        ]}
+        onLayout={handleGridLayout}
+      >
         {visibleItems.map((item, index) => (
           <ProfileGridCell
             key={item.id}
             item={item}
             index={index}
             cellSize={cellSize}
-            borderColor={`${colors.border}88`}
             isDark={isDark}
             userId={user?.id ?? null}
             onOpenViewer={openViewer}
@@ -227,31 +234,33 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
 const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: {
-    borderRadius: radius.md,
     overflow: 'hidden',
-    borderWidth: StyleSheet.hairlineWidth,
-    backgroundColor: 'transparent',
+    backgroundColor: '#0A0E14',
     position: 'relative',
   },
   cellFallback: {
-    width: '31%',
+    width: '33.333%',
     aspectRatio: 1,
   },
-  thumb: { width: '100%', height: '100%' },
+  thumb: {
+    ...StyleSheet.absoluteFillObject,
+    width: '100%',
+    height: '100%',
+  },
   multiBadge: {
     position: 'absolute',
-    top: 4,
-    right: 4,
+    top: 6,
+    right: 6,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: radius.sm,
+    borderRadius: 4,
     padding: 3,
   },
   videoBadge: {
     position: 'absolute',
-    top: 4,
-    left: 4,
+    top: 6,
+    left: 6,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: radius.sm,
+    borderRadius: 4,
     padding: 3,
   },
   overlay: {

@@ -331,9 +331,9 @@ export function getReelsIdleReleaseMs(): number {
 
 export { getHeavyFeatureBootDelayMs as getAndroidHeavyFeatureBootDelayMs } from '@/lib/boot/heavyFeatureDelay';
 
-/** Profil ızgarası sütun sayısı — tablette daha küçük hücre, daha az decode. */
+/** Profil ızgarası — Instagram gibi her zaman 3 sütun. */
 export function getProfileGridColumns(): number {
-  return isAndroidTablet() ? 4 : 3;
+  return 3;
 }
 
 /** Marketplace ızgarası — tablette 3 sütun, daha küçük kapak görselleri. */
@@ -349,7 +349,7 @@ export function getImageTargetWidth(tier: ImageSizeTier): number {
     const tablet: Record<ImageSizeTier, number> = {
       thumb: 80,
       feed: 460,
-      grid: 128,
+      grid: 160,
       avatar: 72,
       full: 680,
     };
@@ -359,7 +359,7 @@ export function getImageTargetWidth(tier: ImageSizeTier): number {
     const phone: Record<ImageSizeTier, number> = {
       thumb: 96,
       feed: 600,
-      grid: 160,
+      grid: 240,
       avatar: 80,
       full: 960,
     };
@@ -368,7 +368,7 @@ export function getImageTargetWidth(tier: ImageSizeTier): number {
   const ios: Record<ImageSizeTier, number> = {
     thumb: 140,
     feed: 800,
-    grid: 200,
+    grid: 280,
     avatar: 112,
     full: 1400,
   };

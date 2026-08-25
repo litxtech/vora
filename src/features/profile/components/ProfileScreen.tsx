@@ -180,7 +180,8 @@ export function ProfileScreen({
   const [loading, setLoading] = useState(
     () => !(warmEntry?.bundle?.profile && warmEntry?.bundle?.stats),
   );
-  const [tabLoading, setTabLoading] = useState(false);
+  // Ziyarette boş "içerik yok" flash'ı olmasın — cache yoksa yükleniyor göster.
+  const [tabLoading, setTabLoading] = useState(() => !(warmEntry?.tabItems?.length));
   const savedCollections = useSavedCollections(userId, { enabled: isOwnProfile });
   const tabRef = useRef(tab);
   tabRef.current = tab;
@@ -220,20 +221,32 @@ export function ProfileScreen({
 
       let showedInstantData = false;
 
+      const applyPosts = (posts: { kind: 'posts' | 'reels'; items: FeedItem[] | ReelItem[] }) => {
+        if (posts.kind === 'posts') {
+          setTabItems(posts.items as FeedItem[]);
+          if (tabRef.current === 'posts' || tabRef.current === 'media' || tabRef.current === 'quotes' || tabRef.current === 'liked') {
+            setTabLoading(false);
+          }
+        }
+      };
+
       if (!force) {
         const cached = getCachedProfileBundle(userId, currentViewerId);
         if (cached) {
           applyProfileBundle(cached);
           const cachedPosts = getCachedTabPosts(userId, 'posts', currentViewerId);
-          if (cachedPosts) setTabItems(cachedPosts);
+          if (cachedPosts) {
+            setTabItems(cachedPosts);
+            setTabLoading(false);
+          } else {
+            setTabLoading(true);
+          }
           setLoading(false);
           showedInstantData = true;
 
           // Seed: gönderileri bundle'ı beklemeden hemen çek — grid boş kalmasın.
           if (isProfileSeedBundle(userId, currentViewerId)) {
-            void loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions).then((posts) => {
-              if (posts.kind === 'posts') setTabItems(posts.items);
-            });
+            void loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions).then(applyPosts);
             void loadProfileScreenBundle(userId, currentViewerId, loadOptions).then((bundle) => {
               if (bundle) applyProfileBundle(bundle);
             });
@@ -246,9 +259,13 @@ export function ProfileScreen({
 
           void revalidateProfileBundleInBackground(userId, currentViewerId, loadOptions, applyProfileBundle);
           if (tabRef.current === 'posts') {
-            void revalidateProfileTabInBackground(userId, 'posts', currentViewerId, (items, kind) => {
-              if (kind === 'posts') setTabItems(items as FeedItem[]);
-            });
+            if (cachedPosts) {
+              void revalidateProfileTabInBackground(userId, 'posts', currentViewerId, (items, kind) => {
+                if (kind === 'posts') setTabItems(items as FeedItem[]);
+              });
+            } else {
+              void loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions).then(applyPosts);
+            }
           }
           return;
         }
@@ -260,27 +277,22 @@ export function ProfileScreen({
         }
       }
 
-      if (force) {
-        if (!showedInstantData) setLoading(true);
-      } else if (!showedInstantData) {
-        setLoading(true);
+      if (!showedInstantData) setLoading(true);
+      if (!getCachedTabPosts(userId, 'posts', currentViewerId)) {
+        setTabLoading(true);
       }
 
+      // Gönderiler header'ı beklemesin — paralel ve bağımsız.
+      void loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions).then(applyPosts);
+
       try {
-        // Header + gönderiler birlikte — önce boş profil, sonra grid flash'ı yok.
-        const [bundle, posts] = await Promise.all([
-          loadProfileScreenBundle(userId, currentViewerId, loadOptions),
-          loadProfileTabContent(userId, 'posts', currentViewerId, loadOptions),
-        ]);
+        const bundle = await loadProfileScreenBundle(userId, currentViewerId, loadOptions);
 
         if (!bundle) {
           return;
         }
 
         applyProfileBundle(bundle);
-        if (posts.kind === 'posts') {
-          setTabItems(posts.items);
-        }
         setLoading(false);
 
         if (!isOwnProfile && user) {

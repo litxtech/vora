@@ -19,13 +19,18 @@ function physicalWidth(layoutWidth: number): number {
   return Math.min(Math.ceil(layoutWidth * PixelRatio.get()), getImageMaxDecodeWidth());
 }
 
-/** Avatar yüklemeleri zaten kare; sunucuda cover ikinci kez kırpar (Android'de yüz çok yakın görünür). */
+/** Avatar: kare contain. Grid/thumb: kare cover (profil ızgarası).
+ *  Feed/full: yalnızca genişlik sınırı + contain — kırpma yok, tam görüntü.
+ */
 function buildRenderQuery(tier: ImageSizeTier, targetW: number): string {
   const quality = getImageRenderQuality();
   if (tier === 'avatar') {
     return `width=${targetW}&height=${targetW}&quality=${quality}&resize=contain`;
   }
-  return `width=${targetW}&quality=${quality}&resize=cover`;
+  if (tier === 'grid' || tier === 'thumb') {
+    return `width=${targetW}&height=${targetW}&quality=${quality}&resize=cover`;
+  }
+  return `width=${targetW}&quality=${quality}&resize=contain`;
 }
 
 export function optimizedImageUrl(

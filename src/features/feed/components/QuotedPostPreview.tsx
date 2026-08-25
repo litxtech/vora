@@ -5,6 +5,7 @@ import { FeedMediaPreview } from '@/components/media/FeedMediaPreview';
 import { Text } from '@/components/ui/Text';
 import { FeedAuthorAvatar } from '@/features/feed/components/FeedAuthorAvatar';
 import { HashtagText } from '@/features/feed/components/HashtagText';
+import { CommentLinkAttachment } from '@/features/richtext';
 import { navigateToFeedDetail } from '@/features/feed/services/feedNavigation';
 import type { QuotedPostPreview as QuotedPost } from '@/features/feed/types';
 import { formatFeedTime } from '@/features/feed/utils';
@@ -99,14 +100,13 @@ export function QuotedPostPreview({ quoted, expanded = false, interactive = true
         ) : null}
 
         <View style={expanded ? undefined : styles.contentClamp}>
-          {expanded ? (
-            <HashtagText content={quoted.content} />
-          ) : (
-            <Text numberOfLines={4} variant="body" style={styles.content}>
-              {quoted.content}
-            </Text>
-          )}
+          <HashtagText
+            content={quoted.content}
+            numberOfLines={expanded ? undefined : 4}
+            style={styles.content}
+          />
         </View>
+        {expanded ? <CommentLinkAttachment content={quoted.content} layout="compact" /> : null}
 
         {hasMedia && primaryMedia ? (
           <View style={styles.mediaWrap}>
@@ -115,6 +115,7 @@ export function QuotedPostPreview({ quoted, expanded = false, interactive = true
               style={[styles.media, expanded && styles.mediaExpanded]}
               showPlayIcon
               tier="feed"
+              resizeMode="contain"
             />
             {extraMedia > 0 ? (
               <View style={[styles.mediaCount, { backgroundColor: `${colors.background}CC` }]}>

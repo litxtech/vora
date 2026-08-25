@@ -1,6 +1,6 @@
-import { memo, useCallback, useMemo, useState, type ReactNode } from 'react';
-import { LayoutChangeEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import type { ImageContentFit } from 'expo-image';
+import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { Image as RnImage, LayoutChangeEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import type { ImageContentFit, ImageLoadEventData } from 'expo-image';
 import { FEED_MEDIA_ASPECT_RATIO } from '@/features/feed/constants';
 import { getFeedMediaMaxHeight } from '@/lib/device/androidPerfProfile';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
@@ -10,7 +10,11 @@ import { FeedInlineVideoSlide } from '@/features/feed/components/FeedInlineVideo
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
-const INLINE_ASPECT = 4 / 5;
+/** Genişlik / yükseklik — Instagram aralığı. */
+const MIN_INLINE_ASPECT = 4 / 5;
+const MAX_INLINE_ASPECT = 1.91;
+const DEFAULT_INLINE_ASPECT = 1;
+const VIDEO_INLINE_ASPECT = 4 / 5;
 const SLIDE_WINDOW = 1;
 
 type MediaCarouselProps = {
@@ -27,6 +31,12 @@ type MediaCarouselProps = {
   videoActive?: boolean;
   videoMuted?: boolean;
 };
+
+function clampFeedAspect(width: number, height: number): number {
+  if (width <= 0 || height <= 0) return DEFAULT_INLINE_ASPECT;
+  const aspect = width / height;
+  return Math.min(MAX_INLINE_ASPECT, Math.max(MIN_INLINE_ASPECT, aspect));
+}
 
 function shouldRenderSlide(activeIndex: number, slideIndex: number, total: number): boolean {
   if (total <= 3) return true;
@@ -54,6 +64,44 @@ export const MediaCarousel = memo(function MediaCarousel({
 
   const [index, setIndex] = useState(0);
   const [width, setWidth] = useState(0);
+  const [aspectByUrl, setAspectByUrl] = useState<Record<string, number>>({});
+
+  const rememberAspect = useCallback((url: string, nextAspect: number) => {
+    setAspectByUrl((prev) => {
+      if (prev[url] != null && Math.abs(prev[url] - nextAspect) < 0.01) return prev;
+      return { ...prev, [url]: nextAspect };
+    });
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    for (const url of urls) {
+      if (!url || isVideoUrl(url)) continue;
+      RnImage.getSize(
+        url,
+        (w, h) => {
+          if (cancelled) return;
+          rememberAspect(url, clampFeedAspect(w, h));
+        },
+        () => undefined,
+      );
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [urls, rememberAspect]);
+
+  const activeUrl = urls[index] ?? urls[0] ?? '';
+  const activeIsVideo = activeUrl ? isVideoUrl(activeUrl) : false;
+  const measuredAspect = aspectByUrl[activeUrl] ?? aspectByUrl[urls[0] ?? ''] ?? DEFAULT_INLINE_ASPECT;
+
+  const mediaAspect = isInline
+    ? logoFrame
+      ? 16 / 9
+      : activeIsVideo
+        ? VIDEO_INLINE_ASPECT
+        : measuredAspect
+    : 1 / FEED_MEDIA_ASPECT_RATIO;
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const next = Math.round(e.nativeEvent.layout.width);
@@ -63,18 +111,11 @@ export const MediaCarousel = memo(function MediaCarousel({
   }, []);
 
   const resolveHeight = useCallback(
-    (_slideIndex = 0) => {
-      if (width <= 0) return 0;
-
-      const fallbackRatio = isInline
-        ? logoFrame
-          ? 16 / 9
-          : INLINE_ASPECT
-        : 1 / FEED_MEDIA_ASPECT_RATIO;
-
-      return Math.min(width / fallbackRatio, maxHeight);
+    (layoutWidth: number, aspect: number) => {
+      if (layoutWidth <= 0 || aspect <= 0) return 0;
+      return Math.min(layoutWidth / aspect, maxHeight);
     },
-    [width, isInline, maxHeight, logoFrame],
+    [maxHeight],
   );
 
   const visibleIndices = useMemo(() => {
@@ -93,22 +134,41 @@ export const MediaCarousel = memo(function MediaCarousel({
     [onSlideIndexChange],
   );
 
+  const handleImageLoad = useCallback(
+    (url: string) => (event: ImageLoadEventData) => {
+      const source = event.source;
+      if (!source?.width || !source?.height) return;
+      rememberAspect(url, clampFeedAspect(source.width, source.height));
+    },
+    [rememberAspect],
+  );
+
   if (urls.length === 0) return null;
 
   const borderRadius = isInline ? radius.xl : 0;
-  const inlineHeight = width > 0 ? resolveHeight(0) : 0;
+  const inlineHeight = width > 0 ? resolveHeight(width, mediaAspect) : 0;
   const showDots = isInline && urls.length > 1;
+  // İlk paint'te aspectRatio ile yer ayır; ölçüldükten sonra sabit height (maxHeight ile çakışmasın).
+  const frameLayoutStyle = isInline
+    ? {
+        borderColor: `${colors.border}88`,
+        borderRadius,
+        backgroundColor: colors.surfaceElevated,
+        ...(width > 0
+          ? { height: inlineHeight }
+          : { aspectRatio: mediaAspect, maxHeight }),
+      }
+    : null;
+
+  // Çerçeve görsel oranına uyunca cover tam oturur; logo kartlarında contain.
+  const fit = logoFrame ? 'contain' : imageContentFit;
 
   return (
     <View onLayout={onLayout} style={isInline ? styles.inlineOuter : undefined}>
       <View
         style={[
           isInline && styles.inlineFrame,
-          isInline && {
-            borderColor: `${colors.border}88`,
-            borderRadius,
-          },
-          isInline && inlineHeight > 0 && { height: inlineHeight },
+          frameLayoutStyle,
           overlay ? styles.frameWithOverlay : null,
         ]}
       >
@@ -119,24 +179,24 @@ export const MediaCarousel = memo(function MediaCarousel({
               pagingEnabled
               showsHorizontalScrollIndicator={false}
               removeClippedSubviews={false}
-              style={{ height: inlineHeight, backgroundColor: 'transparent' }}
+              style={[styles.carouselScroll, { height: inlineHeight }]}
               onMomentumScrollEnd={(e) => {
                 const next = Math.round(e.nativeEvent.contentOffset.x / width);
                 updateIndex(next);
               }}
             >
               {urls.map((url, i) => {
-                const slideHeight = isInline ? inlineHeight : resolveHeight(i);
+                const slideHeight = isInline ? inlineHeight : resolveHeight(width, mediaAspect);
                 const mediaStyle = [
                   styles.image,
                   {
                     width,
                     height: slideHeight,
+                    backgroundColor: isInline ? colors.surfaceElevated : '#000',
                   },
                 ];
 
                 const renderMedia = visibleIndices.has(i);
-                const fit = logoFrame ? 'contain' : imageContentFit;
                 const slideVideoMounted = inlineVideo && videoMounted && index === i;
                 const slideVideoActive = slideVideoMounted && videoActive;
 
@@ -162,7 +222,7 @@ export const MediaCarousel = memo(function MediaCarousel({
                             url={url}
                             style={StyleSheet.absoluteFill}
                             layoutWidth={width}
-                            showPlayIcon={false}
+                            showPlayIcon
                             onPress={onMediaPress ? () => onMediaPress(i) : undefined}
                           />
                         )
@@ -177,6 +237,7 @@ export const MediaCarousel = memo(function MediaCarousel({
                         tier="feed"
                         layoutWidth={width}
                         recyclingKey={`${url}-${i}`}
+                        onLoad={handleImageLoad(url)}
                       />
                     )}
                   </Pressable>
@@ -186,6 +247,14 @@ export const MediaCarousel = memo(function MediaCarousel({
 
             {overlay ? (
               <View style={styles.overlayLayer} pointerEvents="box-none">
+                {onMediaPress && inlineVideo && videoMounted ? (
+                  <Pressable
+                    style={StyleSheet.absoluteFill}
+                    onPress={() => onMediaPress(index)}
+                    accessibilityRole="button"
+                    accessibilityLabel="Videoyu aç"
+                  />
+                ) : null}
                 {overlay}
               </View>
             ) : null}
@@ -202,15 +271,7 @@ export const MediaCarousel = memo(function MediaCarousel({
             ) : null}
           </>
         ) : (
-          <View
-            style={[
-              styles.placeholder,
-              {
-                aspectRatio: isInline ? (logoFrame ? 16 / 9 : INLINE_ASPECT) : 1 / FEED_MEDIA_ASPECT_RATIO,
-                borderRadius,
-              },
-            ]}
-          />
+          <View style={styles.placeholder} />
         )}
       </View>
     </View>
@@ -224,6 +285,7 @@ const styles = StyleSheet.create({
   inlineFrame: {
     borderWidth: StyleSheet.hairlineWidth,
     overflow: 'hidden',
+    width: '100%',
   },
   frameWithOverlay: {
     position: 'relative',
@@ -233,6 +295,9 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
   placeholder: {},
+  carouselScroll: {
+    backgroundColor: 'transparent',
+  },
   image: {},
   dots: {
     position: 'absolute',

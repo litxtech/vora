@@ -573,26 +573,27 @@ export async function fetchUserPosts(
     rows = rows.filter((r) => (r.media_urls?.length ?? 0) > 0);
   }
 
+  // Ziyaretçi: yalnızca friends/close_friends varsa pahalı audience context çek.
   if (viewerId !== userId) {
-    const visible = await filterPostsByAudience(
-      rows.map((r) => ({ id: r.id, authorId: r.author_id, audience: r.audience ?? 'public' })),
-      viewerId,
-    );
-    const allowed = new Set(visible.map((v) => v.id));
-    rows = rows.filter((r) => allowed.has(r.id));
+    const needsAudienceFilter = rows.some((r) => (r.audience ?? 'public') !== 'public');
+    if (needsAudienceFilter) {
+      const visible = await filterPostsByAudience(
+        rows.map((r) => ({ id: r.id, authorId: r.author_id, audience: r.audience ?? 'public' })),
+        viewerId,
+      );
+      const allowed = new Set(visible.map((v) => v.id));
+      rows = rows.filter((r) => allowed.has(r.id));
+    }
   }
 
   const postIds = rows.map((r) => r.id);
   const emptyState = { liked: new Set<string>(), saved: new Set<string>() };
   const baseItems = rows.map((row) => mapPostToFeedItem(row, emptyState));
 
-  // Beğeni durumu + yazar zenginleştirme paralel — profil grid daha erken dolsun.
-  const [state, enriched] = await Promise.all([
-    fetchEngagementState(postIds, viewerId),
-    enrichFeedAuthorsInItems(baseItems),
-  ]);
+  // Profil ızgarası: tek yazar — izdivaç/işletme zenginleştirmesi gereksiz (ek round-trip).
+  const state = await fetchEngagementState(postIds, viewerId);
 
-  return enriched.map((item) => ({
+  return baseItems.map((item) => ({
     ...item,
     isLiked: state.liked.has(item.sourceId),
     isSaved: state.saved.has(item.sourceId),
