@@ -16,6 +16,7 @@ import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { useAuth } from '@/providers/AuthProvider';
 import { detachReelMusic } from '@/features/music/services/reelMusicSync';
 import { ReelFeedPage } from '@/features/reels/components/ReelFeedPage';
+import { useAppForeground } from '@/features/reels/hooks/useAppForeground';
 import { useReels } from '@/features/reels/hooks/useReels';
 import { initReelsPlayback } from '@/features/reels/services/initReelsPlayback';
 import {
@@ -47,7 +48,8 @@ const IOS_REELS_LIST_PERF = {
 
 export function ReelsFeed() {
   const isFocused = useIsFocused();
-  const playbackFocused = isFocused;
+  const appForeground = useAppForeground();
+  const playbackAllowed = isFocused && appForeground;
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
@@ -167,11 +169,41 @@ export function ReelsFeed() {
   }, [setScrolling]);
 
   useEffect(() => {
+    if (playbackAllowed) {
+      const runFocusWork = () => {
+        void initReelsPlayback();
+        void ensureReelFeedAudioMode();
+        setScrolling(false);
+
+        const state = useReelsPlaybackStore.getState();
+        const count = itemsRef.current.length;
+        const safeIndex =
+          state.activeIndex < 0 ? 0 : Math.min(state.activeIndex, Math.max(0, count - 1));
+
+        if (state.activeIndex !== safeIndex) {
+          setPlaybackActiveIndex(safeIndex);
+        }
+
+        if (count > 0) {
+          scheduleReelWarmup(itemsRef.current, safeIndex);
+        }
+      };
+
+      if (shouldDeferHeavyFocusWork()) {
+        const task = deferBackgroundWork(runFocusWork);
+        return () => task.cancel();
+      }
+
+      runFocusWork();
+      return undefined;
+    }
+
+    setScrolling(false);
+    detachReelMusic();
+    pauseReelVideoPreloadPool();
+    clearPrimedReelVideoPreload();
+
     if (!isFocused) {
-      setScrolling(false);
-      detachReelMusic();
-      pauseReelVideoPreloadPool();
-      clearPrimedReelVideoPreload();
       clearSession();
       anchoredRef.current = null;
       anchorFetchStartedRef.current = null;
@@ -181,7 +213,6 @@ export function ReelsFeed() {
         setPlaybackActiveIndex(0);
       }
 
-      // Kısa sekme geçişlerinde havuz korunur; uzun süre dönülmezse bellek/decoder serbest bırakılır.
       const idleRelease = setTimeout(() => {
         resetReelWarmup();
         clearReelVideoPreloadPool();
@@ -191,32 +222,8 @@ export function ReelsFeed() {
       return () => clearTimeout(idleRelease);
     }
 
-    const runFocusWork = () => {
-      void initReelsPlayback();
-      void ensureReelFeedAudioMode();
-      setScrolling(false);
-
-      const state = useReelsPlaybackStore.getState();
-      const count = itemsRef.current.length;
-      const safeIndex =
-        state.activeIndex < 0 ? 0 : Math.min(state.activeIndex, Math.max(0, count - 1));
-
-      if (state.activeIndex !== safeIndex) {
-        setPlaybackActiveIndex(safeIndex);
-      }
-
-      if (count > 0) {
-        scheduleReelWarmup(itemsRef.current, safeIndex);
-      }
-    };
-
-    if (shouldDeferHeavyFocusWork()) {
-      const task = deferBackgroundWork(runFocusWork);
-      return () => task.cancel();
-    }
-
-    runFocusWork();
-  }, [isFocused, clearSession, setPlaybackActiveIndex, setScrolling]);
+    return undefined;
+  }, [playbackAllowed, isFocused, clearSession, setPlaybackActiveIndex, setScrolling]);
 
   useEffect(() => {
     setPlaybackItemCount(items.length);
@@ -279,19 +286,19 @@ export function ReelsFeed() {
   }, [viewportHeight, items.length, isAnchorPending]);
 
   useEffect(() => {
-    if (!isFocused || items.length === 0 || isAnchorPending()) return;
+    if (!playbackAllowed || items.length === 0 || isAnchorPending()) return;
     const idx = useReelsPlaybackStore.getState().activeIndex;
     if (idx < 0) return;
     scheduleReelWarmup(items, idx);
-  }, [isFocused, items, isAnchorPending]);
+  }, [playbackAllowed, items, isAnchorPending]);
 
   useEffect(() => {
-    if (!isFocused || isAnchorPending()) return;
+    if (!playbackAllowed || isAnchorPending()) return;
     queueWarmup(activeIndex);
     return () => {
       if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
     };
-  }, [isFocused, activeIndex, isAnchorPending, queueWarmup]);
+  }, [playbackAllowed, activeIndex, isAnchorPending, queueWarmup]);
 
   const handleScrollBegin = useCallback(() => {
     setScrolling(true);
@@ -391,14 +398,14 @@ export function ReelsFeed() {
       <ReelFeedPage
         item={item}
         index={index}
-        isFocused={playbackFocused}
+        isFocused={playbackAllowed}
         viewportHeight={viewportHeight}
         viewportWidth={SCREEN_WIDTH}
         onUpdate={(patch) => feed.updateItem(item.id, patch)}
         onDeleted={() => feed.removeItem(item.id)}
       />
     ),
-    [feed, playbackFocused, viewportHeight],
+    [feed, playbackAllowed, viewportHeight],
   );
 
   const reelsListPerf = isAndroid() ? getAndroidReelsFlatListPerfProps() : IOS_REELS_LIST_PERF;

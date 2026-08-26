@@ -1,21 +1,26 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  AppState,
   Dimensions,
   FlatList,
   Modal,
   Pressable,
   StyleSheet,
   View,
+  type AppStateStatus,
   type ViewToken,
 } from 'react-native';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { detachReelMusic } from '@/features/music/services/reelMusicSync';
 import { ReelOverlay } from '@/features/reels/components/ReelOverlay';
 import { ReelPlayer } from '@/features/reels/components/ReelPlayer';
 import { recordReelView } from '@/features/reels/services/reelsData';
+import { pauseReelVideoPreloadPool } from '@/features/reels/services/reelVideoPreload';
 import { getReelHotWindow } from '@/features/reels/services/reelWindow';
 import { scheduleReelWarmup } from '@/features/reels/services/reelWarmup';
+import { useAppForeground } from '@/features/reels/hooks/useAppForeground';
 import type { ReelItem } from '@/features/reels/types';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -30,14 +35,34 @@ type ProfileReelViewerProps = {
 
 export function ProfileReelViewer({ reels, startIndex, visible, onClose, onReelDeleted }: ProfileReelViewerProps) {
   const insets = useSafeAreaInsets();
+  const appForeground = useAppForeground();
   const viewedRef = useRef(new Set<string>());
   const [items, setItems] = useState(reels);
   const [activeIndex, setActiveIndex] = useState(startIndex);
+  const playbackAllowed = visible && appForeground;
+
+  const suspendPlayback = useCallback(() => {
+    detachReelMusic();
+    pauseReelVideoPreloadPool();
+  }, []);
 
   useEffect(() => {
-    if (!visible || items.length === 0) return;
+    if (playbackAllowed) return;
+    suspendPlayback();
+  }, [playbackAllowed, suspendPlayback]);
+
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state: AppStateStatus) => {
+      if (!visible || state === 'active') return;
+      suspendPlayback();
+    });
+    return () => sub.remove();
+  }, [visible, suspendPlayback]);
+
+  useEffect(() => {
+    if (!playbackAllowed || items.length === 0) return;
     scheduleReelWarmup(items, activeIndex);
-  }, [visible, items, activeIndex]);
+  }, [playbackAllowed, items, activeIndex]);
 
   const updateItem = (id: string, patch: Partial<ReelItem>) => {
     setItems((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -92,8 +117,8 @@ export function ProfileReelViewer({ reels, startIndex, visible, onClose, onReelD
           renderItem={({ item, index }) => {
             const { min, max } = getReelHotWindow(activeIndex, items.length);
             const inHotWindow = index >= min && index <= max;
-            const isActive = visible && index === activeIndex;
-            const shouldPreload = visible && inHotWindow && !isActive;
+            const isActive = playbackAllowed && index === activeIndex;
+            const shouldPreload = playbackAllowed && inHotWindow && !isActive;
 
             return (
               <View style={styles.page}>

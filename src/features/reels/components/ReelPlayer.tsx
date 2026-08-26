@@ -42,7 +42,6 @@ function safePausePlayer(player: VideoPlayer) {
 
 function startActiveVideo(
   player: VideoPlayer,
-  hasMusic: boolean,
   originalVolume: number,
   resetToStart = false,
 ) {
@@ -52,14 +51,10 @@ function startActiveVideo(
     if (resetToStart && currentTime != null && currentTime > 0.02) {
       p.currentTime = 0;
     }
-    if (hasMusic) {
-      const muteOriginal = originalVolume <= 0.001;
-      p.muted = muteOriginal;
-      p.volume = muteOriginal ? 0 : originalVolume;
-    } else {
-      p.muted = false;
-      p.volume = 1;
-    }
+    // Müziksiz reelde originalVolume 1'dir; paylaşımda ses kapatıldıysa 0 gelir.
+    const muteOriginal = originalVolume <= 0.001;
+    p.muted = muteOriginal;
+    p.volume = muteOriginal ? 0 : originalVolume;
     p.play();
   });
 }
@@ -149,7 +144,8 @@ function ReelPlayerVideo({
   );
 
   const player = useReelVideoPlayer(item.playbackId, videoSource);
-  const musicOriginalVolume = item.musicPlayback?.originalAudioVolume ?? 1;
+  const musicOriginalVolume =
+    item.musicPlayback?.originalAudioVolume ?? (item.videoOriginalMuted ? 0 : 1);
   const { boosting, beginBoost, endBoost } = useReelHoldToSpeed({
     player,
     reelId: item.id,
@@ -263,6 +259,7 @@ function ReelPlayerVideo({
   useEffect(() => {
     if (!shouldMountVideo) {
       safePausePlayer(player);
+      if (hasMusic) detachReelMusicIfOwner(item.id);
       return;
     }
 
@@ -295,7 +292,7 @@ function ReelPlayerVideo({
         resetToStart &&
         (currentTime > 0.5 || duration <= 0 || currentTime >= duration - 0.3);
 
-      startActiveVideo(player, hasMusic, musicOriginalVolume, shouldSeekStart);
+      startActiveVideo(player, musicOriginalVolume, shouldSeekStart);
 
       if (hasMusic && item.musicPlayback) {
         void attachReelMusic(item.id, player, item.musicPlayback);
@@ -383,7 +380,7 @@ function ReelPlayerVideo({
             p.currentTime = 0;
           }
           if (readVideoPlayerPlaying(p) === false && readVideoPlayerStatus(p) === 'readyToPlay') {
-            startActiveVideo(p, hasMusic, musicOriginalVolume);
+            startActiveVideo(p, musicOriginalVolume);
             if (hasMusic && item.musicPlayback) {
               void attachReelMusic(item.id, p, item.musicPlayback);
             }
