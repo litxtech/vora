@@ -85,6 +85,7 @@ export function VoraNeedsCenterScreen() {
   const hasActiveFilters = !!(filters.category || filters.visibility || filters.urgentOnly);
   const isSearching = debouncedQuery.length >= 2;
   const listPerf = getAndroidFlatListPerfProps();
+  const flatListPerf = showSearch ? { ...listPerf, removeClippedSubviews: false } : listPerf;
 
   const handleCreate = useCallback(async () => {
     if (!(await requireAuth('İlan oluşturma'))) return;
@@ -133,6 +134,7 @@ export function VoraNeedsCenterScreen() {
           autoCapitalize="none"
           autoCorrect={false}
           clearButtonMode="never"
+          underlineColorAndroid="transparent"
         />
         {searchQuery.length > 0 ? (
           <Pressable onPress={() => setSearchQuery('')} hitSlop={8}>
@@ -226,8 +228,9 @@ export function VoraNeedsCenterScreen() {
         }}
         onEndReachedThreshold={0.35}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="none"
         scrollEnabled={!filterOpen}
-        {...listPerf}
+        {...flatListPerf}
       />
 
       <VoraNeedFilterSheet

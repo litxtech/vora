@@ -8,7 +8,10 @@ import {
   StyleSheet,
   View,
 } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import {
+  FORM_KEYBOARD_BOTTOM_OFFSET,
+  FormKeyboardScrollView,
+} from '@/components/keyboard/FormKeyboardScrollView';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthHeader } from '@/components/auth/AuthHeader';
@@ -78,7 +81,7 @@ export function CenterShell<T = unknown>(props: CenterShellProps<T>) {
     children,
     headerExtra,
     keyboardAware = false,
-    keyboardBottomOffset = 24,
+    keyboardBottomOffset = FORM_KEYBOARD_BOTTOM_OFFSET,
     listEmptyContent,
   } = props;
 
@@ -176,16 +179,14 @@ export function CenterShell<T = unknown>(props: CenterShellProps<T>) {
   if (keyboardAware) {
     return (
       <GradientBackground>
-        <KeyboardAwareScrollView
+        <FormKeyboardScrollView
           contentContainerStyle={pageStyle}
-          keyboardShouldPersistTaps="handled"
           bottomOffset={keyboardBottomOffset}
           refreshControl={refreshControl}
-          showsVerticalScrollIndicator={false}
         >
           {header}
           <View style={styles.content}>{renderBody()}</View>
-        </KeyboardAwareScrollView>
+        </FormKeyboardScrollView>
       </GradientBackground>
     );
   }

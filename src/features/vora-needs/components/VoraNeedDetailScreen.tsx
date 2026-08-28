@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Button } from '@/components/ui/Button';
+import { FormKeyboardScrollView } from '@/components/keyboard/FormKeyboardScrollView';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { GradientBackground } from '@/components/ui/GradientBackground';
@@ -42,6 +44,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 
 export function VoraNeedDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
@@ -200,7 +203,12 @@ export function VoraNeedDetailScreen() {
 
   return (
     <GradientBackground>
-      <ScrollView contentContainerStyle={styles.page} showsVerticalScrollIndicator={false}>
+      <FormKeyboardScrollView
+        contentContainerStyle={[
+          styles.page,
+          { paddingBottom: insets.bottom + spacing.xxl * 2 },
+        ]}
+      >
         {listing.imageUrl ? (
           <Image source={{ uri: listing.imageUrl }} style={styles.hero} />
         ) : (
@@ -338,7 +346,7 @@ export function VoraNeedDetailScreen() {
             ) : null}
           </GlassCard>
         ) : null}
-      </ScrollView>
+      </FormKeyboardScrollView>
     </GradientBackground>
   );
 }

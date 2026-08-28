@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Alert, Image, Pressable, StyleSheet, Switch, View } from 'react-native';
-import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthHeader } from '@/components/auth/AuthHeader';
+import { FormKeyboardScrollView } from '@/components/keyboard/FormKeyboardScrollView';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GradientBackground } from '@/components/ui/GradientBackground';
@@ -33,6 +34,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 export function CreateVoraNeedScreen() {
   const { colors } = useTheme();
   const { user, profile } = useAuth();
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -126,11 +128,11 @@ export function CreateVoraNeedScreen() {
 
   return (
     <GradientBackground>
-      <KeyboardAwareScrollView
-        contentContainerStyle={styles.page}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        bottomOffset={88}
+      <FormKeyboardScrollView
+        contentContainerStyle={[
+          styles.page,
+          { paddingBottom: insets.bottom + spacing.xxl * 2 },
+        ]}
       >
         <AuthHeader
           title="İhtiyaç Paylaş"
@@ -300,7 +302,7 @@ export function CreateVoraNeedScreen() {
 
           <Button title="Yayınla" loading={saving} onPress={handleSubmit} />
         </GlassCard>
-      </KeyboardAwareScrollView>
+      </FormKeyboardScrollView>
     </GradientBackground>
   );
 }
