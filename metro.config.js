@@ -58,16 +58,47 @@ config.resolver.alias = {
   semver: semverMetroShim,
 };
 
-const defaultResolveRequest = config.resolver.resolveRequest;
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName === '@stripe/stripe-react-native') {
-    return { type: 'sourceFile', filePath: stripeLibEntry };
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  '@livekit/react-native': path.resolve(__dirname, 'node_modules/@livekit/react-native'),
+  '@livekit/react-native-webrtc': path.resolve(__dirname, 'node_modules/@livekit/react-native-webrtc'),
+};
+
+function rewriteLiveKitResolvedPath(filePath) {
+  if (!filePath) return null;
+  const normalized = filePath.replace(/\\/g, '/');
+  if (
+    normalized.includes('/@livekit/react-native-webrtc/src/') ||
+    normalized.endsWith('/@livekit/react-native-webrtc/src/index.ts')
+  ) {
+    return livekitWebrtcEntry;
   }
+  if (
+    normalized.includes('/@livekit/react-native/src/') ||
+    normalized.endsWith('/@livekit/react-native/src/index.tsx')
+  ) {
+    return livekitNativeEntry;
+  }
+  return null;
+}
+
+function resolveLiveKitModule(moduleName) {
   if (moduleName === '@livekit/react-native') {
     return { type: 'sourceFile', filePath: livekitNativeEntry };
   }
   if (moduleName === '@livekit/react-native-webrtc') {
     return { type: 'sourceFile', filePath: livekitWebrtcEntry };
+  }
+  return null;
+}
+
+const defaultResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const liveKitResolved = resolveLiveKitModule(moduleName);
+  if (liveKitResolved) return liveKitResolved;
+
+  if (moduleName === '@stripe/stripe-react-native') {
+    return { type: 'sourceFile', filePath: stripeLibEntry };
   }
   if (moduleName === 'semver') {
     return { type: 'sourceFile', filePath: semverMetroShim };
@@ -78,9 +109,23 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
 
   if (defaultResolveRequest) {
     const resolved = defaultResolveRequest(context, moduleName, platform);
+    if (resolved?.type === 'sourceFile' && resolved.filePath) {
+      const rewritten = rewriteLiveKitResolvedPath(resolved.filePath);
+      if (rewritten) {
+        return { type: 'sourceFile', filePath: rewritten };
+      }
+    }
     if (resolved) return resolved;
   }
-  return context.resolveRequest(context, moduleName, platform);
+
+  const fallback = context.resolveRequest(context, moduleName, platform);
+  if (fallback?.type === 'sourceFile' && fallback.filePath) {
+    const rewritten = rewriteLiveKitResolvedPath(fallback.filePath);
+    if (rewritten) {
+      return { type: 'sourceFile', filePath: rewritten };
+    }
+  }
+  return fallback;
 };
 
 config.transformer.getTransformOptions = async () => ({

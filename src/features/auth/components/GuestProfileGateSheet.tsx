@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  KeyboardAvoidingView,
+  Dimensions,
   Modal,
   Platform,
   Pressable,
   StyleSheet,
   View,
 } from 'react-native';
+import { KeyboardAvoidingView } from 'react-native-keyboard-controller';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { FormKeyboardScrollView } from '@/components/keyboard/FormKeyboardScrollView';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -39,6 +41,8 @@ type GuestProfileGateSheetProps = {
   onCompleted: () => void;
 };
 
+const SHEET_MIN_HEIGHT_RATIO = 0.74;
+
 export function GuestProfileGateSheet({
   visible,
   actionLabel,
@@ -49,6 +53,12 @@ export function GuestProfileGateSheet({
 }: GuestProfileGateSheetProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const windowHeight = Dimensions.get('window').height;
+  const sheetMinHeight = Math.max(
+    420,
+    Math.min(windowHeight * SHEET_MIN_HEIGHT_RATIO, windowHeight - insets.top - spacing.lg),
+  );
+
   const [displayName, setDisplayName] = useState('');
   const [username, setUsername] = useState('');
   const [displayNameError, setDisplayNameError] = useState<string | null>(null);
@@ -137,19 +147,21 @@ export function GuestProfileGateSheet({
       visible={visible}
       transparent
       animationType={resolveModalAnimationType('slide')}
+      statusBarTranslucent
+      presentationStyle="overFullScreen"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+      <KeyboardAvoidingView style={styles.flex} behavior="padding">
         <View style={styles.backdrop}>
-          <Pressable style={styles.dismissArea} onPress={onClose} />
+          <Pressable style={styles.dismissArea} onPress={onClose} accessibilityLabel="Kapat" />
+
           <View
             style={[
               styles.sheet,
               {
                 backgroundColor: colors.surface,
+                minHeight: sheetMinHeight,
+                maxHeight: windowHeight - insets.top - spacing.sm,
                 paddingBottom: Math.max(insets.bottom, spacing.md),
               },
             ]}
@@ -157,54 +169,67 @@ export function GuestProfileGateSheet({
             <View style={[styles.handle, { backgroundColor: colors.border }]} />
 
             <View style={styles.header}>
-              <Text variant="h3">Kimliğini tamamla</Text>
+              <View style={styles.headerCopy}>
+                <Text variant="h3">Kimliğini tamamla</Text>
+                <Text variant="body" secondary style={styles.subtitle}>
+                  {actionLabel} için ad soyad ve kullanıcı adı seçmen gerekiyor. Bu bilgiler diğer
+                  kullanıcılara görünür.
+                </Text>
+              </View>
               <Pressable onPress={onClose} hitSlop={12} style={styles.closeBtn}>
                 <Ionicons name="close" size={22} color={colors.textSecondary} />
               </Pressable>
             </View>
 
-            <Text variant="body" secondary style={styles.subtitle}>
-              {actionLabel} için ad soyad ve kullanıcı adı seçmen gerekiyor. Bu bilgiler diğer
-              kullanıcılara görünür.
-            </Text>
+            <FormKeyboardScrollView
+              style={styles.flex}
+              contentContainerStyle={styles.scrollContent}
+              bottomOffset={Platform.OS === 'android' ? 120 : 96}
+              extraKeyboardSpace={spacing.xl}
+              keyboardDismissMode="interactive"
+            >
+              <Input
+                label="Ad Soyad"
+                value={displayName}
+                onChangeText={(value) => {
+                  setDisplayName(value);
+                  setDisplayNameError(null);
+                  setSubmitError(null);
+                }}
+                placeholder="Örn. Ahmet Yılmaz"
+                autoCapitalize="words"
+                returnKeyType="next"
+                error={displayNameError ?? undefined}
+              />
 
-            <Input
-              label="Ad Soyad"
-              value={displayName}
-              onChangeText={(value) => {
-                setDisplayName(value);
-                setDisplayNameError(null);
-                setSubmitError(null);
-              }}
-              placeholder="Örn. Ahmet Yılmaz"
-              autoCapitalize="words"
-              error={displayNameError ?? undefined}
-            />
+              <Input
+                label="Kullanıcı adı"
+                value={username}
+                onChangeText={handleUsernameChange}
+                placeholder="kullanici_adi"
+                autoCapitalize="none"
+                autoCorrect={false}
+                maxLength={USERNAME_MAX_LENGTH}
+                returnKeyType="done"
+                error={usernameError ?? undefined}
+              />
 
-            <Input
-              label="Kullanıcı adı"
-              value={username}
-              onChangeText={handleUsernameChange}
-              placeholder="kullanici_adi"
-              autoCapitalize="none"
-              autoCorrect={false}
-              maxLength={USERNAME_MAX_LENGTH}
-              error={usernameError ?? undefined}
-            />
-
-            <Text variant="caption" secondary style={styles.hint}>
-              {suggestingUsername
-                ? 'Kullanıcı adı öneriliyor...'
-                : `${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} karakter; ${USERNAME_FORMAT_HINT}.`}
-            </Text>
-
-            {submitError ? (
-              <Text variant="caption" style={[styles.submitError, { color: colors.danger }]}>
-                {submitError}
+              <Text variant="caption" secondary style={styles.hint}>
+                {suggestingUsername
+                  ? 'Kullanıcı adı öneriliyor...'
+                  : `${USERNAME_MIN_LENGTH}–${USERNAME_MAX_LENGTH} karakter; ${USERNAME_FORMAT_HINT}.`}
               </Text>
-            ) : null}
 
-            <Button title="Devam et" onPress={() => void handleSubmit()} loading={saving} />
+              {submitError ? (
+                <Text variant="caption" style={[styles.submitError, { color: colors.danger }]}>
+                  {submitError}
+                </Text>
+              ) : null}
+            </FormKeyboardScrollView>
+
+            <View style={[styles.footer, { borderTopColor: colors.border }]}>
+              <Button title="Devam et" onPress={() => void handleSubmit()} loading={saving} />
+            </View>
           </View>
         </View>
       </KeyboardAvoidingView>
@@ -227,32 +252,48 @@ const styles = StyleSheet.create({
   sheet: {
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.sm,
-    gap: spacing.md,
   },
   handle: {
     alignSelf: 'center',
     width: 40,
     height: 4,
     borderRadius: 2,
-    marginBottom: spacing.xs,
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
+    paddingHorizontal: spacing.lg,
+    gap: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  headerCopy: {
+    flex: 1,
+    gap: spacing.xs,
   },
   closeBtn: {
     padding: spacing.xs,
   },
   subtitle: {
-    marginTop: -spacing.xs,
+    marginTop: spacing.xs,
+  },
+  scrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.lg,
+    gap: spacing.md,
+    flexGrow: 1,
   },
   hint: {
-    marginTop: -spacing.sm,
+    marginTop: -spacing.xs,
   },
   submitError: {
     marginTop: -spacing.xs,
+  },
+  footer: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
 });

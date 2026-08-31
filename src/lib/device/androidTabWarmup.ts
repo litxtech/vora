@@ -31,9 +31,9 @@ async function prefetchInboxListCache(): Promise<void> {
   }
 }
 
-/** Ana sekme modülleri — akış etkileşilebilir olduktan sonra ısıt. */
+/** Ana sekme modülleri — akış etkileşilebilir olduktan sonra ısıt. Dev'de Metro her import'ta bundle yapar → kasma. */
 export function warmupAndroidTabModules(): { cancel: () => void } {
-  if (!isAndroid() || warmed) {
+  if (__DEV__ || !isAndroid() || warmed) {
     return { cancel: () => {} };
   }
 

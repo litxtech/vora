@@ -1,14 +1,10 @@
 import { Pressable, StyleSheet } from 'react-native';
-import { ProfileTabIcon } from '@/features/profile/components/ProfileTabIcon';
+import { FeedHeaderAvatarRing } from '@/features/feed/components/FeedHeaderAvatarRing';
 import { useAuth } from '@/providers/AuthProvider';
-import { useTheme } from '@/providers/ThemeProvider';
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
 import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 
-const AVATAR_SIZE = 34;
-
 export function FeedHeaderAvatarButton() {
-  const { colors } = useTheme();
   const { profile } = useAuth();
   const drawerOpen = useFeedDrawerStore((s) => s.open);
   const openDrawer = useFeedDrawerStore((s) => s.openDrawer);
@@ -29,12 +25,10 @@ export function FeedHeaderAvatarButton() {
       style={({ pressed }) => [styles.btn, pressed && styles.pressed]}
       {...getAndroidInstantPressableProps()}
     >
-      <ProfileTabIcon
+      <FeedHeaderAvatarRing
         avatarUrl={profile?.avatar_url ?? null}
         username={profile?.username ?? ''}
-        color={colors.primary}
-        size={AVATAR_SIZE}
-        focused={false}
+        active={drawerOpen}
       />
     </Pressable>
   );

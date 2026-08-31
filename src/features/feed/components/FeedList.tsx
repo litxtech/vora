@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useScrollToTop } from 'expo-router';
 import { FlashList } from '@shopify/flash-list';
 import type { FlashListRef } from '@shopify/flash-list';
@@ -12,10 +12,11 @@ import { FeedJobCard } from '@/features/feed/components/FeedJobCard';
 import { FeedLostItemCard } from '@/features/feed/components/FeedLostItemCard';
 import { FeedEmptyState } from '@/features/feed/components/shared/FeedEmptyState';
 import { useFeedVideoPlaybackStore } from '@/features/feed/store/feedVideoPlaybackStore';
+import { useFeedRowVisibilityStore } from '@/features/feed/store/feedRowVisibilityStore';
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
-import { getFeedListPerfProps, getFeedEstimatedItemSize, getFeedFlashListDrawDistance, getFeedScrollSettleMs, isAndroid, shouldAutoplayFeedVideos } from '@/lib/device/androidPerfProfile';
+import { getFeedListPerfProps, getFeedFlashListDrawDistance, getFeedScrollSettleMs, isAndroid, shouldAutoplayFeedVideos } from '@/lib/device/androidPerfProfile';
 import { shouldUseSilentListRefresh } from '@/lib/ui/listRefresh';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -26,7 +27,10 @@ type FeedListProps = {
   refreshing: boolean;
   loadingMore: boolean;
   error: string | null;
+  /** Sekme seçili mi (detay üstteyken de true kalabilir) */
   isScreenFocused?: boolean;
+  /** Gerçek rota odağı — detay açılınca false; kart başına useIsFocused yerine tek abonelik */
+  isRouteFocused?: boolean;
   onRefresh: () => void;
   onLoadMore: () => void;
   onUpdateItem: (id: string, patch: Partial<FeedItem>) => void;
@@ -38,7 +42,7 @@ type FeedListProps = {
 type FeedPostRowProps = {
   item: FeedItem;
   isScreenFocused?: boolean;
-  isRowVisible?: boolean;
+  isRouteFocused?: boolean;
   onUpdateItem: (id: string, patch: Partial<FeedItem>) => void;
   onRemoveItem?: (id: string) => void;
 };
@@ -46,10 +50,12 @@ type FeedPostRowProps = {
 const FeedPostRow = memo(function FeedPostRow({
   item,
   isScreenFocused,
-  isRowVisible,
+  isRouteFocused,
   onUpdateItem,
   onRemoveItem,
 }: FeedPostRowProps) {
+  const isRowVisible = useFeedRowVisibilityStore((s) => s.visibleById[item.id] === true);
+
   const onUpdate = useCallback(
     (patch: Partial<FeedItem>) => onUpdateItem(item.id, patch),
     [item.id, onUpdateItem],
@@ -63,7 +69,7 @@ const FeedPostRow = memo(function FeedPostRow({
     return (
       <FeedSponsoredAdCard
         item={item}
-        isVisible={isRowVisible ?? true}
+        isVisible={isRowVisible}
         onUpdate={onUpdate}
       />
     );
@@ -79,7 +85,8 @@ const FeedPostRow = memo(function FeedPostRow({
     <FeedPostCard
       item={item}
       isScreenFocused={isScreenFocused}
-      isRowVisible={isRowVisible ?? true}
+      isRouteFocused={isRouteFocused}
+      isRowVisible={isRowVisible}
       onUpdate={onUpdate}
       onDeleted={onRemoveItem ? onDeleted : undefined}
     />
@@ -87,22 +94,35 @@ const FeedPostRow = memo(function FeedPostRow({
 });
 
 function pickActiveVideoPostId(viewableItems: ViewToken[]): string | null {
-  let activeVideoPostId: string | null = null;
-  let bestPercent = 0;
+  let best: { postId: string; percent: number; index: number } | null = null;
 
   for (const token of viewableItems) {
     if (!token.isViewable || !token.item) continue;
     const row = token.item as FeedItem;
     if (row.sourceType !== 'post' || !row.mediaUrls.some((url) => isVideoUrl(url))) continue;
 
-    const percent = token.percentVisible ?? 0;
-    if (percent > bestPercent) {
-      bestPercent = percent;
-      activeVideoPostId = row.sourceId;
+    const percent = (token as { percentVisible?: number }).percentVisible ?? 0;
+    const index = token.index ?? Number.MAX_SAFE_INTEGER;
+    // Görünürlük yüksek olan; eşitlikte listedeki üstteki (küçük index) tercih edilir.
+    if (
+      !best ||
+      percent > best.percent ||
+      (percent === best.percent && index < best.index)
+    ) {
+      best = { postId: row.sourceId, percent, index };
     }
   }
 
-  return activeVideoPostId;
+  return best?.postId ?? null;
+}
+
+function collectVisibleIds(viewableItems: ViewToken[]): Set<string> {
+  const nextVisible = new Set<string>();
+  for (const token of viewableItems) {
+    if (!token.isViewable || !token.item) continue;
+    nextVisible.add((token.item as FeedItem).id);
+  }
+  return nextVisible;
 }
 
 export function FeedList({
@@ -112,6 +132,7 @@ export function FeedList({
   loadingMore,
   error,
   isScreenFocused,
+  isRouteFocused,
   onRefresh,
   onLoadMore,
   onUpdateItem,
@@ -120,15 +141,17 @@ export function FeedList({
   listBottomInset = 0,
 }: FeedListProps) {
   const { colors } = useTheme();
-  const listInteractionLocked = useFeedDrawerStore((s) => s.listInteractionLocked);
   const showInitialEmpty = !loading && items.length === 0;
-  const listPerf = getFeedListPerfProps();
+  const listPerf = useMemo(() => getFeedListPerfProps(), []);
+  const drawDistance = useMemo(() => getFeedFlashListDrawDistance(), []);
   const listRef = useRef<FlatList<FeedItem> | FlashListRef<FeedItem>>(null);
   useScrollToTop(listRef);
-  const [visibleRowIds, setVisibleRowIds] = useState<Set<string>>(() => new Set());
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingViewableRef = useRef<ViewToken[]>([]);
   const commitActiveVideoRef = useRef<(viewableItems: ViewToken[]) => void>(() => {});
+  const isScreenFocusedRef = useRef(isScreenFocused !== false);
+  isScreenFocusedRef.current = isScreenFocused !== false;
+  const visibleWhileScrollingRef = useRef<Set<string>>(new Set());
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
@@ -145,23 +168,25 @@ export function FeedList({
     if (useFeedDrawerStore.getState().listInteractionLocked) return;
 
     const isScrolling = useFeedVideoPlaybackStore.getState().isScrolling;
-    const nextVisible = new Set<string>();
+    const nextVisible = collectVisibleIds(viewableItems);
 
-    for (const token of viewableItems) {
-      if (!token.isViewable || !token.item) continue;
-      const row = token.item as FeedItem;
-      nextVisible.add(row.id);
+    // Blur / gizli sekmede boş viewability — görünür satırları ve son
+    // bilinen token'ları silme; geri dönünce medya viewability beklemasin.
+    if (nextVisible.size === 0 && !isScreenFocusedRef.current) {
+      return;
     }
 
-    setVisibleRowIds((prev) => {
-      if (!isScrolling) return nextVisible;
-      const merged = new Set(nextVisible);
-      for (const id of prev) merged.add(id);
-      return merged;
-    });
     pendingViewableRef.current = viewableItems;
 
-    if (isScrolling) return;
+    if (isScrolling) {
+      // Kaydırırken merge — sticky görünürlük; store'u her frame güncelleme.
+      const merged = visibleWhileScrollingRef.current;
+      for (const id of nextVisible) merged.add(id);
+      return;
+    }
+
+    visibleWhileScrollingRef.current = new Set(nextVisible);
+    useFeedRowVisibilityStore.getState().replaceVisible(nextVisible);
     commitActiveVideo(viewableItems);
   }).current;
 
@@ -173,12 +198,9 @@ export function FeedList({
   const handleScrollSettled = useCallback(() => {
     useFeedVideoPlaybackStore.getState().setScrolling(false);
 
-    const nextVisible = new Set<string>();
-    for (const token of pendingViewableRef.current) {
-      if (!token.isViewable || !token.item) continue;
-      nextVisible.add((token.item as FeedItem).id);
-    }
-    setVisibleRowIds(nextVisible);
+    const nextVisible = collectVisibleIds(pendingViewableRef.current);
+    visibleWhileScrollingRef.current = new Set(nextVisible);
+    useFeedRowVisibilityStore.getState().replaceVisible(nextVisible);
     commitActiveVideo(pendingViewableRef.current);
   }, [commitActiveVideo]);
 
@@ -190,12 +212,20 @@ export function FeedList({
   useEffect(() => {
     return () => {
       if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+      useFeedRowVisibilityStore.getState().clear();
     };
   }, []);
 
   useEffect(() => {
     useFeedVideoPlaybackStore.getState().setScrolling(false);
   }, []);
+
+  // Sekmeye geri dönünce son bilinen görünür satırlardan aktif videoyu yeniden seç.
+  useEffect(() => {
+    if (isScreenFocused === false) return;
+    if (pendingViewableRef.current.length === 0) return;
+    commitActiveVideoRef.current(pendingViewableRef.current);
+  }, [isScreenFocused]);
 
   useEffect(() => {
     const clipSubviews = listPerf.removeClippedSubviews ?? false;
@@ -228,15 +258,16 @@ export function FeedList({
       <FeedPostRow
         item={item}
         isScreenFocused={isScreenFocused}
-        isRowVisible={visibleRowIds.has(item.id)}
+        isRouteFocused={isRouteFocused}
         onUpdateItem={onUpdateItem}
         onRemoveItem={onRemoveItem}
       />
     ),
-    [isScreenFocused, visibleRowIds, onUpdateItem, onRemoveItem],
+    [isScreenFocused, isRouteFocused, onUpdateItem, onRemoveItem],
   );
 
   const keyExtractor = useCallback((item: FeedItem) => item.id, []);
+  const getItemType = useCallback((item: FeedItem) => item.sourceType, []);
 
   const listHeader = useMemo(
     () => (
@@ -254,57 +285,97 @@ export function FeedList({
     [colors.danger, error, header],
   );
 
-  const listEmpty = showInitialEmpty ? (
-    <FeedEmptyState
-      title="Henüz içerik yok"
-      message="Bölgenizdeki paylaşımlar burada görünecek. İlk paylaşımı sen yap!"
-      icon="radio-outline"
-    />
-  ) : null;
+  const listEmpty = useMemo(
+    () =>
+      showInitialEmpty ? (
+        <FeedEmptyState
+          title="Henüz içerik yok"
+          message="Bölgenizdeki paylaşımlar burada görünecek. İlk paylaşımı sen yap!"
+          icon="radio-outline"
+        />
+      ) : null,
+    [showInitialEmpty],
+  );
 
-  const listFooter =
-    loadingMore || (loading && items.length > 0 && !shouldUseSilentListRefresh()) ? (
-      <ActivityIndicator color={colors.primary} style={styles.footer} />
-    ) : null;
+  const listFooter = useMemo(
+    () =>
+      loadingMore || (loading && items.length > 0 && !shouldUseSilentListRefresh()) ? (
+        <ActivityIndicator color={colors.primary} style={styles.footer} />
+      ) : null,
+    [loadingMore, loading, items.length, colors.primary],
+  );
 
-  const sharedListProps = {
-    data: items,
-    keyExtractor,
-    renderItem,
-    ListHeaderComponent: listHeader,
-    ListEmptyComponent: listEmpty,
-    ListFooterComponent: listFooter,
-    refreshControl: (
+  const contentContainerStyle = useMemo(
+    () => [styles.content, listBottomInset > 0 && { paddingBottom: listBottomInset }],
+    [listBottomInset],
+  );
+
+  const refreshControl = useMemo(
+    () => (
       <AppRefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
     ),
-    onEndReached: onLoadMore,
-    onEndReachedThreshold: 0.4 as const,
-    onViewableItemsChanged: onViewableItemsChanged,
-    viewabilityConfig,
-    onScrollBeginDrag: handleScrollBegin,
-    onScrollEndDrag: handleScrollEndDrag,
-    onMomentumScrollEnd: handleScrollSettled,
-    scrollEnabled: !listInteractionLocked,
-    showsVerticalScrollIndicator: false,
-    contentContainerStyle: [styles.content, listBottomInset > 0 && { paddingBottom: listBottomInset }],
-    style: styles.list,
-    ...listPerf,
-  };
+    [refreshing, onRefresh, colors.primary],
+  );
+
+  const sharedListProps = useMemo(
+    () => ({
+      data: items,
+      keyExtractor,
+      renderItem,
+      getItemType,
+      ListHeaderComponent: listHeader,
+      ListEmptyComponent: listEmpty,
+      ListFooterComponent: listFooter,
+      refreshControl,
+      onEndReached: onLoadMore,
+      onEndReachedThreshold: 0.4 as const,
+      onViewableItemsChanged: onViewableItemsChanged,
+      viewabilityConfig,
+      onScrollBeginDrag: handleScrollBegin,
+      onScrollEndDrag: handleScrollEndDrag,
+      onMomentumScrollEnd: handleScrollSettled,
+      showsVerticalScrollIndicator: false,
+      contentContainerStyle,
+      style: styles.list,
+      ...listPerf,
+    }),
+    [
+      items,
+      keyExtractor,
+      renderItem,
+      getItemType,
+      listHeader,
+      listEmpty,
+      listFooter,
+      refreshControl,
+      onLoadMore,
+      onViewableItemsChanged,
+      viewabilityConfig,
+      handleScrollBegin,
+      handleScrollEndDrag,
+      handleScrollSettled,
+      contentContainerStyle,
+      listPerf,
+    ],
+  );
 
   if (isAndroid()) {
     return (
       <FlashList
         ref={listRef}
         {...sharedListProps}
-        drawDistance={getFeedFlashListDrawDistance()}
+        drawDistance={drawDistance}
       />
     );
   }
 
+  // getItemType yalnızca FlashList; FlatList'e geçirme.
+  const { getItemType: _flashItemType, ...flatListProps } = sharedListProps;
+
   return (
     <FlatList
       ref={listRef}
-      {...sharedListProps}
+      {...flatListProps}
     />
   );
 }

@@ -110,8 +110,9 @@ export function shouldAutoplayFeedVideos(): boolean {
   return !isAndroidTablet();
 }
 
-/** Mesaj modülü ön-ısıtma — tablette atla. */
+/** Mesaj modülü ön-ısıtma — tablette atla. Dev client'ta Metro spike yapar. */
 export function shouldWarmupAndroidTabModules(): boolean {
+  if (__DEV__) return false;
   return isAndroid() && !isAndroidTablet();
 }
 

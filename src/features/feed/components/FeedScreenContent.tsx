@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useIsFocused, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GradientBackground } from '@/components/ui/GradientBackground';
+import { useMainTabSelected } from '@/features/navigation/hooks/useMainTabScreenActive';
 import { FeedFilters } from '@/features/feed/components/FeedFilters';
 import { FeedSpotlightCarousel } from '@/features/feed/components/FeedSpotlightCarousel';
 import { FeaturedProfilesCarousel } from '@/features/profile/components/FeaturedProfilesCarousel';
@@ -39,6 +40,7 @@ import {
   shouldWarmupAndroidTabModules,
 } from '@/lib/device/androidPerfProfile';
 import { warmupAndroidTabModules } from '@/lib/device/androidTabWarmup';
+import { warmupHeavyRouteModules } from '@/lib/navigation/routeWarmup';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { useAuth } from '@/providers/AuthProvider';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
@@ -51,6 +53,8 @@ import { spacing } from '@/constants/theme';
 export function FeedScreenContent() {
   const router = useRouter();
   const isFocused = useIsFocused();
+  /** Detay üstteyken de true — liste/medya unmount olmasın, geri kaydırınca boş flash olmasın. */
+  const isTabSelected = useMainTabSelected('index');
   const insets = useSafeAreaInsets();
   const tabBarBottomInset = useStableTabBarInset();
   const listBottomInset = getFloatingTabBarReserve(tabBarBottomInset) + spacing.md;
@@ -78,7 +82,8 @@ export function FeedScreenContent() {
 
   useEffect(() => {
     if (!isFocused || !shouldDeferFeedRichHeader()) return;
-    setRichHeaderReady(false);
+    // Geri dönüşte yeniden bekletme — bir kez hazır olduysa kalsın.
+    if (richHeaderReady) return;
     const delayMs = getFeedRichHeaderDelayMs();
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -88,28 +93,39 @@ export function FeedScreenContent() {
       cancelled = true;
       clearTimeout(timer);
     };
+  }, [isFocused, richHeaderReady]);
+
+  useEffect(() => {
+    // Dev: warmup/prefetch Metro spike yapar — release'te detay geçişi hızlanır.
+    if (!isFocused || __DEV__) return;
+
+    const routeTask = warmupHeavyRouteModules();
+    const tabTask = shouldWarmupAndroidTabModules() ? warmupAndroidTabModules() : { cancel: () => {} };
+
+    return () => {
+      routeTask.cancel();
+      tabTask.cancel();
+    };
   }, [isFocused]);
 
   useEffect(() => {
-    if (!isFocused || !shouldWarmupAndroidTabModules()) return;
-    const task = warmupAndroidTabModules();
-    return () => task.cancel();
-  }, [isFocused]);
-
-  useEffect(() => {
-    if (!isFocused) {
+    // Yalnızca başka sekmeye geçince temizle — detay push blur'unda state silme.
+    if (!isFocused && !isTabSelected) {
       useFeedMusicSoundStore.getState().clear();
       useFeedVideoPlaybackStore.getState().clear();
     }
-  }, [isFocused]);
+  }, [isFocused, isTabSelected]);
 
   useEffect(() => {
-    if (!isFocused || category !== 'all') {
+    if (category !== 'all') {
       setHeaderEvents([]);
       setHeaderLostItems([]);
       setFeaturedProfiles([]);
       return;
     }
+
+    // Blur'da header'ı silme — sağa kaydırıp / detaydan geri dönünce boş flash olmasın.
+    if (!isTabSelected) return;
 
     if (shouldDeferFeedRichHeader() && !richHeaderReady) {
       return;
@@ -139,7 +155,7 @@ export function FeedScreenContent() {
     }
 
     loadHeaderContent();
-  }, [isFocused, category, regionId, user?.id, featuredProfilesVisible, richHeaderReady]);
+  }, [isTabSelected, category, regionId, user?.id, featuredProfilesVisible, richHeaderReady]);
 
   const handleBannerRefresh = useCallback(() => {
     resetNewPosts();
@@ -217,7 +233,8 @@ export function FeedScreenContent() {
             refreshing={refreshing}
             loadingMore={loadingMore}
             error={error}
-            isScreenFocused={isFocused}
+            isScreenFocused={isTabSelected}
+            isRouteFocused={isFocused}
             onRefresh={handleRefresh}
             onLoadMore={loadMore}
             onUpdateItem={updateItem}

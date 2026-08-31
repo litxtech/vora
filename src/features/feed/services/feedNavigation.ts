@@ -4,7 +4,9 @@ import type { MapDetailType } from '@/features/map/types';
 import { navigateToPublicProfile, prefetchPublicProfile } from '@/features/profile/services/profileNavigation';
 import { type Href, router } from 'expo-router';
 import { pushRoute } from '@/lib/navigation/pushRoute';
-import { prefetchPostDetailRoute } from '@/lib/navigation/lazyRouteScreens';
+import {
+  prefetchFeedDetailRoute,
+} from '@/lib/navigation/lazyRouteScreens';
 
 /** Yazar profiline gider — işletme hesaplarında kurumsal detaya yönlendirir. */
 export function navigateToAuthorProfile(
@@ -70,12 +72,13 @@ function buildFeedDetailHref(
 }
 
 export function prefetchFeedDetail(sourceType: FeedSourceType, sourceId: string): void {
+  // Dev client: router.prefetch + lazy chunk import Metro'da binlerce modül derler.
+  if (__DEV__) return;
+
   const href = buildFeedDetailHref(sourceType, sourceId);
   if (href) router.prefetch(href);
 
-  if (sourceType === 'post') {
-    prefetchPostDetailRoute();
-  }
+  prefetchFeedDetailRoute(sourceType);
 
   const mapType = FEED_SOURCE_TO_MAP_DETAIL[sourceType];
   if (mapType) prefetchMapDetail(mapType, sourceId);
