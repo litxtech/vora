@@ -1,6 +1,7 @@
-import { Image as RNImage, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import { StyleSheet, View, Image as RNImage, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
+import { normalizeLocalFileUri } from '@/lib/files/readLocalFile';
 import type { MusicSelection } from '@/features/music/types';
 
 type StoryPublishMediaProps = {
@@ -10,13 +11,20 @@ type StoryPublishMediaProps = {
   videoMuted?: boolean;
   musicPlaysOnStory?: boolean;
   style?: StyleProp<ViewStyle>;
+  onImageLoad?: () => void;
+  onImageError?: () => void;
 };
 
 function isLocalMediaUri(uri: string): boolean {
-  return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('ph://');
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('ph://') ||
+    uri.startsWith('assets-library://')
+  );
 }
 
-/** Hikâye önizlemesi — yerel dosyalarda RN Image (transform içinde daha güvenilir). */
+/** Hikâye paylaşım önizlemesi — gönderi editörü ile aynı yerel görsel yolu. */
 export function StoryPublishMedia({
   uri,
   mediaType,
@@ -24,19 +32,22 @@ export function StoryPublishMedia({
   videoMuted = false,
   musicPlaysOnStory = false,
   style,
+  onImageLoad,
+  onImageError,
 }: StoryPublishMediaProps) {
-  const fillStyle = style ?? styles.fill;
+  const localUri = normalizeLocalFileUri(uri);
+  const hostStyle = style ? [styles.host, style] : styles.host;
 
-  if (!uri) {
-    return <View style={fillStyle} />;
+  if (!localUri) {
+    return <View style={hostStyle} />;
   }
 
   if (mediaType === 'video') {
     return (
-      <View style={fillStyle} pointerEvents="none">
+      <View style={hostStyle} pointerEvents="none" collapsable={false}>
         <CapturedVideoPreview
-          uri={uri}
-          style={StyleSheet.absoluteFill}
+          key={localUri}
+          uri={localUri}
           contentFit="cover"
           music={musicPlaysOnStory ? music : null}
           videoMuted={videoMuted}
@@ -46,29 +57,47 @@ export function StoryPublishMedia({
     );
   }
 
-  if (isLocalMediaUri(uri)) {
+  if (isLocalMediaUri(localUri)) {
     return (
-      <RNImage
-        source={{ uri }}
-        style={fillStyle}
-        resizeMode="cover"
-        pointerEvents="none"
-      />
+      <View style={hostStyle} pointerEvents="none" collapsable={false}>
+        <RNImage
+          key={localUri}
+          source={{ uri: localUri }}
+          style={styles.mediaFill}
+          resizeMode="cover"
+          onLoad={onImageLoad}
+          onError={onImageError}
+        />
+      </View>
     );
   }
 
   return (
-    <Image
-      source={{ uri }}
-      style={fillStyle}
-      contentFit="cover"
-      pointerEvents="none"
-    />
+    <View style={hostStyle} pointerEvents="none" collapsable={false}>
+      <Image
+        key={localUri}
+        source={{ uri: localUri }}
+        style={styles.mediaFill}
+        contentFit="cover"
+        cachePolicy="none"
+        transition={0}
+        onLoad={onImageLoad}
+        onError={onImageError}
+      />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  fill: {
-    ...StyleSheet.absoluteFillObject,
+  host: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    backgroundColor: '#000',
+    overflow: 'hidden',
+  },
+  mediaFill: {
+    width: '100%',
+    height: '100%',
   },
 });

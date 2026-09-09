@@ -16,9 +16,12 @@ import * as ImagePicker from 'expo-image-picker';
 import { router, useFocusEffect, useLocalSearchParams, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { isLocalVideoUri } from '@/lib/media/isVideoUrl';
+import { prepareStoryVideoPreviewUri } from '@/features/stories/services/prepareStoryVideoPreview';
+import { useMediaHandoffStore } from '@/features/compose/store/mediaHandoffStore';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
+import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import { LocationPicker, type SelectedLocation } from '@/features/compose/components/LocationPicker';
 import { useMediaEditorStore } from '@/features/compose/store/mediaEditorStore';
 import { COMPOSE_DEFAULT_CATEGORY, COMPOSE_DEFAULT_CATEGORY_LABEL } from '@/features/compose/constants';
@@ -40,6 +43,7 @@ import { SyncedVideoPreview } from '@/features/vora-studio/components/SyncedVide
 import { useStudioExportStore } from '@/features/vora-studio/store/studioExportStore';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { ComposeHashtagSuggestions } from '@/features/agenda/components/ComposeHashtagSuggestions';
+import { ComposerLinkPreview } from '@/features/richtext';
 import { FEED_FILTERS } from '@/features/feed/constants';
 import { REGIONS } from '@/constants/regions';
 import type { RegionId } from '@/constants/regions';
@@ -75,37 +79,38 @@ function ComposeVideoPreview({
   music?: ReturnType<typeof useMusicSelectionStore.getState>['selection'];
   editManifest?: ReturnType<typeof useStudioExportStore.getState>['editManifest'];
 }) {
-  return <SyncedVideoPreview uri={uri} music={music} editManifest={editManifest} style={styles.thumb} autoPlay />;
+  const videoMuted = useMediaEditorStore((s) => s.videoMuted);
+  return (
+    <SyncedVideoPreview
+      uri={uri}
+      music={music}
+      muted={videoMuted}
+      editManifest={editManifest}
+      style={styles.thumb}
+      autoPlay
+    />
+  );
 }
 
-type AttachButtonProps = {
+type ToolbarIconProps = {
   icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  color: string;
   onPress: () => void;
   disabled?: boolean;
   active?: boolean;
+  color?: string;
 };
 
-function AttachButton({ icon, label, color, onPress, disabled, active }: AttachButtonProps) {
+function ToolbarIcon({ icon, onPress, disabled, active, color }: ToolbarIconProps) {
   const { colors } = useTheme();
+  const tint = active ? (color ?? colors.primary) : colors.primary;
   return (
     <Pressable
-      style={[
-        styles.attachBtn,
-        {
-          borderColor: active ? color : colors.border,
-          backgroundColor: active ? `${color}14` : colors.surface,
-          opacity: disabled ? 0.45 : 1,
-        },
-      ]}
       onPress={onPress}
       disabled={disabled}
+      hitSlop={10}
+      style={[styles.toolbarIcon, disabled && styles.toolbarIconDisabled]}
     >
-      <Ionicons name={icon} size={20} color={active ? color : colors.textSecondary} />
-      <Text variant="caption" style={{ color: active ? color : colors.textSecondary, fontSize: 11 }}>
-        {label}
-      </Text>
+      <Ionicons name={icon} size={24} color={active ? tint : colors.primary} />
     </Pressable>
   );
 }
@@ -151,6 +156,7 @@ export function ComposeScreen() {
   const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [showLocation, setShowLocation] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
+  const [showGalleryPicker, setShowGalleryPicker] = useState(false);
   const [musicOpen, setMusicOpen] = useState(false);
   const handledUploadStatus = useRef<string>('idle');
 
@@ -197,11 +203,17 @@ export function ComposeScreen() {
   }, [editedUri]);
 
   useEffect(() => {
+    const handoff = useMediaHandoffStore.getState().payload;
+    if (handoff?.mediaUris?.length) {
+      setMediaUris(handoff.mediaUris.slice(0, MAX_MEDIA_COUNT));
+      useMediaHandoffStore.getState().clearHandoff();
+      return;
+    }
     if (!initialMediaUris) return;
     const uris = initialMediaUris.split(',').filter(Boolean);
     if (!uris.length) return;
     setMediaUris(uris.slice(0, MAX_MEDIA_COUNT));
-  }, [initialMediaUris]);
+  }, [initialMediaUris, fromEditor]);
 
   useEffect(() => {
     if (!initialContent?.trim()) return;
@@ -258,10 +270,6 @@ export function ComposeScreen() {
     if (handledUploadStatus.current === uploadStatus) return;
 
     if (uploadStatus === 'success' && uploadResult) {
-      if (videoUploadActive) {
-        handledUploadStatus.current = uploadStatus;
-        return;
-      }
       handledUploadStatus.current = uploadStatus;
       const sharedToReels = !!uploadResult.reelId && hasVideo;
       Alert.alert(
@@ -312,9 +320,13 @@ export function ComposeScreen() {
     if (!result.canceled) {
       const uris = result.assets.map((a) => a.uri).slice(0, MAX_MEDIA_COUNT - mediaUris.length);
       const combined = [...mediaUris, ...uris].slice(0, MAX_MEDIA_COUNT);
+      useMediaHandoffStore.getState().setHandoff({
+        mediaUris: combined,
+        mediaType: 'image',
+      });
       router.push({
         pathname: '/media-editor',
-        params: { mediaUris: combined.join(','), mediaType: 'image' },
+        params: { handoff: '1', mediaType: 'image' },
       } as never);
     }
   };
@@ -322,9 +334,13 @@ export function ComposeScreen() {
   const openPhotoEditor = () => {
     const photoUris = mediaUris.filter((uri) => !isLocalVideoUri(uri));
     if (!photoUris.length) return;
+    useMediaHandoffStore.getState().setHandoff({
+      mediaUris: photoUris,
+      mediaType: 'image',
+    });
     router.push({
       pathname: '/media-editor',
-      params: { mediaUris: photoUris.join(','), mediaType: 'image' },
+      params: { handoff: '1', mediaType: 'image' },
     } as never);
   };
 
@@ -360,11 +376,30 @@ export function ComposeScreen() {
     });
 
     if (!result.canceled && result.assets[0]?.uri) {
-      router.push({
-        pathname: '/media-editor',
-        params: { mediaUris: result.assets[0].uri, mediaType: 'video' },
-      } as never);
+      try {
+        const playableUri = await prepareStoryVideoPreviewUri(result.assets[0].uri);
+        useMediaHandoffStore.getState().setHandoff({
+          mediaUris: [playableUri],
+          mediaType: 'video',
+        });
+        router.push({
+          pathname: '/media-editor',
+          params: { handoff: '1', mediaType: 'video' },
+        } as never);
+      } catch (err) {
+        Alert.alert(
+          'Video hazırlanamadı',
+          err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+        );
+      }
     }
+  };
+
+  const openCamera = () => {
+    router.push({
+      pathname: '/capture',
+      params: { mode: 'post' },
+    } as never);
   };
 
   const handleSubmit = async () => {
@@ -395,6 +430,7 @@ export function ComposeScreen() {
       latitude: selectedLocation?.latitude ?? null,
       longitude: selectedLocation?.longitude ?? null,
       music: musicSelection,
+      videoMuted: hasVideo && useMediaEditorStore.getState().videoMuted,
       editManifest,
       communityId: communityId ?? null,
     };
@@ -436,22 +472,18 @@ export function ComposeScreen() {
   return (
     <GradientBackground>
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <View style={[styles.topBar, { borderBottomColor: colors.border }]}>
-          <Pressable onPress={handleBack} hitSlop={12} style={styles.topSide}>
-            <Ionicons name="close" size={24} color={colors.text} />
+        <View style={styles.topBar}>
+          <Pressable onPress={handleBack} hitSlop={14} style={styles.closeBtn}>
+            <Ionicons name="close" size={26} color={colors.text} />
           </Pressable>
-
-          <View style={styles.topCenter}>
-            <Text variant="label">{communityId ? 'Toplulukta paylaş' : 'Yeni gönderi'}</Text>
-            <Text secondary variant="caption" numberOfLines={1}>
-              {regionLabel}
-            </Text>
-          </View>
 
           <Pressable
             {...keyboardPersistPress(handleSubmit)}
             disabled={!canSubmit}
-            style={[styles.shareBtn, { backgroundColor: canSubmit ? colors.primary : colors.border }]}
+            style={[
+              styles.shareBtn,
+              { backgroundColor: canSubmit ? colors.primary : `${colors.primary}55` },
+            ]}
           >
             {isBackgroundUploading ? (
               <ActivityIndicator size="small" color="#fff" />
@@ -477,27 +509,155 @@ export function ComposeScreen() {
           style={styles.scroll}
           contentContainerStyle={styles.page}
           keyboardShouldPersistTaps="handled"
-          bottomOffset={24}
+          bottomOffset={72}
         >
-          <View style={[styles.composeCard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-            <TextInput
-              style={[styles.contentInput, { color: colors.text }]}
-              placeholder="Ne oluyor? #hashtag kullanabilirsin"
-              placeholderTextColor={colors.textMuted}
-              value={content}
-              onChangeText={setContent}
-              multiline
-              maxLength={2000}
+          <View style={styles.composerRow}>
+            <ProfileAvatar
+              username={profile?.username ?? 'u'}
+              avatarUrl={profile?.avatar_url ?? null}
+              size={44}
             />
-            <View style={[styles.divider, { backgroundColor: colors.border }]} />
-            <TextInput
-              style={[styles.titleInput, { color: colors.textSecondary }]}
-              placeholder="Başlık (isteğe bağlı)"
-              placeholderTextColor={colors.textMuted}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={120}
-            />
+
+            <View style={styles.composerBody}>
+              {showOptionsPanel ? (
+                <Pressable
+                  onPress={() => setShowOptions((v) => !v)}
+                  style={[
+                    styles.audienceChip,
+                    { borderColor: colors.primary, backgroundColor: `${colors.primary}12` },
+                  ]}
+                >
+                  <Ionicons
+                    name={AUDIENCE_OPTIONS.find((o) => o.id === audience)?.icon ?? 'earth-outline'}
+                    size={13}
+                    color={colors.primary}
+                  />
+                  <Text style={{ color: colors.primary, fontSize: 13, fontWeight: '700' }}>
+                    {AUDIENCE_OPTIONS.find((o) => o.id === audience)?.label}
+                  </Text>
+                  <Ionicons name="chevron-down" size={13} color={colors.primary} />
+                </Pressable>
+              ) : null}
+
+              <TextInput
+                style={[styles.contentInput, { color: colors.text }]}
+                placeholder={communityId ? 'Toplulukta ne paylaşmak istersin?' : 'Ne oluyor?'}
+                placeholderTextColor={colors.textMuted}
+                value={content}
+                onChangeText={setContent}
+                multiline
+                maxLength={2000}
+                autoFocus
+              />
+
+              <View style={styles.linkPreviewWrap}>
+                <ComposerLinkPreview content={content} />
+              </View>
+
+              <TextInput
+                style={[styles.titleInput, { color: colors.textSecondary }]}
+                placeholder="Başlık ekle (isteğe bağlı)"
+                placeholderTextColor={colors.textMuted}
+                value={title}
+                onChangeText={setTitle}
+                maxLength={120}
+              />
+
+              <Text secondary variant="caption" style={styles.regionHint} numberOfLines={1}>
+                {regionLabel}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.mediaStrip}>
+            <View style={styles.mediaStripHeader}>
+              <Text secondary variant="caption" style={styles.mediaStripLabel}>
+                Medya
+              </Text>
+              <Text secondary variant="caption">
+                {remainingSlots}/{MAX_MEDIA_COUNT}
+              </Text>
+            </View>
+
+            <View style={styles.mediaChipRow}>
+              <Pressable
+                onPress={() => setShowGalleryPicker((v) => !v)}
+                disabled={remainingSlots <= 0 || (!showPhoto && !showVideo)}
+                style={[
+                  styles.mediaChip,
+                  {
+                    borderColor: showGalleryPicker ? colors.primary : colors.border,
+                    backgroundColor: showGalleryPicker ? `${colors.primary}12` : colors.surface,
+                  },
+                  (remainingSlots <= 0 || (!showPhoto && !showVideo)) && styles.mediaBtnDisabled,
+                ]}
+              >
+                <Ionicons
+                  name="images-outline"
+                  size={16}
+                  color={showGalleryPicker ? colors.primary : colors.textSecondary}
+                />
+                <Text
+                  style={[
+                    styles.mediaChipText,
+                    { color: showGalleryPicker ? colors.primary : colors.text },
+                  ]}
+                >
+                  Galeri
+                </Text>
+                <Ionicons
+                  name={showGalleryPicker ? 'chevron-up' : 'chevron-down'}
+                  size={12}
+                  color={colors.textMuted}
+                />
+              </Pressable>
+
+              <Pressable
+                onPress={openCamera}
+                disabled={remainingSlots <= 0 || (!showPhoto && !showVideo)}
+                style={[
+                  styles.mediaChip,
+                  { borderColor: colors.border, backgroundColor: colors.surface },
+                  (remainingSlots <= 0 || (!showPhoto && !showVideo)) && styles.mediaBtnDisabled,
+                ]}
+              >
+                <Ionicons name="camera-outline" size={16} color={colors.textSecondary} />
+                <Text style={[styles.mediaChipText, { color: colors.text }]}>Kamera</Text>
+              </Pressable>
+            </View>
+
+            {showGalleryPicker ? (
+              <View style={styles.mediaChoiceRow}>
+                {showPhoto ? (
+                  <Pressable
+                    onPress={pickImages}
+                    disabled={remainingSlots <= 0}
+                    style={[
+                      styles.mediaChoiceBtn,
+                      { borderColor: colors.border, backgroundColor: colors.surface },
+                      remainingSlots <= 0 && styles.mediaBtnDisabled,
+                    ]}
+                  >
+                    <Ionicons name="image-outline" size={15} color={colors.primary} />
+                    <Text style={[styles.mediaChoiceText, { color: colors.text }]}>Resim</Text>
+                  </Pressable>
+                ) : null}
+                {showVideo ? (
+                  <Pressable
+                    onPress={pickVideo}
+                    disabled={remainingSlots <= 0 || hasVideo}
+                    style={[
+                      styles.mediaChoiceBtn,
+                      { borderColor: colors.border, backgroundColor: colors.surface },
+                      (remainingSlots <= 0 || hasVideo) && styles.mediaBtnDisabled,
+                    ]}
+                  >
+                    <Ionicons name="film-outline" size={15} color={colors.primary} />
+                    <Text style={[styles.mediaChoiceText, { color: colors.text }]}>Video</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
           </View>
 
           {discoverVisible ? (
@@ -509,25 +669,32 @@ export function ComposeScreen() {
           ) : null}
 
           {mediaUris.length > 0 ? (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.mediaRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.mediaRow}
+            >
               {mediaUris.map((uri, i) => {
                 const isVideo = isLocalVideoUri(uri);
                 return (
                   <View key={`${uri}-${i}`} style={styles.mediaWrap}>
                     <Pressable onPress={() => setPreviewIndex(i)}>
                       {isVideo ? (
-                        <View style={styles.videoThumb}>
+                        <View style={[styles.videoThumb, { borderColor: colors.border }]}>
                           <ComposeVideoPreview uri={uri} music={musicSelection} editManifest={editManifest} />
                           <View style={styles.playOverlay}>
-                            <Ionicons name="play" size={18} color="#fff" />
+                            <Ionicons name="play" size={22} color="#fff" />
                           </View>
                         </View>
                       ) : (
                         <View style={styles.photoThumb}>
-                          <Image source={{ uri }} style={styles.thumb} />
+                          <Image
+                            source={{ uri }}
+                            style={[styles.thumb, { borderColor: colors.border }]}
+                          />
                           {musicSelection && !hasVideo ? (
                             <View style={styles.thumbMusicOverlay} pointerEvents="none">
-                              <MusicMarqueeOverlay music={musicSelection} maxWidth={72} />
+                              <MusicMarqueeOverlay music={musicSelection} maxWidth={100} />
                             </View>
                           ) : null}
                         </View>
@@ -543,21 +710,21 @@ export function ComposeScreen() {
                           } as never)
                         }
                       >
-                        <Ionicons name="cut-outline" size={12} color="#fff" />
+                        <Ionicons name="cut-outline" size={13} color="#fff" />
                       </Pressable>
                     ) : (
                       <Pressable
                         style={[styles.mediaAction, styles.mediaEdit, { backgroundColor: colors.primary }]}
                         onPress={openPhotoEditor}
                       >
-                        <Ionicons name="create-outline" size={12} color="#fff" />
+                        <Ionicons name="create-outline" size={13} color="#fff" />
                       </Pressable>
                     )}
                     <Pressable
                       style={[styles.mediaAction, styles.mediaRemove, { backgroundColor: colors.danger }]}
                       onPress={() => setMediaUris((p) => p.filter((_, j) => j !== i))}
                     >
-                      <Ionicons name="close" size={12} color="#fff" />
+                      <Ionicons name="close" size={13} color="#fff" />
                     </Pressable>
                   </View>
                 );
@@ -593,68 +760,21 @@ export function ComposeScreen() {
             </View>
           ) : null}
 
-          <View style={styles.attachRow}>
-            {showPhoto ? (
-              <AttachButton
-                icon="images-outline"
-                label="Fotoğraf"
-                color={colors.primary}
-                onPress={pickImages}
-                disabled={remainingSlots <= 0}
-              />
-            ) : null}
-            {showVideo ? (
-              <AttachButton
-                icon="videocam-outline"
-                label="Video"
-                color={colors.accent}
-                onPress={pickVideo}
-                disabled={remainingSlots <= 0 || hasVideo}
-              />
-            ) : null}
-            {!hasVideo && mediaUris.length > 0 && showMusic ? (
-              <AttachButton
-                icon="musical-notes-outline"
-                label="Müzik"
-                color={colors.accent}
-                onPress={() => setMusicOpen(true)}
-                active={!!musicSelection}
-              />
-            ) : null}
-            {showLocationAttach ? (
-              <AttachButton
-                icon="location-outline"
-                label="Konum"
-                color={colors.accent}
-                onPress={() => setShowLocation((v) => !v)}
-                active={showLocation || !!selectedLocation}
-              />
-            ) : null}
-            {showOptionsPanel ? (
-              <AttachButton
-                icon="options-outline"
-                label="Ayarlar"
-                color={colors.primary}
-                onPress={() => setShowOptions((v) => !v)}
-                active={showOptions}
-              />
-            ) : null}
-          </View>
-
           {showLocationAttach && showLocation ? (
-            <View style={[styles.section, { borderColor: colors.border, backgroundColor: `${colors.surface}AA` }]}>
+            <View style={[styles.section, { borderColor: colors.border, backgroundColor: colors.surface }]}>
               <LocationPicker
                 regionId={regionId}
                 value={selectedLocation}
                 onChange={setSelectedLocation}
                 onTextChange={setLocationText}
                 compact
+                scope="world"
               />
             </View>
           ) : null}
 
           {showOptionsPanel && showOptions ? (
-            <View style={[styles.section, { borderColor: colors.border, backgroundColor: `${colors.surface}AA` }]}>
+            <View style={[styles.section, { borderColor: colors.border, backgroundColor: colors.surface }]}>
               <Text variant="caption" secondary style={styles.sectionLabel}>
                 Kimler görebilir?
               </Text>
@@ -668,19 +788,19 @@ export function ComposeScreen() {
                       style={[
                         styles.chip,
                         {
-                          borderColor: active ? colors.accent : colors.border,
-                          backgroundColor: active ? `${colors.accent}18` : 'transparent',
+                          borderColor: active ? colors.primary : colors.border,
+                          backgroundColor: active ? `${colors.primary}18` : 'transparent',
                         },
                       ]}
                     >
                       <Ionicons
                         name={opt.icon}
                         size={13}
-                        color={active ? colors.accent : colors.textMuted}
+                        color={active ? colors.primary : colors.textMuted}
                       />
                       <Text
                         variant="caption"
-                        style={{ color: active ? colors.accent : colors.textSecondary, fontSize: 12 }}
+                        style={{ color: active ? colors.primary : colors.textSecondary, fontSize: 12 }}
                       >
                         {opt.label}
                       </Text>
@@ -723,42 +843,56 @@ export function ComposeScreen() {
             </View>
           ) : null}
 
-          {showOptionsPanel && !showOptions ? (
+          {showOptionsPanel && !showOptions && (category || selectedLocation) ? (
             <View style={styles.summaryRow}>
-              <Pressable style={styles.summaryChip} onPress={() => setShowOptions(true)}>
-                <Ionicons name="eye-outline" size={13} color={colors.textMuted} />
-                <Text variant="caption" secondary>
-                  {AUDIENCE_OPTIONS.find((o) => o.id === audience)?.label}
-                </Text>
-              </Pressable>
-              <Text variant="caption" secondary>
-                ·
-              </Text>
-              <Pressable style={styles.summaryChip} onPress={() => setShowOptions(true)}>
-                <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
-                <Text variant="caption" secondary>
-                  {category
-                    ? CATEGORIES.find((c) => c.id === category)?.label
-                    : `${COMPOSE_DEFAULT_CATEGORY_LABEL} (varsayılan)`}
-                </Text>
-              </Pressable>
-              {selectedLocation ? (
-                <>
+              {category ? (
+                <Pressable style={styles.summaryChip} onPress={() => setShowOptions(true)}>
+                  <Ionicons name="pricetag-outline" size={13} color={colors.textMuted} />
                   <Text variant="caption" secondary>
-                    ·
+                    {CATEGORIES.find((c) => c.id === category)?.label}
                   </Text>
-                  <Pressable style={styles.summaryChip} onPress={() => setShowLocation(true)}>
-                    <Ionicons name="location-outline" size={13} color={colors.textMuted} />
-                    <Text variant="caption" secondary numberOfLines={1}>
-                      {selectedLocation.label}
-                    </Text>
-                  </Pressable>
-                </>
+                </Pressable>
+              ) : null}
+              {selectedLocation ? (
+                <Pressable style={styles.summaryChip} onPress={() => setShowLocation(true)}>
+                  <Ionicons name="location-outline" size={13} color={colors.textMuted} />
+                  <Text variant="caption" secondary numberOfLines={1}>
+                    {selectedLocation.label}
+                  </Text>
+                </Pressable>
               ) : null}
             </View>
           ) : null}
-
         </KeyboardAwareScrollView>
+
+        <View style={[styles.toolbar, { borderTopColor: colors.border, backgroundColor: colors.background }]}>
+          {!hasVideo && mediaUris.length > 0 && showMusic ? (
+            <ToolbarIcon
+              icon="musical-notes-outline"
+              onPress={() => setMusicOpen(true)}
+              active={!!musicSelection}
+            />
+          ) : null}
+          {showLocationAttach ? (
+            <ToolbarIcon
+              icon="location-outline"
+              onPress={() => setShowLocation((v) => !v)}
+              active={showLocation || !!selectedLocation}
+            />
+          ) : null}
+          {showOptionsPanel ? (
+            <ToolbarIcon
+              icon="options-outline"
+              onPress={() => setShowOptions((v) => !v)}
+              active={showOptions}
+            />
+          ) : null}
+
+          <View style={styles.toolbarSpacer} />
+          <Text secondary variant="caption" style={styles.charCount}>
+            {content.length}/2000
+          </Text>
+        </View>
 
         <FullScreenMediaViewer
           urls={mediaUris}
@@ -770,7 +904,8 @@ export function ComposeScreen() {
         <AudioPickerSheet
           visible={musicOpen}
           selectedTrackId={musicSelection?.trackId ?? null}
-          initialMode="music"
+          selectionMode
+          tapToSelect
           onClose={() => setMusicOpen(false)}
           onSelect={handleMusicSelect}
         />
@@ -784,98 +919,190 @@ const styles = StyleSheet.create({
   topBar: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    gap: spacing.sm,
   },
-  topSide: { width: 72, alignItems: 'flex-start' },
-  topCenter: { flex: 1, alignItems: 'center' },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   shareBtn: {
-    minWidth: 72,
-    height: 34,
+    minWidth: 88,
+    height: 36,
     borderRadius: radius.full,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: spacing.md,
+    paddingHorizontal: spacing.lg,
   },
-  shareBtnText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  shareBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
   uploadPanelWrap: {
     paddingHorizontal: spacing.md,
     paddingBottom: spacing.xs,
   },
   scroll: { flex: 1 },
   page: {
-    padding: spacing.md,
-    gap: spacing.sm,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    gap: spacing.md,
     paddingBottom: spacing.lg,
   },
-  composeCard: {
+  composerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: spacing.sm,
+  },
+  composerBody: {
+    flex: 1,
+    gap: spacing.xs,
+  },
+  audienceChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
     borderWidth: 1,
-    borderRadius: radius.lg,
-    overflow: 'hidden',
+    borderRadius: radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginBottom: 4,
   },
   contentInput: {
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.sm,
-    minHeight: 88,
-    maxHeight: 160,
-    fontSize: 16,
-    lineHeight: 22,
+    minHeight: 120,
+    fontSize: 20,
+    lineHeight: 28,
+    fontWeight: '400',
     textAlignVertical: 'top',
+    paddingTop: 0,
   },
-  divider: { height: StyleSheet.hairlineWidth, marginHorizontal: spacing.md },
+  linkPreviewWrap: {
+    marginHorizontal: -8,
+    marginTop: 4,
+    marginBottom: 4,
+  },
   titleInput: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '500',
+    paddingVertical: 2,
+  },
+  regionHint: {
+    marginTop: 2,
+  },
+  mediaStrip: {
+    gap: spacing.xs,
+  },
+  mediaStripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  mediaStripLabel: {
+    fontWeight: '600',
+    letterSpacing: 0.2,
+  },
+  mediaChipRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  mediaChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
+  },
+  mediaChipText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  mediaChoiceRow: {
+    flexDirection: 'row',
+    gap: spacing.xs,
+  },
+  mediaChoiceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    height: 32,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderRadius: radius.full,
+  },
+  mediaChoiceText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  mediaBtnDisabled: {
+    opacity: 0.4,
   },
   mediaRow: { gap: spacing.sm, paddingVertical: spacing.xs },
   mediaWrap: { position: 'relative' },
   photoThumb: { position: 'relative' },
-  thumb: { width: 72, height: 72, borderRadius: radius.md },
+  thumb: {
+    width: 148,
+    height: 148,
+    borderRadius: radius.lg,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   thumbMusicOverlay: {
     position: 'absolute',
-    left: 2,
-    right: 2,
-    bottom: 2,
+    left: 6,
+    right: 6,
+    bottom: 6,
   },
-  videoThumb: { width: 72, height: 72, borderRadius: radius.md, overflow: 'hidden' },
+  videoThumb: {
+    width: 148,
+    height: 148,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+  },
   playOverlay: {
-    ...StyleSheet.absoluteFill,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)',
   },
   mediaAction: {
     position: 'absolute',
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  mediaRemove: { top: -4, right: -4 },
-  mediaEdit: { bottom: -4, left: -4 },
-  attachRow: {
+  mediaRemove: { top: -6, right: -6 },
+  mediaEdit: { bottom: -6, left: -6 },
+  toolbar: {
     flexDirection: 'row',
-    gap: spacing.xs,
+    alignItems: 'center',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.sm,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    gap: 2,
   },
-  attachBtn: {
-    flex: 1,
+  toolbarIcon: {
+    width: 42,
+    height: 42,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 3,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-    borderWidth: 1,
+  },
+  toolbarIconDisabled: {
+    opacity: 0.35,
+  },
+  toolbarSpacer: { flex: 1 },
+  charCount: {
+    paddingRight: spacing.sm,
   },
   section: {
     borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.sm,
+    borderRadius: radius.lg,
+    padding: spacing.md,
     gap: spacing.sm,
   },
   sectionLabel: { marginBottom: -4 },
@@ -894,14 +1121,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: spacing.xs,
+    gap: spacing.sm,
   },
   summaryChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    maxWidth: '45%',
+    maxWidth: '70%',
   },
   hint: { marginTop: -4 },
   musicBadgeWrap: {
@@ -909,10 +1135,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: spacing.xs,
-  },
-  progressRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
   },
 });

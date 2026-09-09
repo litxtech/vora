@@ -20,12 +20,28 @@ export function coordInBbox(
   );
 }
 
-/** Gönderi / konum seçimi için geçerli koordinat kontrolü */
+export type LocationGeoScope = 'region' | 'world';
+
+/** Dünya geneli geçerli koordinat (gönderi / story konum etiketi) */
+export function isValidWorldCoordinate(latitude: number, longitude: number): boolean {
+  return (
+    Number.isFinite(latitude) &&
+    Number.isFinite(longitude) &&
+    latitude >= -90 &&
+    latitude <= 90 &&
+    longitude >= -180 &&
+    longitude <= 180
+  );
+}
+
+/** Gönderi / konum seçimi için geçerli koordinat kontrolü (varsayılan: Karadeniz bölgesi) */
 export function isValidPostCoordinate(
   latitude: number,
   longitude: number,
   regionId?: RegionId,
+  scope: LocationGeoScope = 'region',
 ): boolean {
+  if (scope === 'world') return isValidWorldCoordinate(latitude, longitude);
   if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return false;
 
   if (regionId) {
@@ -39,10 +55,23 @@ export function isValidPostCoordinate(
 export function pickValidCoordinate(
   candidates: Array<MapCoordinate | null | undefined>,
   regionId?: RegionId,
+  scope: LocationGeoScope = 'region',
 ): MapCoordinate | null {
   for (const coord of candidates) {
     if (!coord) continue;
-    if (isValidPostCoordinate(coord.latitude, coord.longitude, regionId)) return coord;
+    if (isValidPostCoordinate(coord.latitude, coord.longitude, regionId, scope)) return coord;
   }
   return null;
+}
+
+/** Yaklaşık mesafe (metre) — sıralama için yeterli */
+export function approximateDistanceMeters(
+  from: MapCoordinate,
+  latitude: number,
+  longitude: number,
+): number {
+  const dLat = (latitude - from.latitude) * 111_000;
+  const dLng =
+    (longitude - from.longitude) * 111_000 * Math.cos((from.latitude * Math.PI) / 180);
+  return Math.sqrt(dLat * dLat + dLng * dLng);
 }

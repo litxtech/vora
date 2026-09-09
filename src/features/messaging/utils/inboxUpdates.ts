@@ -21,6 +21,8 @@ export function messagePreviewFromRow(row: IncomingMessageRow): string {
   switch (row.message_type) {
     case 'image':
       return 'Fotoğraf gönderdi';
+    case 'cap':
+      return 'Caps gönderdi';
     case 'video':
       return 'Video gönderdi';
     case 'audio':

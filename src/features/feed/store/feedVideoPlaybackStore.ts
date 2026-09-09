@@ -25,7 +25,10 @@ export const useFeedVideoPlaybackStore = create<FeedVideoPlaybackState>((set, ge
       unmutedPostId: get().unmutedPostId === postId ? get().unmutedPostId : null,
     });
   },
-  setScrolling: (scrolling) => set({ isScrolling: scrolling }),
+  setScrolling: (scrolling) => {
+    if (get().isScrolling === scrolling) return;
+    set({ isScrolling: scrolling });
+  },
   toggleUnmuted: (postId) => {
     set({ unmutedPostId: get().unmutedPostId === postId ? null : postId });
   },

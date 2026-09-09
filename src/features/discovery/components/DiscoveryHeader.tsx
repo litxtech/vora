@@ -7,6 +7,8 @@ import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { DISCOVERY_FEATURE } from '@/features/discovery/featureFlags';
+import { cityPath } from '@/features/city-governance/constants';
+import { CITY_SYSTEM_FEATURE } from '@/features/city-governance/featureFlags';
 import { FeedIconButton } from '@/features/feed/components/shared/FeedIconButton';
 import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
 import { MapHeaderButton } from '@/features/map/components/MapHeaderButton';
@@ -44,6 +46,7 @@ export function DiscoveryHeader() {
   const showPeriodFilter = useFeatureVisible(DISCOVERY_FEATURE.periodFilter);
   const showAgendaChip = useFeatureVisible(DISCOVERY_FEATURE.agendaChip);
   const showCommunitiesChip = useFeatureVisible(DISCOVERY_FEATURE.communitiesChip);
+  const showCityChip = useFeatureVisible(CITY_SYSTEM_FEATURE.id);
   const showHeaderMap = useFeatureVisible(DISCOVERY_FEATURE.headerMap);
   const showHeaderIncidents = useFeatureVisible(DISCOVERY_FEATURE.headerIncidents);
 
@@ -149,6 +152,14 @@ export function DiscoveryHeader() {
               label="Topluluk"
               accent={colors.primary}
               onPress={() => router.push('/communities' as never)}
+            />
+          ) : null}
+          {showCityChip ? (
+            <FilterChip
+              icon="business-outline"
+              label="Şehir"
+              accent="#F59E0B"
+              onPress={() => router.push(cityPath(regionId) as never)}
             />
           ) : null}
           <View style={[styles.scopeHint, { backgroundColor: colors.surfaceElevated, borderColor: colors.border }]}>

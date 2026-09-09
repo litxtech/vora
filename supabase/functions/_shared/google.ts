@@ -82,7 +82,7 @@ export async function verifyGooglePremiumPurchase(input: {
   expiresAt: string;
 }> {
   const packageName =
-    Deno.env.get('GOOGLE_PLAY_PACKAGE_NAME') ?? 'com.karadeniz.dijitalagi';
+    Deno.env.get('GOOGLE_PLAY_PACKAGE_NAME') ?? 'com.litxtech.vora';
   const plan = planFromGoogleProductId(input.productId);
   if (!plan) {
     throw new Error(`Unknown Google product ID: ${input.productId}`);

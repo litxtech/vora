@@ -1,9 +1,11 @@
+import { Alert } from 'react-native';
 import { type Href, router } from 'expo-router';
 import { listingDetailPath } from '@/features/marketplace/constants';
 import { listingDetailPath as personnelListingPath } from '@/features/personnel-center/constants';
 import { voraNeedDetailPath } from '@/features/vora-needs/constants';
 import { openReelsAtReel } from '@/features/reels/services/reelsNavigation';
 import { resolveReelShareHints } from '../services/reelShareHints';
+import { fetchSharedReelAvailability } from '../services/sharedReelAvailability';
 import type { ChatMessage, SharedCardMetadata } from '../types';
 
 function resolveCardType(message: ChatMessage): SharedCardMetadata['cardType'] | null {
@@ -29,7 +31,7 @@ function resolveCardType(message: ChatMessage): SharedCardMetadata['cardType'] |
   }
 }
 
-export function navigateToSharedCard(message: ChatMessage, viewerId: string | null = null) {
+export async function navigateToSharedCard(message: ChatMessage, viewerId: string | null = null) {
   const targetId = message.metadata?.targetId;
   if (!targetId) return;
 
@@ -40,9 +42,15 @@ export function navigateToSharedCard(message: ChatMessage, viewerId: string | nu
     case 'post':
       router.push(`/detail/posts/${targetId}` as Href);
       break;
-    case 'reel':
+    case 'reel': {
+      const available = await fetchSharedReelAvailability(targetId);
+      if (!available) {
+        Alert.alert('Bu reel kaldırıldı', 'Paylaşılan reel artık mevcut değil.');
+        return;
+      }
       openReelsAtReel(targetId, resolveReelShareHints(targetId, meta));
       break;
+    }
     case 'profile':
       if (meta?.username) router.push(`/u/${meta.username}` as Href);
       else router.push(`/user/${targetId}` as Href);

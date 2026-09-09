@@ -36,6 +36,14 @@ yarn-error.*
 .env*.local
 google-services.json
 
+# local Supabase CLI link/state (project refs, pooler URLs)
+supabase/.temp/
+
+# local Expo bundle/check artifacts
+.expo-bundle-check/
+.expo-livekit-check/
+.expo-tmp-*/
+
 # typescript
 *.tsbuildinfo
 

@@ -1,5 +1,1 @@
-import { MapDetailScreen } from '@/features/map/components/MapDetailScreen';
-
-export default function TrafficDetailScreen() {
-  return <MapDetailScreen type="traffic" />;
-}
+export { MapDetailRouteScreen as default } from '@/lib/navigation/lazyRouteScreens';

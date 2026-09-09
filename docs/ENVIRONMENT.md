@@ -57,7 +57,8 @@ Mağaza kimliği ve marka değerleri tek dosyada:
 | `APP_SLUG` | `voralive` | Expo slug |
 | `APP_SCHEME` | `vora` | Deep link şeması |
 | `APP_DOMAIN` | `vora.app` | Paylaşım domain'i |
-| `APP_BUNDLE_ID` | `com.karadeniz.dijitalagi` | iOS bundle + Android package (değiştirilemez) |
+| `APP_BUNDLE_ID` | `com.karadeniz.dijitalagi` | iOS bundle (App Store; değiştirilemez) |
+| `APP_ANDROID_PACKAGE` | `com.litxtech.vora` | Google Play yeni kayıt (askılı paket kullanılamaz) |
 | `APPLE_TEAM_ID` | `9W6CR7KXM7` | Apple Developer Team |
 | `iapProductId(...)` | — | IAP ürün ID üretici |
 
@@ -98,6 +99,7 @@ Bu değerler yalnızca sunucuda; istemciye **asla** konmaz.
 | Secret | Açıklama |
 |--------|----------|
 | `AGORA_APP_ID` / `AGORA_APP_CERTIFICATE` | Agora token üretimi |
+| `LIVEKIT_URL` / `LIVEKIT_API_KEY` / `LIVEKIT_API_SECRET` | LiveKit token üretimi (şehir sesli odaları — Phase 4) |
 | `MUX_TOKEN_ID` / `MUX_TOKEN_SECRET` | Video upload |
 
 ### AI
@@ -124,7 +126,7 @@ Bu değerler yalnızca sunucuda; istemciye **asla** konmaz.
 | `APPLE_ISSUER_ID` / `APPLE_KEY_ID` / `APPLE_PRIVATE_KEY` | App Store Server API |
 | `APPLE_BUNDLE_ID` | Varsayılan: `com.karadeniz.dijitalagi` |
 | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | Play Billing |
-| `GOOGLE_PLAY_PACKAGE_NAME` | Varsayılan: `com.karadeniz.dijitalagi` |
+| `GOOGLE_PLAY_PACKAGE_NAME` | Varsayılan: `com.litxtech.vora` |
 
 ### Paylaşım (share-preview)
 

@@ -5089,6 +5089,7 @@ export type Database = {
           id: string
           is_edited: boolean
           like_count: number
+          media_urls: string[]
           parent_id: string | null
           post_id: string
           updated_at: string
@@ -5100,6 +5101,7 @@ export type Database = {
           id?: string
           is_edited?: boolean
           like_count?: number
+          media_urls?: string[]
           parent_id?: string | null
           post_id: string
           updated_at?: string
@@ -5111,6 +5113,7 @@ export type Database = {
           id?: string
           is_edited?: boolean
           like_count?: number
+          media_urls?: string[]
           parent_id?: string | null
           post_id?: string
           updated_at?: string

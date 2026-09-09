@@ -7,6 +7,7 @@ import { LostItemAvatar } from '@/features/lost-found/components/LostItemAvatar'
 import { navigateToFeedDetail, prefetchFeedDetail } from '@/features/feed/services/feedNavigation';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
+import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type FeedLostItemCardProps = {
@@ -19,15 +20,21 @@ export const FeedLostItemCard = memo(function FeedLostItemCard({ item }: FeedLos
   const urgent = Boolean(item.isFeatured);
   const itemType = item.lostItemType ?? 'lost';
 
-  const openDetail = () => {
+  const warmDetail = () => {
     prefetchFeedDetail('lost_found', item.sourceId);
+  };
+
+  const openDetail = () => {
+    warmDetail();
     navigateToFeedDetail('lost_found', item.sourceId, item.isDemo);
   };
 
   return (
     <Pressable
       style={[styles.card, { borderBottomColor: colors.border }]}
+      onPressIn={warmDetail}
       onPress={openDetail}
+      {...getAndroidInstantPressableProps()}
     >
       <LostItemAvatar
         imageUrl={imageUrl}

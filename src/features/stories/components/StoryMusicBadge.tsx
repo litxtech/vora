@@ -2,7 +2,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
-import { spacing } from '@/constants/theme';
+import { radius, spacing } from '@/constants/theme';
 
 type StoryMusicBadgeProps = {
   title: string;
@@ -12,7 +12,7 @@ type StoryMusicBadgeProps = {
   stacked?: boolean;
 };
 
-/** Sol alt — modern müzik rozeti */
+/** Sol alt — cam efektli müzik rozeti */
 export function StoryMusicBadge({ title, artist, onPress, stacked = false }: StoryMusicBadgeProps) {
   return (
     <Pressable
@@ -21,31 +21,38 @@ export function StoryMusicBadge({ title, artist, onPress, stacked = false }: Sto
       style={[styles.wrap, stacked && styles.wrapStacked]}
       hitSlop={6}
     >
-      <LinearGradient
-        colors={['rgba(124,58,237,0.55)', 'rgba(30,136,229,0.45)']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.gradientBorder}
-      >
-        <View style={styles.inner}>
-          <View style={styles.disc}>
-            <Ionicons name="musical-notes" size={14} color="#fff" />
-          </View>
-          <View style={styles.meta}>
-            <Text variant="caption" style={styles.title} numberOfLines={1}>
-              {title}
-            </Text>
-            {artist ? (
-              <Text variant="caption" style={styles.artist} numberOfLines={1}>
-                {artist}
+      <View style={styles.shadow}>
+        <LinearGradient
+          colors={['rgba(167,139,250,0.35)', 'rgba(37,99,235,0.2)', 'rgba(255,255,255,0.06)']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.gradientBorder}
+        >
+          <View style={styles.inner}>
+            <LinearGradient
+              colors={['#7c3aed', '#2563eb']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.disc}
+            >
+              <Ionicons name="musical-notes" size={13} color="#fff" />
+            </LinearGradient>
+            <View style={styles.meta}>
+              <Text variant="caption" style={styles.title} numberOfLines={1}>
+                {title}
               </Text>
+              {artist ? (
+                <Text variant="caption" style={styles.artist} numberOfLines={1}>
+                  {artist}
+                </Text>
+              ) : null}
+            </View>
+            {onPress ? (
+              <Ionicons name="chevron-up" size={13} color="rgba(255,255,255,0.55)" />
             ) : null}
           </View>
-          {onPress ? (
-            <Ionicons name="chevron-up" size={14} color="rgba(255,255,255,0.7)" />
-          ) : null}
-        </View>
-      </LinearGradient>
+        </LinearGradient>
+      </View>
     </Pressable>
   );
 }
@@ -59,28 +66,36 @@ const styles = StyleSheet.create({
     maxWidth: '78%',
   },
   wrapStacked: {
-    bottom: spacing.lg + 40,
+    bottom: spacing.lg + 48,
+  },
+  shadow: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 8,
+    elevation: 6,
   },
   gradientBorder: {
-    borderRadius: 14,
-    padding: 1.5,
+    borderRadius: radius.full,
+    padding: 1,
   },
   inner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 12,
-    backgroundColor: 'rgba(8,8,14,0.82)',
+    gap: spacing.sm,
+    minHeight: 44,
+    paddingVertical: 6,
+    paddingLeft: 6,
+    paddingRight: 12,
+    borderRadius: radius.full - 1,
+    backgroundColor: 'rgba(8,8,14,0.78)',
   },
   disc: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.12)',
   },
   meta: {
     flex: 1,
@@ -90,11 +105,13 @@ const styles = StyleSheet.create({
   title: {
     color: '#fff',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 13,
+    lineHeight: 16,
   },
   artist: {
-    color: 'rgba(255,255,255,0.72)',
-    fontSize: 10,
+    color: 'rgba(255,255,255,0.68)',
+    fontSize: 11,
+    lineHeight: 14,
     fontWeight: '600',
   },
 });

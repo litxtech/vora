@@ -14,6 +14,7 @@ type AdminAdCardProps = {
   onReview: () => void;
   onQuickApprove?: () => void;
   onQuickReject?: () => void;
+  onQuickRemove?: () => void;
   showQuickActions?: boolean;
   actionLoading?: boolean;
 };
@@ -23,6 +24,7 @@ export function AdminAdCard({
   onReview,
   onQuickApprove,
   onQuickReject,
+  onQuickRemove,
   showQuickActions = false,
   actionLoading = false,
 }: AdminAdCardProps) {
@@ -87,6 +89,16 @@ export function AdminAdCard({
               compact
             />
           </>
+        ) : null}
+        {onQuickRemove ? (
+          <AdminActionChip
+            label="Kaldır"
+            icon="trash-outline"
+            tone="danger"
+            onPress={onQuickRemove}
+            loading={actionLoading}
+            compact
+          />
         ) : null}
       </View>
     </GlassCard>

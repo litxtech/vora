@@ -12,9 +12,10 @@ const IOS_STORE_URL =
   Deno.env.get('IOS_APP_STORE_URL') ?? 'https://apps.apple.com/tr/app/vora-x/id6777120091?l=tr';
 const ANDROID_STORE_URL =
   Deno.env.get('ANDROID_PLAY_STORE_URL') ??
-  'https://play.google.com/store/apps/details?id=com.karadeniz.dijitalagi';
+  'https://play.google.com/store/apps/details?id=com.litxtech.vora';
 const APPLE_TEAM_ID = Deno.env.get('APPLE_TEAM_ID') ?? '9W6CR7KXM7';
-const ANDROID_PACKAGE = Deno.env.get('ANDROID_PACKAGE') ?? 'com.karadeniz.dijitalagi';
+const IOS_BUNDLE_ID = Deno.env.get('APPLE_BUNDLE_ID') ?? 'com.karadeniz.dijitalagi';
+const ANDROID_PACKAGE = Deno.env.get('ANDROID_PACKAGE') ?? 'com.litxtech.vora';
 
 function parseSha256Fingerprints(): string[] {
   const raw =
@@ -535,7 +536,7 @@ function serveAppleAssociation(): Response {
       apps: [],
       details: [
         {
-          appID: `${APPLE_TEAM_ID}.${ANDROID_PACKAGE}`,
+          appID: `${APPLE_TEAM_ID}.${IOS_BUNDLE_ID}`,
           paths: ['/p/*', '/r/*', '/v/*', '/u/*', '/m/*', '/s/*'],
         },
       ],

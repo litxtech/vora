@@ -1,5 +1,1 @@
-import { TripDetailScreen } from '@/features/rides/components/TripDetailScreen';
-
-export default function RideDetailRoute() {
-  return <TripDetailScreen />;
-}
+export { TripDetailRouteScreen as default } from '@/lib/navigation/lazyRouteScreens';

@@ -114,6 +114,8 @@ export function AdminUserQuickSheet({
     );
   };
 
+  const isDeleted = user?.account_status === 'deleted';
+
   return (
     <Modal visible={visible} transparent animationType={resolveModalAnimationType('slide')} onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose}>
@@ -173,16 +175,21 @@ export function AdminUserQuickSheet({
               icon="snow-outline"
               label="Hesabı Dondur"
               tone="danger"
-              disabled={busy}
+              disabled={busy || isDeleted}
               onPress={() =>
                 void run(() => updateAccountStatus(userId, 'frozen'), 'Hesap donduruldu.')
               }
             />
             <ActionRow
               icon="play-circle-outline"
-              label="Hesabı Aktifleştir"
+              label={isDeleted ? 'Silinen hesabı aç' : 'Hesabı Aktifleştir'}
               disabled={busy}
-              onPress={() => void run(() => adminReactivateAccount(userId), 'Hesap aktifleştirildi.')}
+              onPress={() =>
+                void run(
+                  () => adminReactivateAccount(userId),
+                  isDeleted ? 'Silinen hesap yeniden açıldı.' : 'Hesap aktifleştirildi.',
+                )
+              }
             />
 
             {isAdmin ? (

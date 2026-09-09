@@ -47,10 +47,33 @@ export async function reviewBusinessAd(
   approve: boolean,
   note?: string,
 ): Promise<{ error: string | null }> {
+  if (!approve) {
+    const { error } = await supabase.rpc('admin_moderate_feed_content', {
+      p_target_type: 'business_ad',
+      p_target_id: adId,
+      p_action: 'remove',
+      p_reason: note ?? 'Reklam reddedildi',
+    });
+    return { error: supabaseErrorMessage(error) };
+  }
+
   const { error } = await supabase.rpc('admin_review_business_ad', {
     p_ad_id: adId,
-    p_approve: approve,
+    p_approve: true,
     p_note: note ?? null,
+  });
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function removeBusinessAdFromFeed(
+  adId: string,
+  reason = 'Admin reklam kaldırma',
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.rpc('admin_moderate_feed_content', {
+    p_target_type: 'business_ad',
+    p_target_id: adId,
+    p_action: 'remove',
+    p_reason: reason,
   });
   return { error: supabaseErrorMessage(error) };
 }

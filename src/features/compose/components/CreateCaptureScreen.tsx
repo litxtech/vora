@@ -21,8 +21,9 @@ import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import {
-  CAPTURE_PHOTO_QUALITY,
   capturePictureOptions,
+  captureRecordOptions,
+  captureVideoViewProps,
   finalizeCapturedPhoto,
 } from '@/features/compose/services/cameraCapture';
 import { handoffCameraToVideoPlayback } from '@/lib/audio/safeAudioMode';
@@ -34,12 +35,19 @@ import {
 } from '@/features/stories/constants';
 import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
 import { routeStoryVideo } from '@/features/stories/services/routeStoryVideo';
+import { prepareStoryVideoPreviewUri } from '@/features/stories/services/prepareStoryVideoPreview';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
+import { useMediaHandoffStore } from '@/features/compose/store/mediaHandoffStore';
+import { useMediaEditorStore } from '@/features/compose/store/mediaEditorStore';
+import { DEFAULT_ZOOM } from '@/features/compose/utils/mediaEditorZoom';
+import { prepareLocalImageUri } from '@/lib/media/prepareLocalImage';
+import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { radius, spacing } from '@/constants/theme';
 import { deferAfterInteractions } from '@/lib/ui/deferUntilUiIdle';
 import { useTheme } from '@/providers/ThemeProvider';
-import { CaptureCameraZoomOverlay } from '@/features/compose/components/CaptureCameraZoomOverlay';
 import { useCaptureCameraZoom } from '@/features/compose/hooks/useCaptureCameraZoom';
+import { CaptureCameraZoomOverlay } from '@/features/compose/components/CaptureCameraZoomOverlay';
+import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
 
 const MAX_VIDEO_DURATION_SEC = 90;
 const MIN_VIDEO_MS = 800;
@@ -63,12 +71,18 @@ type CaptureShareMode = 'story' | 'post' | 'reels';
 export function CreateCaptureScreen() {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ mode?: string }>();
-  const initialMode: CaptureShareMode =
-    params.mode === 'story' ? 'story' : params.mode === 'reels' ? 'reels' : 'post';
-  const [shareMode, setShareMode] = useState<CaptureShareMode>(initialMode);
+  const params = useLocalSearchParams<{ mode?: string; capture?: string }>();
   const { requireAuth } = useRequireAuth();
   const showSoundCreate = useFeatureVisible('user-sounds');
+  const storiesEnabled = useFeatureVisible('stories');
+  const requestedMode: CaptureShareMode =
+    params.mode === 'story' && storiesEnabled
+      ? 'story'
+      : params.mode === 'reels'
+        ? 'reels'
+        : 'post';
+  const [shareMode, setShareMode] = useState<CaptureShareMode>(requestedMode);
+  const initialCameraMode: 'picture' | 'video' = params.capture === 'video' ? 'video' : 'picture';
   const cameraRef = useRef<CameraViewType>(null);
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
@@ -77,15 +91,15 @@ export function CreateCaptureScreen() {
 
   const [facing, setFacing] = useState<'front' | 'back'>('back');
   const [flash, setFlash] = useState<'off' | 'on' | 'auto'>('off');
-  const [cameraMode, setCameraMode] = useState<'picture' | 'video'>('picture');
+  const [cameraMode, setCameraMode] = useState<'picture' | 'video'>(initialCameraMode);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraLive, setCameraLive] = useState(false);
   const [galleryThumb, setGalleryThumb] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [handoffPreviewUri, setHandoffPreviewUri] = useState<string | null>(null);
   const [recording, setRecording] = useState(false);
   const [recordingElapsedSec, setRecordingElapsedSec] = useState(0);
   const recordStartedAt = useRef<number | null>(null);
-  const longPressActive = useRef(false);
   const pendingRecordRef = useRef(false);
   const stopWhenReadyRef = useRef(false);
   const recordingRef = useRef(false);
@@ -120,11 +134,22 @@ export function CreateCaptureScreen() {
     showManualControls,
     isPinchingRef,
   } = useCaptureCameraZoom({
-    enabled: cameraLive && !busy,
+    enabled: cameraLive && !handoffPreviewUri,
     recording,
-    resetKey: facing,
+    facing,
+    resetKey: `${facing}-${cameraMode}`,
     onFlipCamera: handleFlipCameraRequest,
   });
+
+  useEffect(() => {
+    setShareMode(requestedMode);
+  }, [requestedMode]);
+
+  useEffect(() => {
+    if (!storiesEnabled && shareMode === 'story') {
+      setShareMode('post');
+    }
+  }, [shareMode, storiesEnabled]);
 
   useEffect(() => {
     recordingRef.current = recording;
@@ -285,38 +310,74 @@ export function CreateCaptureScreen() {
           return;
         }
 
-        useStoryPublishStore.getState().setDraft({
-          mediaUri: uri,
-          mediaType: 'image',
-          durationSec,
-        });
-        router.replace('/stories/publish' as Href);
+        setBusy(true);
+        try {
+          const stableUri = await prepareLocalImageUri(uri);
+          useStoryPublishStore.getState().setDraft({
+            mediaUri: stableUri,
+            mediaType: 'image',
+            durationSec,
+            mediaWidth: items[0]?.width,
+            mediaHeight: items[0]?.height,
+          });
+          router.replace('/stories/publish' as Href);
+        } catch (err) {
+          Alert.alert(
+            'Fotoğraf hazırlanamadı',
+            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+          );
+        } finally {
+          setBusy(false);
+        }
         return;
       }
 
-      if (shareMode === 'reels') {
+      if (shareMode === 'reels' || shareMode === 'post') {
+        // file:// route params'ta bozulur — store + video için slide'ları önceden doldur.
+        if (mediaType === 'video' && items[0]?.uri) {
+          let duration = durationSec ?? 0;
+          if (duration <= 0) {
+            try {
+              duration = await probeVideoDuration(items[0].uri);
+            } catch {
+              duration = 0;
+            }
+          }
+          useMediaEditorStore.getState().initSlides([
+            {
+              uri: items[0].uri,
+              isVideo: true,
+              durationSec: duration,
+              textOverlays: [],
+              filterId: 'none',
+              rotationDeg: 0,
+              mediaWidth: items[0].width ?? 0,
+              mediaHeight: items[0].height ?? 0,
+              zoomScale: DEFAULT_ZOOM.zoomScale,
+              zoomTranslateX: DEFAULT_ZOOM.zoomTranslateX,
+              zoomTranslateY: DEFAULT_ZOOM.zoomTranslateY,
+            },
+          ]);
+        }
+
+        useMediaHandoffStore.getState().setHandoff({
+          mediaUris: items.map((item) => item.uri),
+          mediaType,
+          mediaWidths: items.map((item) => item.width ?? 0),
+          mediaHeights: items.map((item) => item.height ?? 0),
+          publishAs: shareMode === 'reels' ? 'reel' : 'post',
+        });
         router.replace({
           pathname: '/media-editor',
           params: {
-            mediaUris: items.map((item) => item.uri).join(','),
+            handoff: '1',
             mediaType,
-            mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
-            mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
-            publishAs: 'reel',
+            seeded: mediaType === 'video' ? '1' : '0',
+            ...(shareMode === 'reels' ? { publishAs: 'reel' } : {}),
           },
         } as Href);
         return;
       }
-
-      router.replace({
-        pathname: '/media-editor',
-        params: {
-          mediaUris: items.map((item) => item.uri).join(','),
-          mediaType,
-          mediaWidths: items.map((item) => String(item.width ?? 0)).join(','),
-          mediaHeights: items.map((item) => String(item.height ?? 0)).join(','),
-        },
-      } as Href);
     },
     [shareMode],
   );
@@ -334,8 +395,14 @@ export function CreateCaptureScreen() {
       if (photo?.uri) {
         const finalized = await finalizeCapturedPhoto(photo.uri, photo);
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        void goToMediaEditor(
-          [{ uri: finalized.uri, width: finalized.width, height: finalized.height }],
+        await goToMediaEditor(
+          [
+            {
+              uri: finalized.uri,
+              width: finalized.width > 0 ? finalized.width : photo.width,
+              height: finalized.height > 0 ? finalized.height : photo.height,
+            },
+          ],
           'image',
         );
       }
@@ -371,9 +438,11 @@ export function CreateCaptureScreen() {
 
       for (let attempt = 0; attempt < RECORD_ASYNC_MAX_ATTEMPTS; attempt += 1) {
         try {
-          const recordPromise = camera.recordAsync({
-            maxDuration: shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
-          });
+          const recordPromise = camera.recordAsync(
+            captureRecordOptions(
+              shareMode === 'story' ? STORY_MAX_VIDEO_SEC : MAX_VIDEO_DURATION_SEC,
+            ),
+          );
           if (shouldStopImmediately) {
             setTimeout(() => {
               try {
@@ -401,16 +470,40 @@ export function CreateCaptureScreen() {
         const elapsed = recordStartedAt.current ? Date.now() - recordStartedAt.current : 0;
         if (elapsed < MIN_VIDEO_MS) {
           if (!shouldStopImmediately) {
-            Alert.alert('Çok kısa', 'Video kaydı için biraz daha basılı tutun.');
+            Alert.alert('Çok kısa', 'Video kaydı için biraz daha kayıt alın.');
           }
           return;
         }
         const elapsedSec = (recordStartedAt.current ? Date.now() - recordStartedAt.current : 0) / 1000;
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setCameraLive(false);
-        setCameraReady(false);
-        await handoffCameraToVideoPlayback();
-        await goToMediaEditor([{ uri: video.uri }], 'video', elapsedSec);
+        setBusy(true);
+        try {
+          // Önce kamerayı kapat — kopya/oynatma kamera oturumu açıkken siyah ekran verir.
+          setHandoffPreviewUri(null);
+          setCameraLive(false);
+          setCameraReady(false);
+          await handoffCameraToVideoPlayback();
+          if (Platform.OS === 'ios') {
+            await new Promise<void>((resolve) => setTimeout(resolve, 200));
+          }
+
+          const playableUri = await prepareStoryVideoPreviewUri(video.uri);
+          if (shareMode === 'story') {
+            setHandoffPreviewUri(playableUri);
+            await routeStoryVideo(playableUri, elapsedSec);
+          } else {
+            await goToMediaEditor([{ uri: playableUri }], 'video', elapsedSec);
+          }
+        } catch (err) {
+          Alert.alert(
+            'Video hazırlanamadı',
+            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+          );
+          setHandoffPreviewUri(null);
+          setCameraLive(true);
+        } finally {
+          setBusy(false);
+        }
       }
     } catch (err) {
       if (!shouldStopImmediately) {
@@ -469,8 +562,6 @@ export function CreateCaptureScreen() {
   const stopVideoRecording = useCallback(() => {
     if (isPinchingRef.current) return;
 
-    longPressActive.current = false;
-
     if (pendingRecordRef.current && !recordAsyncActiveRef.current) {
       stopWhenReadyRef.current = true;
       setRecording(false);
@@ -488,10 +579,19 @@ export function CreateCaptureScreen() {
     }
   }, [isPinchingRef, resetRecordingState]);
 
-  const handleShutterPressOut = useCallback(() => {
-    if (recordingRef.current) return;
-    stopVideoRecording();
-  }, [stopVideoRecording]);
+  const handleCapturePress = useCallback(() => {
+    if (recordingRef.current || recordAsyncActiveRef.current) {
+      stopVideoRecording();
+      return;
+    }
+
+    if (cameraMode === 'video') {
+      void startVideoRecording();
+      return;
+    }
+
+    void handlePhoto();
+  }, [cameraMode, stopVideoRecording]);
 
   const pickFromGallery = useCallback(async (mediaType: 'images' | 'videos') => {
     if (busy || recording) return;
@@ -520,27 +620,44 @@ export function CreateCaptureScreen() {
       const duration = result.assets[0]?.duration ?? undefined;
       if (!uri) return;
 
-      if (shareMode === 'story') {
-        setBusy(true);
-        try {
+      setBusy(true);
+      try {
+        if (shareMode === 'story') {
           await routeStoryVideo(uri, duration);
-        } catch (err) {
-          Alert.alert(
-            'Video hazırlanamadı',
-            err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
-          );
-        } finally {
-          setBusy(false);
+        } else {
+          const playableUri = await prepareStoryVideoPreviewUri(uri);
+          await goToMediaEditor([{ uri: playableUri }], 'video', duration);
         }
-        return;
+      } catch (err) {
+        Alert.alert(
+          'Video hazırlanamadı',
+          err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+        );
+      } finally {
+        setBusy(false);
       }
-
-      void goToMediaEditor([{ uri }], 'video', duration);
       return;
     }
 
-    void goToMediaEditor(result.assets.map((asset) => ({ uri: asset.uri })), 'image');
-  }, [goToMediaEditor, shareMode]);
+    void goToMediaEditor(
+      result.assets.map((asset) => ({
+        uri: asset.uri,
+        width: asset.width,
+        height: asset.height,
+      })),
+      'image',
+    );
+  }, [busy, goToMediaEditor, recording, shareMode]);
+
+  const openGalleryPicker = useCallback(() => {
+    if (busy || recording) return;
+
+    Alert.alert('Galeriden seç', 'Ne eklemek istiyorsun?', [
+      { text: 'Resim', onPress: () => void pickFromGallery('images') },
+      { text: 'Video', onPress: () => void pickFromGallery('videos') },
+      { text: 'İptal', style: 'cancel' },
+    ]);
+  }, [busy, pickFromGallery, recording]);
 
   const pickStoryFromGallery = useCallback(() => {
     Alert.alert('Galeriden seç', 'Hikayene ne eklemek istiyorsun?', [
@@ -610,7 +727,15 @@ export function CreateCaptureScreen() {
             },
           ]}
         >
-          {cameraLive ? (
+          {handoffPreviewUri ? (
+            <CapturedVideoPreview
+              key={handoffPreviewUri}
+              uri={handoffPreviewUri}
+              contentFit="cover"
+              loop={false}
+              autoPlay
+            />
+          ) : cameraLive ? (
             <CameraView
               key={`${facing}-${cameraMode}`}
               ref={cameraRef}
@@ -619,8 +744,9 @@ export function CreateCaptureScreen() {
               flash={flash}
               mode={cameraMode}
               mute={cameraMute}
-              mirror={false}
+              mirror={facing === 'front'}
               zoom={linearZoom}
+              {...captureVideoViewProps(cameraMode)}
               {...(Platform.OS === 'ios'
                 ? {
                     selectedLens,
@@ -628,7 +754,6 @@ export function CreateCaptureScreen() {
                       handleAvailableLensesChanged(lenses),
                   }
                 : {})}
-              {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
               onCameraReady={handleCameraReady}
               onMountError={({ message }) => {
                 setCameraLive(false);
@@ -648,8 +773,9 @@ export function CreateCaptureScreen() {
           flash={flash}
           mode={cameraMode}
           mute={cameraMute}
-          mirror={false}
+          mirror={facing === 'front'}
           zoom={linearZoom}
+          {...captureVideoViewProps(cameraMode)}
           {...(Platform.OS === 'ios'
             ? {
                 selectedLens,
@@ -657,7 +783,6 @@ export function CreateCaptureScreen() {
                   handleAvailableLensesChanged(lenses),
               }
             : {})}
-          {...(Platform.OS === 'android' ? { ratio: '4:3' as const } : {})}
           onCameraReady={handleCameraReady}
           onMountError={({ message }) => {
             setCameraLive(false);
@@ -667,6 +792,27 @@ export function CreateCaptureScreen() {
       ) : (
         <View style={[StyleSheet.absoluteFill, styles.cameraPlaceholder]} />
       )}
+
+      {cameraLive && !handoffPreviewUri ? (
+        <CaptureCameraZoomOverlay
+          enabled
+          showManualControls={showManualControls}
+          bounds={{
+            top: insets.top + 56,
+            bottom: insets.bottom + 168,
+          }}
+          linearZoom={linearZoom}
+          displayZoom={displayZoom}
+          indicatorVisible={indicatorVisible}
+          activePresetId={activePresetId}
+          presets={presets}
+          previewGesture={previewGesture}
+          applyPreset={applyPreset}
+          onZoomRailChange={updateZoomFromRail}
+          onZoomRailStart={handleZoomRailStart}
+          onZoomRailEnd={handleZoomRailEnd}
+        />
+      ) : null}
 
       <View style={[styles.topBar, { paddingTop: insets.top + spacing.sm }]}>
         <Pressable onPress={() => router.back()} hitSlop={12} style={styles.topBtn}>
@@ -711,7 +857,8 @@ export function CreateCaptureScreen() {
       </View>
 
       <View style={[styles.modeBar, { top: insets.top + spacing.sm + 44 }]}>
-        {(['story', 'post', 'reels'] as const).map((mode) => {
+        {((storiesEnabled ? ['story', 'post', 'reels'] : ['post', 'reels']) as CaptureShareMode[]).map(
+          (mode) => {
           const active = shareMode === mode;
           const label = mode === 'story' ? 'Hikaye' : mode === 'post' ? 'Gönderi' : 'Reels';
           return (
@@ -734,10 +881,8 @@ export function CreateCaptureScreen() {
               pickStoryFromGallery();
               return;
             }
-            void pickFromGallery('images');
+            openGalleryPicker();
           }}
-          onLongPress={shareMode === 'story' ? undefined : () => void pickFromGallery('videos')}
-          delayLongPress={280}
         >
           {galleryThumb ? (
             <Image source={{ uri: galleryThumb }} style={styles.galleryThumb} contentFit="cover" />
@@ -748,31 +893,78 @@ export function CreateCaptureScreen() {
           )}
         </Pressable>
 
-        <Pressable
-          disabled={busy || (!cameraReady && !recording)}
-          onPress={async () => {
-            if (recordingRef.current || recordAsyncActiveRef.current) {
-              stopVideoRecording();
-              return;
-            }
-            if (longPressActive.current) {
-              longPressActive.current = false;
-              return;
-            }
-            void handlePhoto();
-          }}
-          onLongPress={() => {
-            longPressActive.current = true;
-            void startVideoRecording();
-          }}
-          onPressOut={handleShutterPressOut}
-          delayLongPress={220}
-          style={styles.shutterWrap}
-        >
-          <View style={[styles.shutterOuter, recording && styles.shutterOuterRecording]}>
-            <View style={[styles.shutterInner, recording && styles.shutterInnerRecording]} />
+        <View style={styles.captureCenter}>
+          <View style={styles.captureModeRow}>
+            <Pressable
+              disabled={recording || busy}
+              onPress={() => setCameraMode('picture')}
+              style={[
+                styles.captureModeBtn,
+                cameraMode === 'picture' && styles.captureModeBtnActive,
+                (recording || busy) && styles.captureModeBtnDisabled,
+              ]}
+            >
+              <Ionicons
+                name="image-outline"
+                size={15}
+                color={cameraMode === 'picture' ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.captureModeText,
+                  cameraMode === 'picture' && styles.captureModeTextActive,
+                ]}
+              >
+                Resim
+              </Text>
+            </Pressable>
+            <Pressable
+              disabled={recording || busy}
+              onPress={() => setCameraMode('video')}
+              style={[
+                styles.captureModeBtn,
+                cameraMode === 'video' && styles.captureModeBtnActive,
+                (recording || busy) && styles.captureModeBtnDisabled,
+              ]}
+            >
+              <Ionicons
+                name="videocam-outline"
+                size={15}
+                color={cameraMode === 'video' ? '#000' : '#fff'}
+              />
+              <Text
+                style={[
+                  styles.captureModeText,
+                  cameraMode === 'video' && styles.captureModeTextActive,
+                ]}
+              >
+                Video
+              </Text>
+            </Pressable>
           </View>
-        </Pressable>
+
+          <Pressable
+            disabled={busy || (!cameraReady && !recording)}
+            onPress={handleCapturePress}
+            style={styles.shutterWrap}
+          >
+            <View
+              style={[
+                styles.shutterOuter,
+                cameraMode === 'video' && styles.shutterOuterVideo,
+                recording && styles.shutterOuterRecording,
+              ]}
+            >
+              <View
+                style={[
+                  styles.shutterInner,
+                  cameraMode === 'video' && styles.shutterInnerVideo,
+                  recording && styles.shutterInnerRecording,
+                ]}
+              />
+            </View>
+          </Pressable>
+        </View>
 
         <Pressable
           style={styles.sideAction}
@@ -782,34 +974,6 @@ export function CreateCaptureScreen() {
           <Text style={styles.sideActionLabel}>Metin</Text>
         </Pressable>
       </View>
-
-      <CaptureCameraZoomOverlay
-        enabled={cameraLive && !busy}
-        showManualControls={showManualControls}
-        bounds={
-          shareMode === 'story'
-            ? {
-                top: insets.top + STORY_CAPTURE_TOP_OFFSET,
-                bottom: insets.bottom + STORY_CAPTURE_BOTTOM_OFFSET,
-                left: STORY_CARD_HORIZONTAL_INSET,
-                right: STORY_CARD_HORIZONTAL_INSET,
-              }
-            : {
-                top: insets.top + 56,
-                bottom: insets.bottom + 140,
-              }
-        }
-        linearZoom={linearZoom}
-        displayZoom={displayZoom}
-        indicatorVisible={indicatorVisible}
-        activePresetId={activePresetId}
-        presets={presets}
-        previewGesture={previewGesture}
-        applyPreset={applyPreset}
-        onZoomRailChange={updateZoomFromRail}
-        onZoomRailStart={handleZoomRailStart}
-        onZoomRailEnd={handleZoomRailEnd}
-      />
 
       {busy ? (
         <View style={styles.busyOverlay} pointerEvents="none">
@@ -940,6 +1104,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: 'rgba(255,255,255,0.12)',
   },
+  captureCenter: {
+    alignItems: 'center',
+    gap: spacing.md,
+  },
+  captureModeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    padding: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.42)',
+  },
+  captureModeBtn: {
+    minWidth: 82,
+    height: 34,
+    borderRadius: radius.full,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: spacing.sm,
+  },
+  captureModeBtnActive: {
+    backgroundColor: 'rgba(255,255,255,0.94)',
+  },
+  captureModeBtnDisabled: {
+    opacity: 0.45,
+  },
+  captureModeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  captureModeTextActive: {
+    color: '#000',
+  },
   shutterWrap: {
     alignItems: 'center',
     justifyContent: 'center',
@@ -956,11 +1156,17 @@ const styles = StyleSheet.create({
   shutterOuterRecording: {
     borderColor: '#ff3b30',
   },
+  shutterOuterVideo: {
+    borderColor: '#ff3b30',
+  },
   shutterInner: {
     width: 62,
     height: 62,
     borderRadius: radius.full,
     backgroundColor: '#fff',
+  },
+  shutterInnerVideo: {
+    backgroundColor: '#ff3b30',
   },
   shutterInnerRecording: {
     width: 34,

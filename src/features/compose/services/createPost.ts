@@ -14,6 +14,12 @@ import { publishPostAsReel } from '@/features/compose/services/publishPostAsReel
 import { attestPostContent } from '@/features/vcts/services/attestation';
 import { resolvePostLocationCoords } from '@/features/compose/services/resolvePostLocation';
 import { finalizePublishedVideo } from '@/services/video/finalizeVideo';
+import { kickstartMuxSync } from '@/services/video/muxPoll';
+import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
+import {
+  ensureLocalVideoPoster,
+  registerLocalVideoPreview,
+} from '@/features/feed/services/warmLocalVideoPoster';
 import { getProfileLabel } from '@/lib/notifications/helpers';
 import { notifyMentionedUsers } from '@/lib/notifications/mentions';
 import { buildNotificationData } from '@/lib/notifications/notificationPayload';
@@ -28,7 +34,7 @@ import type { MusicSelection } from '@/features/music/types';
 import { editManifestToDbField, getMusicPersistenceError } from '@/features/music/services/recordUsage';
 import { audioSelectionToDbFields, recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import type { MapLocationSource } from '@/features/map/types';
-import { isValidPostCoordinate } from '@/features/map/utils/geoBounds';
+import { isValidWorldCoordinate } from '@/features/map/utils/geoBounds';
 import type { PublishedEditManifest } from '@/features/vora-studio/types';
 import { supabaseErrorMessage } from '@/lib/errors';
 import { trackReferralEvent } from '@/features/referral-earnings/services/referralTracking';
@@ -52,6 +58,8 @@ export type CreatePostInput = {
   audience?: PostAudience;
   communityId?: string | null;
   music?: MusicSelection | null;
+  /** Editörde "Ses" kapatıldıysa videonun orijinal sesi susturulur */
+  videoMuted?: boolean;
   editManifest?: PublishedEditManifest | null;
 };
 
@@ -106,11 +114,10 @@ async function runDeferredPostSideEffects(
     }
   }
 
-  const locationRegion = input.locationSuggestionRegionId ?? (input.regionId as RegionId);
   if (
     mapLatitude != null &&
     mapLongitude != null &&
-    isValidPostCoordinate(mapLatitude, mapLongitude, locationRegion)
+    isValidWorldCoordinate(mapLatitude, mapLongitude)
   ) {
     const { error: locationError } = await supabase.rpc('set_post_location', {
       p_post_id: postId,
@@ -163,7 +170,6 @@ export async function createPost(
   const preparedSlots: PreparedMediaSlot[] = new Array(mediaCount);
   let hasVideo = false;
   let firstVideoId: string | null = null;
-  let firstVideoIndex = -1;
   const videoStillProcessing = input.mediaUris.some((uri) => isLocalVideoUri(uri));
 
   onProgress?.('preparing', 0.05, VIDEO_PROGRESS.preparing, null);
@@ -175,19 +181,21 @@ export async function createPost(
 
         if (isLocalVideoUri(uri)) {
           onProgress?.('preparing', 0.1 + (i / Math.max(mediaCount, 1)) * 0.15, VIDEO_PROGRESS.preparing, null);
-          const reserved = await reservePostVideo(
-            input.authorId,
-            input.regionId,
-            uri,
-            i,
-            caption || null,
-          );
+          // Mux rezervasyonu + kalıcı yerel kopya paralel — izleme URI'si hemen hazır olsun.
+          const [reserved, playableLocalUri] = await Promise.all([
+            reservePostVideo(input.authorId, input.regionId, uri, i, caption || null),
+            prepareLocalVideoUri(uri, { forceCopy: true }),
+          ]);
           if ('error' in reserved) {
             throw new Error(reserved.error);
           }
           if (input.editManifest) {
             reserved.skipCompression = true;
           }
+          reserved.localUri = playableLocalUri;
+          registerLocalVideoPreview(reserved.videoId, playableLocalUri);
+          // Kapak arka planda — paylaşımı bekletme
+          void ensureLocalVideoPoster(reserved.videoId, playableLocalUri);
           preparedSlots[i] = { kind: 'video', reservation: reserved };
           return;
         }
@@ -234,7 +242,6 @@ export async function createPost(
       hasVideo = true;
       if (!firstVideoId) {
         firstVideoId = mapped.videoId;
-        firstVideoIndex = mediaUrls.length - 1;
       }
       continue;
     }
@@ -268,6 +275,7 @@ export async function createPost(
       requires_moderation: false,
       community_id: input.communityId ?? null,
       ...audioSelectionToDbFields(input.music ?? null),
+      ...(input.videoMuted ? { original_audio_volume: 0 } : {}),
       ...editManifestToDbField(input.editManifest ?? null),
     })
     .select('id')
@@ -321,6 +329,22 @@ export async function createPost(
 
     if (uploadResult.error) {
       console.warn('[createPost] background video upload failed:', uploadResult.error);
+    } else {
+      // Upload biter bitmez Mux sync + DB URL güncellemesi — attestation'ı bekleme.
+      kickstartMuxSync(slot.reservation.videoId);
+      const canPublishReel =
+        publishStatus === 'published' &&
+        !input.communityId &&
+        slot.reservation.videoId === firstVideoId;
+      void finalizePublishedVideo({
+        postId: data.id,
+        videoId: slot.reservation.videoId,
+        mediaIndex: slotIndex,
+        authorId: input.authorId,
+        regionId: input.regionId,
+        caption,
+        publishReel: canPublishReel,
+      });
     }
 
     if (uploadResult.sha256 && uploadResult.storagePath) {
@@ -350,17 +374,8 @@ export async function createPost(
   const shouldPublishReel =
     hasVideo && firstVideoId && publishStatus === 'published' && !input.communityId;
 
-  if (shouldPublishReel && videoStillProcessing && firstVideoIndex >= 0 && firstVideoId) {
-    void finalizePublishedVideo({
-      postId: data.id,
-      videoId: firstVideoId,
-      mediaIndex: firstVideoIndex,
-      authorId: input.authorId,
-      regionId: input.regionId,
-      caption,
-      publishReel: true,
-    });
-  } else if (shouldPublishReel && firstVideoId && !videoStillProcessing) {
+  // Mux hâlâ hazır değilse finalize zaten arka planda; hazır videolar için anında reel.
+  if (shouldPublishReel && firstVideoId && !videoStillProcessing) {
     onProgress?.('reel', 0.96, 'Reels\'e ekleniyor...', null);
     const reelResult = await publishPostAsReel({
       authorId: input.authorId,

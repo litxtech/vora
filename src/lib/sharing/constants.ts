@@ -1,4 +1,4 @@
-import { APP_BUNDLE_ID, APP_DOMAIN, APP_SCHEME, APP_SHARE_BASE_URL } from '@/constants/app';
+import { APP_ANDROID_PACKAGE, APP_DOMAIN, APP_SCHEME, APP_SHARE_BASE_URL } from '@/constants/app';
 import { env } from '@/config/env';
 
 const SHARE_PREVIEW_SUFFIX = '/functions/v1/share-preview';
@@ -29,7 +29,7 @@ export const IOS_APP_STORE_URL =
 
 export const ANDROID_PLAY_STORE_URL =
   env.stores.androidPlayStoreUrl ||
-  `https://play.google.com/store/apps/details?id=${APP_BUNDLE_ID}`;
+  `https://play.google.com/store/apps/details?id=${APP_ANDROID_PACKAGE}`;
 
 export type ShareContentKind = 'post' | 'reel' | 'profile' | 'verify' | 'marketplace' | 'shop';
 
@@ -47,7 +47,7 @@ export function buildBusinessShopAndroidIntentUrl(
   fallbackHttpsUrl?: string,
 ): string {
   const fallback = encodeURIComponent(fallbackHttpsUrl ?? buildBusinessShopShareUrl(businessId));
-  return `intent://s/${businessId}#Intent;scheme=${APP_SCHEME};package=${APP_BUNDLE_ID};S.browser_fallback_url=${fallback};end`;
+  return `intent://s/${businessId}#Intent;scheme=${APP_SCHEME};package=${APP_ANDROID_PACKAGE};S.browser_fallback_url=${fallback};end`;
 }
 
 export function buildBusinessShopDeepLink(businessId: string): string {

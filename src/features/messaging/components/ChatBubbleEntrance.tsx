@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { StyleSheet } from 'react-native';
 import Animated, {
   useAnimatedStyle,
@@ -23,16 +23,27 @@ export function ChatBubbleEntrance({
   onMarkEntered,
   children,
 }: ChatBubbleEntranceProps) {
-  const shouldAnimateRef = useRef(!enteredMessageIds.has(messageId));
-  const opacity = useSharedValue(shouldAnimateRef.current ? 0 : 1);
-  const scale = useSharedValue(shouldAnimateRef.current ? 0.9 : 1);
-  const translateX = useSharedValue(shouldAnimateRef.current ? (isMine ? 8 : -8) : 0);
-  const translateY = useSharedValue(shouldAnimateRef.current ? 6 : 0);
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
 
   useEffect(() => {
+    const shouldAnimate = !enteredMessageIds.has(messageId);
     onMarkEntered(messageId);
-    if (!shouldAnimateRef.current) return;
 
+    if (!shouldAnimate) {
+      opacity.value = 1;
+      scale.value = 1;
+      translateX.value = 0;
+      translateY.value = 0;
+      return;
+    }
+
+    opacity.value = 0;
+    scale.value = 0.9;
+    translateX.value = isMine ? 8 : -8;
+    translateY.value = 6;
     opacity.value = withTiming(1, { duration: 90 });
     scale.value = withSpring(1, { damping: 20, stiffness: 420, mass: 0.55 });
     translateX.value = withSpring(0, { damping: 22, stiffness: 400, mass: 0.6 });

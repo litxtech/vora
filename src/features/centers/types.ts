@@ -11,7 +11,9 @@ export type CenterId =
   | 'hotel-center'
   | 'business-center'
   | 'support-center'
-  | 'izdivac-center';
+  | 'izdivac-center'
+  | 'date-center'
+  | 'city-system';
 
 export type CenterGroup = 'community' | 'map' | 'economy' | 'media' | 'social';
 

@@ -14,6 +14,7 @@ import { useTheme } from '@/providers/ThemeProvider';
 type MusicEditorPanelProps = {
   track: MusicTrack;
   mode?: 'video' | 'photo';
+  showPreviewAction?: boolean;
   clipDurationSec: number;
   musicStartSec: number;
   musicEndSec?: number;
@@ -32,6 +33,7 @@ type MusicEditorPanelProps = {
 export function MusicEditorPanel({
   track,
   mode = 'video',
+  showPreviewAction = true,
   clipDurationSec,
   musicStartSec,
   musicEndSec,
@@ -60,13 +62,15 @@ export function MusicEditorPanel({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.topActions}
       >
-        <MusicFilterChip
-          label={isPlaying ? 'Duraklat' : 'İzle'}
-          icon={isPlaying ? 'pause' : 'play-circle-outline'}
-          accent
-          active={isPlaying}
-          onPress={onTogglePreview}
-        />
+        {showPreviewAction ? (
+          <MusicFilterChip
+            label={isPlaying ? 'Duraklat' : 'İzle'}
+            icon={isPlaying ? 'pause' : 'play-circle-outline'}
+            accent
+            active={isPlaying}
+            onPress={onTogglePreview}
+          />
+        ) : null}
         <MusicFilterChip label="Müziği değiştir" icon="swap-horizontal" onPress={onChangeTrack} />
         <MusicFilterChip label="Kaldır" icon="close-outline" onPress={onRemove} />
       </ScrollView>

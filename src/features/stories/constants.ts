@@ -2,6 +2,9 @@ export const STORY_PHOTO_DURATION_MS = 7_000;
 
 export const STORY_MAX_VIDEO_SEC = 30;
 
+/** false: hikâye halkası, yayınlama, arşiv ve ilgili rotalar gizlenir (kod kalır). */
+export const STORIES_ENABLED = false;
+
 export const STORY_TTL_HOURS = 24;
 
 export const STORY_RING_PAGE_SIZE = 40;
@@ -26,7 +29,7 @@ export const STORY_ITEM_TRANSITION_MS = 240;
 export const STORY_SPRING = { damping: 24, stiffness: 280, mass: 0.9 } as const;
 
 /** Snapchat / Instagram tarzı kart — yumuşak oval köşeler */
-export const STORY_CARD_RADIUS = 32;
+export const STORY_CARD_RADIUS = 36;
 export const STORY_CARD_HORIZONTAL_INSET = 14;
 export const STORY_CARD_TOP_GAP = 10;
 export const STORY_CARD_BOTTOM_GAP = 12;
@@ -34,6 +37,13 @@ export const STORY_CARD_BOTTOM_GAP = 12;
 export const STORY_CAPTURE_TOP_OFFSET = 92;
 /** Kamera önizlemesi — alt shutter alanı */
 export const STORY_CAPTURE_BOTTOM_OFFSET = 132;
+/** Paylaşım önizlemesi — ekran kenarından nefes payı (izleyici inset’ten bağımsız) */
+export const STORY_PUBLISH_HORIZONTAL_INSET = 22;
+/** Sağ araç rayı — başlık altından daha aşağı (kart içeriğine kayar) */
+export const STORY_PUBLISH_RAIL_TOP_EXTRA = 40;
+export const STORY_PUBLISH_RAIL_RIGHT = 8;
+/** Paylaşım ekranı alt şeridi — kartın büyümesini engeller */
+export const STORY_PUBLISH_BOTTOM_CHROME_HEIGHT = 104;
 export const STORY_CARD_BORDER_COLOR = 'rgba(255,255,255,0.16)';
 
 export const STORY_STICKER_CATEGORIES = [
@@ -45,3 +55,7 @@ export const STORY_STICKER_CATEGORIES = [
 ] as const;
 
 export type StoryStickerCategoryId = (typeof STORY_STICKER_CATEGORIES)[number]['id'];
+
+export const STORY_ARCHIVE_PAGE_SIZE = 36;
+
+export const STORY_ARCHIVE_ACCENT = '#EC407A';

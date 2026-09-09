@@ -7,6 +7,7 @@ import { formatEventDateCompact, isEventLiveNow } from '@/features/events/consta
 import { navigateToFeedDetail, prefetchFeedDetail } from '@/features/feed/services/feedNavigation';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
+import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type FeedEventCardProps = {
@@ -18,15 +19,21 @@ export const FeedEventCard = memo(function FeedEventCard({ item }: FeedEventCard
   const coverUrl = item.mediaUrls[0] ?? null;
   const live = isEventLiveNow(item.createdAt, item.endsAt);
 
-  const openDetail = () => {
+  const warmDetail = () => {
     prefetchFeedDetail('event', item.sourceId);
+  };
+
+  const openDetail = () => {
+    warmDetail();
     navigateToFeedDetail('event', item.sourceId, item.isDemo);
   };
 
   return (
     <Pressable
       style={[styles.card, { borderBottomColor: colors.border }]}
+      onPressIn={warmDetail}
       onPress={openDetail}
+      {...getAndroidInstantPressableProps()}
     >
       <EventAvatar coverUrl={coverUrl} size={48} live={live} />
       <View style={styles.meta}>

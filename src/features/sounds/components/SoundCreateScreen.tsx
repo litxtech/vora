@@ -255,7 +255,7 @@ function RecordControls({
           >
             <Ionicons
               name={action.icon}
-              size={action.primary ? 26 : 22}
+              size={action.primary ? 22 : 20}
               color={action.danger ? colors.danger : action.primary ? '#fff' : colors.text}
             />
           </View>
@@ -358,7 +358,7 @@ export function SoundCreateScreen() {
     user?.id,
   ]);
 
-  const ringSize = 124;
+  const ringSize = 132;
   const stroke = 4;
   const ringRadius = (ringSize - stroke) / 2;
   const circumference = 2 * Math.PI * ringRadius;
@@ -458,24 +458,18 @@ export function SoundCreateScreen() {
                       />
                     </Svg>
                     <View style={styles.ringCenter}>
-                      <Text
-                        style={styles.timerText}
-                        numberOfLines={1}
-                        adjustsFontSizeToFit
-                        minimumFontScale={0.5}
-                      >
-                        {recorder.elapsedLabel}
-                      </Text>
+                      <Text style={styles.timerText}>{recorder.elapsedLabel}</Text>
                     </View>
                   </View>
 
-                  <SoundWaveVisualizer
-                    active={waveActive}
-                    accentColor="#fff"
-                    mutedColor="rgba(255,255,255,0.28)"
-                    height={36}
-                    style={styles.waveInline}
-                  />
+                  <View style={styles.waveInline}>
+                    <SoundWaveVisualizer
+                      active={waveActive}
+                      accentColor="#fff"
+                      mutedColor="rgba(255,255,255,0.28)"
+                      height={32}
+                    />
+                  </View>
                 </View>
 
                 {recorder.importLabel ? (
@@ -562,12 +556,6 @@ export function SoundCreateScreen() {
                       </Text>
                     </View>
                   ))}
-                  <View style={[styles.tipChip, styles.tipChipWide, { backgroundColor: `${colors.danger}08`, borderColor: `${colors.danger}22` }]}>
-                    <Ionicons name="alert-circle-outline" size={13} color={colors.danger} />
-                    <Text secondary variant="caption" style={styles.tipChipText}>
-                      YouTube / Spotify bağlantıları desteklenmiyor — kendi kaydınızı veya dosyanızı kullanın.
-                    </Text>
-                  </View>
                 </View>
               </GlassCard>
             </>
@@ -790,7 +778,8 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
   },
   importCard: {
-    gap: spacing.md,
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
   },
   importCardHeader: {
     flexDirection: 'row',
@@ -845,10 +834,9 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   heroMain: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingVertical: spacing.xs,
   },
   hintChip: {
@@ -867,32 +855,35 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   waveInline: {
-    flex: 1,
-    maxWidth: 120,
+    width: '72%',
+    maxWidth: 220,
+    alignSelf: 'center',
   },
   ringWrap: {
-    width: 124,
-    height: 124,
+    width: 132,
+    height: 132,
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   ringSvg: {
-    position: 'absolute',
+    ...StyleSheet.absoluteFillObject,
   },
   ringCenter: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
-    maxWidth: 96,
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: spacing.lg,
   },
   timerText: {
     color: '#fff',
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: '800',
     fontVariant: ['tabular-nums'],
     textAlign: 'center',
-    width: '100%',
+    lineHeight: 34,
+    includeFontPadding: false,
+    letterSpacing: 0.5,
   },
   phasePill: {
     flex: 1,
@@ -967,10 +958,6 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     maxWidth: '48%',
     flexGrow: 1,
-  },
-  tipChipWide: {
-    maxWidth: '100%',
-    flexBasis: '100%',
   },
   tipChipText: {
     flex: 1,

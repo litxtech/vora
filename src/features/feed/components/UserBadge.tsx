@@ -6,6 +6,7 @@ import { BADGE_CONFIG } from '@/features/feed/constants';
 import { VoraAIBadge } from '@/features/vora-ai/components/VoraAIBadge';
 import { VORA_AI_USERNAME } from '@/features/vora-ai/constants';
 import { PlatformCharmTick } from '@/features/platform-charm/components/PlatformCharmTick';
+import { CityLeaderChip } from '@/features/city-governance/components/CityLeaderChip';
 import { PioneerBadge } from '@/features/pioneer/components/PioneerBadge';
 import { PlatformSupporterTick } from '@/features/platform-support/components/PlatformSupporterTick';
 import { IzdivacBadgeChips } from '@/features/izdivac/components/IzdivacBadgeChips';
@@ -14,6 +15,7 @@ import {
   authorPublicName,
 } from '@/features/profile/services/businessIdentity';
 import { isBadgeHidden, roleBadgeKey } from '@/features/profile/services/badgeVisibility';
+import type { RegionId } from '@/constants/regions';
 import { navigateToAuthorProfile, prefetchAuthorProfile } from '@/features/feed/services/feedNavigation';
 import type { FeedAuthor } from '@/features/feed/types';
 import { useUserCardOptional } from '@/providers/UserCardProvider';
@@ -64,6 +66,9 @@ export function UserBadge({
   const showPioneer = author.isPioneer && !isBadgeHidden(hidden, 'pioneer');
   const showPlatformSupporter =
     author.isPlatformSupporter && !isBadgeHidden(hidden, 'platform_supporter');
+  const showCityLeader =
+    Boolean(author.cityLeaderRegionId && author.cityLeaderRegionName) &&
+    !isBadgeHidden(hidden, 'city_leader');
   const visibleIzdivacBadges = (author.izdivacBadges ?? []).filter(
     (badge) => !isBadgeHidden(hidden, badge),
   );
@@ -111,6 +116,19 @@ export function UserBadge({
             <IzdivacBadgeChips badges={visibleIzdivacBadges} iconOnly />
           ) : null}
           {showAiBadge ? <VoraAIBadge compact /> : null}
+          {showCityLeader && author.cityLeaderRegionId && author.cityLeaderRegionName ? (
+            <CityLeaderChip
+              compact
+              leader={{
+                userId: author.id,
+                username: author.username,
+                fullName: author.fullName,
+                avatarUrl: author.avatarUrl,
+                regionId: author.cityLeaderRegionId as RegionId,
+                regionName: author.cityLeaderRegionName,
+              }}
+            />
+          ) : null}
           {showRoleBadge && !showAiBadge ? (
             <View style={[styles.badge, styles.badgeInline, { backgroundColor: `${roleBadge.color}22` }]}>
               <Ionicons

@@ -14,7 +14,8 @@ export type BadgeType =
   | 'premium'
   | 'platform_supporter'
   | 'platform_charm'
-  | 'pioneer';
+  | 'pioneer'
+  | 'city_leader';
 
 export type ProfileTab =
   | 'posts'

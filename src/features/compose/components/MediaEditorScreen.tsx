@@ -35,6 +35,8 @@ import { probeVideoDuration } from '@/features/vora-studio/services/exportStudio
 import { useStudioExportStore } from '@/features/vora-studio/store/studioExportStore';
 import type { PublishedEditManifest } from '@/features/vora-studio/types';
 import { isLocalVideoUri } from '@/lib/media/isVideoUrl';
+import { prepareStoryVideoPreviewUri } from '@/features/stories/services/prepareStoryVideoPreview';
+import { useMediaHandoffStore } from '@/features/compose/store/mediaHandoffStore';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
 import type { RegionId } from '@/constants/regions';
 import { radius, spacing } from '@/constants/theme';
@@ -45,6 +47,9 @@ type Params = {
   mediaType?: string | string[];
   mediaWidths?: string | string[];
   mediaHeights?: string | string[];
+  handoff?: string | string[];
+  publishAs?: string | string[];
+  seeded?: string | string[];
 };
 
 function parseCsvParam(value: string | string[] | undefined): string[] {
@@ -151,12 +156,30 @@ export function MediaEditorScreen() {
   }, [requireAuth]);
 
   useEffect(() => {
+    const seeded = Array.isArray(params.seeded) ? params.seeded[0] : params.seeded;
+    // Capture ekranı video slide'larını önceden doldurduysa yeniden yükleme.
+    if (seeded === '1' && useMediaEditorStore.getState().slides.some((s) => s.isVideo)) {
+      useMediaHandoffStore.getState().clearHandoff();
+      setLoading(false);
+      return;
+    }
+
+    const handoff = useMediaHandoffStore.getState().payload;
     const rawUris = Array.isArray(params.mediaUris) ? params.mediaUris[0] : params.mediaUris;
-    const forcedType = Array.isArray(params.mediaType) ? params.mediaType[0] : params.mediaType;
-    const uris = (rawUris ?? '').split(',').filter(Boolean);
-    const widths = parseCsvParam(params.mediaWidths);
-    const heights = parseCsvParam(params.mediaHeights);
+    const forcedType =
+      handoff?.mediaType ??
+      (Array.isArray(params.mediaType) ? params.mediaType[0] : params.mediaType);
+    const uris = handoff?.mediaUris?.length
+      ? handoff.mediaUris
+      : (rawUris ?? '').split(',').filter(Boolean);
+    const widths = handoff?.mediaWidths?.map(String) ?? parseCsvParam(params.mediaWidths);
+    const heights = handoff?.mediaHeights?.map(String) ?? parseCsvParam(params.mediaHeights);
+
     if (!uris.length) {
+      if (useMediaEditorStore.getState().slides.length > 0) {
+        setLoading(false);
+        return;
+      }
       setLoading(false);
       return;
     }
@@ -167,7 +190,15 @@ export function MediaEditorScreen() {
       const nextSlides = await Promise.all(
         uris.map(async (uri, index) => {
           const video = resolveIsVideo(uri, forcedType);
-          const durationSec = video ? await probeVideoDuration(uri) : 0;
+          let playableUri = uri;
+          if (video && !handoff) {
+            try {
+              playableUri = await prepareStoryVideoPreviewUri(uri);
+            } catch {
+              playableUri = uri;
+            }
+          }
+          const durationSec = video ? await probeVideoDuration(playableUri) : 0;
           let mediaWidth = Number(widths[index] ?? 0);
           let mediaHeight = Number(heights[index] ?? 0);
           if (!video) {
@@ -183,7 +214,7 @@ export function MediaEditorScreen() {
             }
           }
           return {
-            uri,
+            uri: playableUri,
             isVideo: video,
             durationSec,
             textOverlays: [],
@@ -200,13 +231,14 @@ export function MediaEditorScreen() {
 
       if (cancelled) return;
       initSlides(nextSlides);
+      useMediaHandoffStore.getState().clearHandoff();
       setLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [params.mediaUris, params.mediaType, params.mediaWidths, params.mediaHeights, initSlides]);
+  }, [params.mediaUris, params.mediaType, params.mediaWidths, params.mediaHeights, params.handoff, params.seeded, initSlides]);
 
   const handleBack = () => {
     reset();
@@ -354,11 +386,15 @@ export function MediaEditorScreen() {
         setEditManifest(null);
       }
 
+      useMediaHandoffStore.getState().setHandoff({
+        mediaUris: finalUris,
+        mediaType: videoSlide ? 'video' : 'image',
+      });
       router.replace({
         pathname: '/compose',
         params: {
-          mediaUris: finalUris.join(','),
           fromEditor: '1',
+          handoff: '1',
         },
       } as Href);
     } finally {
@@ -610,7 +646,8 @@ export function MediaEditorScreen() {
       <AudioPickerSheet
         visible={musicOpen}
         selectedTrackId={musicSelection?.trackId ?? null}
-        initialMode="music"
+        selectionMode
+        tapToSelect
         onClose={() => {
           setMusicOpen(false);
           if (!musicSelection) setActivePanel('none');
@@ -618,10 +655,16 @@ export function MediaEditorScreen() {
         onSelect={handleMusicSelect}
       />
 
-      {musicSelection && !slide.isVideo ? (
+      {musicSelection ? (
         <MediaEditorMusicPanel
           visible={activePanel === 'music' && !musicOpen}
           music={musicSelection}
+          mediaType={slide.isVideo ? 'video' : 'image'}
+          clipDurationSec={
+            slide.isVideo
+              ? Math.max(0.5, musicSelection.musicEndSec - musicSelection.musicStartSec)
+              : undefined
+          }
           previewPlaying={musicPreviewPlaying}
           onTogglePreview={() => setMusicPreviewPlaying((v) => !v)}
           onChangeTrack={() => setMusicOpen(true)}

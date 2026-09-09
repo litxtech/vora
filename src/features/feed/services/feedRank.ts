@@ -30,6 +30,11 @@ export function feedRankWindowStart(): string {
   return new Date(Date.now() - FEED_RANK_PERIOD_HOURS * 3_600_000).toISOString();
 }
 
+/** Ranked 48s havuzu bir sayfayı doldurmuyorsa eski post backfill gerekir. */
+export function needsFeedBackfill(rankedCount: number, pageSize: number): boolean {
+  return rankedCount < pageSize;
+}
+
 export function isRankCursor(cursor: string | null): boolean {
   return !!cursor?.startsWith(RANK_CURSOR_PREFIX);
 }
@@ -102,6 +107,8 @@ export function paginateRankedFeed<T extends { createdAt: string }>(
   pageSize: number,
   poolFull: boolean,
   windowStart: string,
+  /** true ise devam cursor'ı sayfadaki son öğenin createdAt'i olur (backfill sonrası). */
+  useLastItemAsChronoCursor = false,
 ): { page: T[]; nextCursor: string | null } {
   const page = sorted.slice(offset, offset + pageSize);
 
@@ -109,13 +116,14 @@ export function paginateRankedFeed<T extends { createdAt: string }>(
     return { page, nextCursor: buildRankCursor(offset + pageSize) };
   }
 
-  if (poolFull) {
-    return { page, nextCursor: buildChronoCursor(windowStart) };
+  const last = page[page.length - 1];
+
+  // Ranked pencere bitti — havuz dolu olmasa da eski postlara chrono ile devam et
+  if (page.length > 0 || poolFull) {
+    const continueAt =
+      useLastItemAsChronoCursor && last ? last.createdAt : windowStart;
+    return { page, nextCursor: buildChronoCursor(continueAt) };
   }
 
-  const last = page[page.length - 1];
-  return {
-    page,
-    nextCursor: page.length === pageSize && last ? last.createdAt : null,
-  };
+  return { page, nextCursor: null };
 }

@@ -94,4 +94,6 @@ export type MapLocationSuggestion = {
   /** Mapbox Search Box — seçimde koordinat almak için */
   mapboxId?: string;
   sessionToken?: string;
+  /** Kullanıcıya uzaklık (metre); proximity sıralaması için */
+  distanceMeters?: number;
 };

@@ -1,6 +1,11 @@
 import { supabase } from '@/lib/supabase/client';
 import type { ContentStatus } from '@/types/database';
 import { supabaseErrorMessage } from '@/lib/errors';
+import {
+  adminModerateFeedContent,
+  type AdminFeedContentTargetType,
+  type AdminFeedModerateAction,
+} from '@/features/admin/services/removedContentManagement';
 
 export type AdminContentTab = 'posts' | 'reels' | 'comments';
 export type AdminContentStatusFilter = 'all' | AdminContentStatusFilterValue;
@@ -213,7 +218,7 @@ export async function moderateContent(
   moderatorId: string,
   targetType: string,
   targetId: string,
-  action: 'warn' | 'hide' | 'remove',
+  action: 'warn' | 'hide' | 'remove' | 'restore' | 'delete_permanent',
   reason: string,
 ) {
   if (action === 'warn') {
@@ -225,24 +230,19 @@ export async function moderateContent(
     return { error: result.error, warning: result.data };
   }
 
-  const statusMap: Record<string, ContentStatus> = {
-    hide: 'hidden',
-    remove: 'removed',
-  };
+  const { error } = await adminModerateFeedContent(
+    targetType as AdminFeedContentTargetType,
+    targetId,
+    action as AdminFeedModerateAction,
+    reason,
+  );
 
-  if (targetType === 'post' && statusMap[action]) {
-    await supabase.from('posts').update({ status: statusMap[action] }).eq('id', targetId);
-  } else if (targetType === 'reel' && statusMap[action]) {
-    await supabase.from('reels').update({ status: statusMap[action] }).eq('id', targetId);
+  if (error) {
+    return { error, warning: null };
   }
 
-  const { error } = await supabase.from('moderation_actions').insert({
-    moderator_id: moderatorId,
-    target_type: targetType,
-    target_id: targetId,
-    action,
-    reason,
-  });
+  // RPC moderasyon_actions kaydını yazar; moderatorId geriye dönük uyumluluk için tutulur.
+  void moderatorId;
 
-  return { error: supabaseErrorMessage(error), warning: null };
+  return { error: null, warning: null };
 }

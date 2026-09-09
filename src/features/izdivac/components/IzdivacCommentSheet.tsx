@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSharedValue } from 'react-native-reanimated';
 import { KeyboardSheetLayout, KeyboardPersistButton } from '@/components/keyboard';
 import { CommentActionMenu, useCommentTapGestures, type CommentAction } from '@/components/comments';
+import { RichText, CommentLinkAttachment, ComposerLinkPreview } from '@/features/richtext';
 import { Text } from '@/components/ui/Text';
 import { IZDIVAC_ACCENT } from '@/features/izdivac/constants';
 import {
@@ -236,6 +237,8 @@ export function IzdivacCommentSheet({
         </View>
       ) : null}
 
+      <ComposerLinkPreview content={text} />
+
       <View style={[styles.inputRow, { borderColor: colors.border }]}>
         <TextInput
           style={[styles.input, { color: colors.text }]}
@@ -303,6 +306,7 @@ export function IzdivacCommentSheet({
                       onEdit={handleStartEdit}
                       onDelete={handleDelete}
                       onCopy={handleCopy}
+                      onBeforeOpen={onClose}
                     />
                   ))
                 )}
@@ -323,6 +327,7 @@ const CommentRow = memo(function CommentRow({
   onEdit,
   onDelete,
   onCopy,
+  onBeforeOpen,
 }: {
   comment: IzdivacPostComment;
   currentUserId: string | null;
@@ -331,6 +336,7 @@ const CommentRow = memo(function CommentRow({
   onEdit: (comment: IzdivacPostComment) => void;
   onDelete: (comment: IzdivacPostComment) => void;
   onCopy: (comment: IzdivacPostComment) => void;
+  onBeforeOpen: () => void;
 }) {
   const { colors } = useTheme();
   const isPending = comment.commentId.startsWith('temp-');
@@ -379,8 +385,18 @@ const CommentRow = memo(function CommentRow({
           ) : null}
         </View>
         <Pressable {...tapGestures} style={styles.commentBody}>
-          <Text style={styles.commentText}>{comment.body}</Text>
+          <RichText
+            content={comment.body}
+            style={styles.commentText}
+            linkColor={IZDIVAC_ACCENT}
+            enableMentions
+            enableHashtags
+            mentionColor={IZDIVAC_ACCENT}
+            hashtagColor={colors.accent}
+            onBeforeOpen={onBeforeOpen}
+          />
         </Pressable>
+        <CommentLinkAttachment content={comment.body} onBeforeOpen={onBeforeOpen} />
       </View>
 
       {comment.replies?.map((reply) => (
@@ -393,6 +409,7 @@ const CommentRow = memo(function CommentRow({
           onEdit={onEdit}
           onDelete={onDelete}
           onCopy={onCopy}
+          onBeforeOpen={onBeforeOpen}
         />
       ))}
     </View>

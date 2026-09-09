@@ -92,7 +92,7 @@ export function AdminPostActionsSheet({
 
   const handleModerate = (action: 'hide' | 'remove', label: string) => {
     if (!user) return;
-    Alert.alert(label, 'Bu işlem admin panelinden geri alınabilir.', [
+    Alert.alert(label, 'İçerik yayından kaldırılır ve sahibine bildirim gönderilir.', [
       { text: 'Vazgeç', style: 'cancel' },
       {
         text: label,

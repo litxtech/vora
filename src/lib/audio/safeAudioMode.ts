@@ -93,7 +93,9 @@ export async function ensureVideoPlaybackAudioMode(): Promise<boolean> {
  */
 export async function handoffCameraToVideoPlayback(): Promise<void> {
   if (Platform.OS === 'ios') {
-    await delay(400);
+    await delay(650);
+  } else {
+    await delay(120);
   }
   await ensureVideoPlaybackAudioMode();
 }

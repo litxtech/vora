@@ -30,6 +30,17 @@ export function readMemoryFeedCache(cacheKey: string): FeedCacheSnapshot | null 
   return memoryCache;
 }
 
+export function readCachedFeedItemBySource(
+  sourceType: FeedItem['sourceType'],
+  sourceId: string,
+): FeedItem | null {
+  return (
+    memoryCache?.items.find(
+      (item) => item.sourceType === sourceType && item.sourceId === sourceId,
+    ) ?? null
+  );
+}
+
 export async function readDiskFeedCache(cacheKey: string): Promise<FeedCacheSnapshot | null> {
   try {
     const raw = await AsyncStorage.getItem(DISK_KEY);

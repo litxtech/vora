@@ -1,4 +1,4 @@
-import { Alert, Linking } from 'react-native';
+import { Alert, InteractionManager, Linking } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { resolveAppRouteFromShareUrl } from '@/lib/sharing/resolveIncomingShareUrl';
@@ -6,6 +6,8 @@ import { devLog, devWarn } from '@/lib/safeLog';
 
 export type OpenUrlOptions = {
   presentationStyle?: WebBrowser.WebBrowserPresentationStyle;
+  /** Uygulama içi route açılmadan önce (ör. yorum sheet kapat) */
+  onBeforeNavigate?: () => void;
 };
 
 const NATIVE_SCHEME_RE =
@@ -128,12 +130,18 @@ export async function openUrl(raw: string, options?: OpenUrlOptions): Promise<vo
   const inAppRoute = resolveAppRouteFromShareUrl(raw);
   if (inAppRoute) {
     devLog('openUrl', 'in-app share route', { raw, inAppRoute });
-    router.push(inAppRoute as never);
+    options?.onBeforeNavigate?.();
+    // Modal/sheet kapandıktan sonra push et — aksi halde navigasyon arkada kalır
+    InteractionManager.runAfterInteractions(() => {
+      router.push(inAppRoute as never);
+    });
     return;
   }
 
   const url = normalizeLinkInput(raw);
   if (!url) return;
+
+  options?.onBeforeNavigate?.();
 
   const mode = resolveOpenMode(url);
   devLog('openUrl', 'open', { raw, url, mode });

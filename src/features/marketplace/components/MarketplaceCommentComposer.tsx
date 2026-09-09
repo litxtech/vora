@@ -3,6 +3,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Ionicons } from '@expo/vector-icons';
 import { KeyboardPersistButton } from '@/components/keyboard';
 import { Text } from '@/components/ui/Text';
+import { ComposerLinkPreview } from '@/features/richtext';
 import { isVideoUrl } from '@/features/marketplace/services/descriptionBlocks';
 import { MARKETPLACE_ACCENT } from '@/features/marketplace/constants';
 import type { MarketplaceCommentKind } from '@/features/marketplace/types';
@@ -92,6 +93,8 @@ export function MarketplaceCommentComposer({
           ))}
         </ScrollView>
       ) : null}
+
+      <ComposerLinkPreview content={value} />
 
       <View style={[styles.inputRow, { borderColor: colors.border, backgroundColor: `${colors.surface}CC` }]}>
         <TextInput

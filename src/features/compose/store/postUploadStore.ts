@@ -2,6 +2,10 @@ import { create } from 'zustand';
 import { createPost, type CreatePostInput } from '@/features/compose/services/createPost';
 import { isUploadCancelledError } from '@/services/video/uploadCancelled';
 import { isLocalVideoUri } from '@/lib/media/isVideoUrl';
+import {
+  getCachedLocalVideoPoster,
+  warmLocalVideoPosterByUri,
+} from '@/features/feed/services/warmLocalVideoPoster';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { VIDEO_PROGRESS } from '@/services/video/progressMessages';
 
@@ -63,12 +67,17 @@ export const usePostUploadStore = create<PostUploadState>((set, get) => ({
 
     const runId = ++uploadRunId;
     const controller = new AbortController();
+    const hasVideo = input.mediaUris.some((uri) => isLocalVideoUri(uri));
+    const firstVideoUri = input.mediaUris.find((uri) => isLocalVideoUri(uri));
+    if (firstVideoUri) {
+      warmLocalVideoPosterByUri(firstVideoUri);
+    }
+
     const thumb =
       previewUri ??
+      (firstVideoUri ? getCachedLocalVideoPoster(firstVideoUri) : null) ??
       input.mediaUris.find((uri) => !isLocalVideoUri(uri)) ??
-      input.mediaUris[0] ??
       null;
-    const hasVideo = input.mediaUris.some((uri) => isLocalVideoUri(uri));
 
     set({
       status: 'uploading',

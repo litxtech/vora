@@ -27,6 +27,9 @@ import { isEphemeralMediaMessage } from '../services/ephemeralImage';
 import { ChatSharedCard } from './ChatSharedCard';
 import { ChatCallLog } from './ChatCallLog';
 import { ChatHeyetDecisionCard } from '@/features/heyet/components/ChatHeyetDecisionCard';
+import { CapAttachment } from '@/features/caps';
+import { isCapMessageMetadata } from '@/features/caps/constants';
+import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { parseCallLogMetadata } from '../services/callLogMetadata';
 import { isStoryReplyMessage } from '../services/storyReplyMetadata';
 import { ChatStoryReplyCard } from './ChatStoryReplyCard';
@@ -228,6 +231,7 @@ export const ChatBubble = memo(function ChatBubble({
     message.messageType === 'text' && !message.deletedForAll && !isStoryReply;
   const isAudioMessage = message.messageType === 'audio';
   const isMediaMessage = message.messageType === 'image' || message.messageType === 'video';
+  const isCapMessage = message.messageType === 'cap';
   const hasMediaCaption = isMediaMessage && message.content.trim().length > 0;
   const hasMediaExtra =
     hasMediaCaption ||
@@ -235,6 +239,9 @@ export const ChatBubble = memo(function ChatBubble({
   const mediaOnly = isMediaMessage && !hasMediaExtra;
   const isReelShare = message.messageType === 'shared_reel';
   const isCallLog = message.messageType === 'call';
+  const capOnly =
+    isCapMessage && !Boolean(message.replyTo || message.replyToId || message.forwardedFromId);
+  const transparentBubble = mediaOnly || capOnly || isReelShare || isStoryReply || isCallLog;
   const callLogMeta = isCallLog ? parseCallLogMetadata(message.metadata) : null;
   const metaRecord = message.metadata as Record<string, unknown> | null | undefined;
   const heyetDecisionMeta = metaRecord?.kind === 'heyet_decision' ? metaRecord : null;
@@ -352,20 +359,19 @@ export const ChatBubble = memo(function ChatBubble({
       style={[
         styles.bubble,
         isMine ? styles.bubbleMine : styles.bubbleTheirs,
-        isMediaMessage ? styles.bubbleMedia : null,
-        mediaOnly ? styles.bubbleMediaOnly : null,
+        isMediaMessage || isCapMessage ? styles.bubbleMedia : null,
+        mediaOnly || capOnly ? styles.bubbleMediaOnly : null,
         isReelShare ? styles.bubbleReelShare : null,
         isStoryReply ? styles.bubbleReelShare : null,
         isCallLog ? styles.bubbleCallLog : null,
         {
-          backgroundColor:
-            isReelShare || isStoryReply || isCallLog || mediaOnly
-              ? 'transparent'
-              : isMine
-                ? chat.outgoingBubble
-                : chat.incomingBubble,
-          shadowOpacity: isReelShare || isStoryReply || isCallLog || mediaOnly ? 0 : 0.08,
-          elevation: isReelShare || isStoryReply || isCallLog || mediaOnly ? 0 : 1,
+          backgroundColor: transparentBubble
+            ? 'transparent'
+            : isMine
+              ? chat.outgoingBubble
+              : chat.incomingBubble,
+          shadowOpacity: transparentBubble ? 0 : 0.08,
+          elevation: transparentBubble ? 0 : 1,
         },
         showAvatar ? styles.bubbleInGroup : null,
       ]}
@@ -456,6 +462,60 @@ export const ChatBubble = memo(function ChatBubble({
               onDoublePress={canQuote ? onDoublePress : undefined}
             />
           )
+        ) : null}
+        {contentVisible && message.messageType === 'cap' && message.mediaUrl ? (
+          <View style={styles.capBubble}>
+            <CapAttachment
+              capId={
+                isCapMessageMetadata(message.metadata)
+                  ? message.metadata.capId
+                  : 'unknown'
+              }
+              imageUrl={
+                isCapMessageMetadata(message.metadata)
+                  ? message.metadata.thumbUrl ?? message.metadata.imageUrl ?? message.mediaUrl
+                  : message.mediaUrl
+              }
+              videoUrl={
+                isCapMessageMetadata(message.metadata)
+                  ? message.metadata.videoUrl
+                  : isVideoUrl(message.mediaUrl)
+                    ? message.mediaUrl
+                    : null
+              }
+              width={
+                isCapMessageMetadata(message.metadata) ? message.metadata.width : null
+              }
+              height={
+                isCapMessageMetadata(message.metadata) ? message.metadata.height : null
+              }
+              startMs={
+                isCapMessageMetadata(message.metadata) ? message.metadata.startMs : null
+              }
+              endMs={
+                isCapMessageMetadata(message.metadata) ? message.metadata.endMs : null
+              }
+              overlay={
+                isCapMessageMetadata(message.metadata) ? message.metadata.overlay : null
+              }
+              creator={
+                isCapMessageMetadata(message.metadata)
+                  ? {
+                      id: message.metadata.creatorId,
+                      username: message.metadata.creatorUsername,
+                      fullName: null,
+                      avatarUrl: message.metadata.creatorAvatarUrl,
+                    }
+                  : {
+                      id: message.senderId,
+                      username: message.sender?.username ?? 'kullanici',
+                      fullName: message.sender?.full_name ?? null,
+                      avatarUrl: message.sender?.avatar_url ?? null,
+                    }
+              }
+              autoplay={false}
+            />
+          </View>
         ) : null}
         {contentVisible && message.messageType === 'video' && message.mediaUrl ? (
           isEphemeralMedia && message.localStatus !== 'sending' && !shouldShowQueuedVideoOverlay(message) ? (
@@ -717,6 +777,11 @@ const styles = StyleSheet.create({
   bubbleMediaOnly: {
     paddingHorizontal: 0,
     paddingVertical: 0,
+  },
+  capBubble: {
+    paddingHorizontal: 0,
+    paddingVertical: 0,
+    backgroundColor: 'transparent',
   },
   mediaBubbleInset: {
     paddingHorizontal: 12,

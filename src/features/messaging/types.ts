@@ -7,6 +7,7 @@ export type MessageType =
   | 'audio'
   | 'location'
   | 'file'
+  | 'cap'
   | 'shared_post'
   | 'shared_reel'
   | 'shared_profile'
@@ -45,6 +46,19 @@ export type EphemeralImageMetadata = {
   durationSec: number;
   viewedAt?: string | null;
   expired?: boolean;
+};
+
+export type CapMessageMetadata = {
+  kind: 'cap';
+  capId: string;
+  imageUrl: string;
+  videoUrl: string | null;
+  thumbUrl: string | null;
+  width?: number | null;
+  height?: number | null;
+  creatorId: string;
+  creatorUsername: string;
+  creatorAvatarUrl: string | null;
 };
 
 export type MessageDeliveryStatus = 'sending' | 'sent' | 'delivered' | 'read' | 'failed';
@@ -121,7 +135,7 @@ export type ChatMessage = {
   sender?: MessagingParticipant;
   replyTo?: Pick<ChatMessage, 'id' | 'content' | 'senderId' | 'messageType' | 'sender'>;
   reactions?: MessageReactionSummary[];
-  metadata?: SharedCardMetadata | CallLogMetadata | EphemeralImageMetadata | null;
+  metadata?: SharedCardMetadata | CallLogMetadata | EphemeralImageMetadata | CapMessageMetadata | null;
   /** Yalnızca istemci tarafı — sunucuya yazılmadan önce */
   localStatus?: MessageDeliveryStatus;
   localOnly?: boolean;

@@ -44,7 +44,7 @@ export async function uploadVideo(
   onProgress?: (state: VideoUploadProgress) => void,
   options: VideoUploadOptions = {},
 ): Promise<VideoUploadRecord> {
-  const profile = options.profile ?? 'quality';
+  const profile = options.profile ?? 'post';
   const skipCompression = options.skipCompression ?? false;
   const { signal } = options;
 

@@ -1,38 +1,27 @@
-import { StyleSheet } from 'react-native';
-import { router } from 'expo-router';
-import { Text } from '@/components/ui/Text';
-import { hashtagPath } from '@/features/hashtag/navigation';
+import { type StyleProp, type TextStyle } from 'react-native';
+import { RichText } from '@/features/richtext';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type HashtagTextProps = {
   content: string;
+  style?: StyleProp<TextStyle>;
+  numberOfLines?: number;
 };
 
-export function HashtagText({ content }: HashtagTextProps) {
+/** Gönderi gövdesi: tıklanabilir link, #hashtag ve @mention. */
+export function HashtagText({ content, style, numberOfLines }: HashtagTextProps) {
   const { colors } = useTheme();
-  const parts = content.split(/(#[\p{L}\p{N}_]+)/gu);
 
   return (
-    <Text>
-      {parts.map((part, i) => {
-        if (part.startsWith('#')) {
-          const tag = part.slice(1);
-          return (
-            <Text
-              key={i}
-              style={[styles.tag, { color: colors.primary }]}
-              onPress={() => router.push(hashtagPath(tag))}
-            >
-              {part}
-            </Text>
-          );
-        }
-        return <Text key={i}>{part}</Text>;
-      })}
-    </Text>
+    <RichText
+      content={content}
+      style={style}
+      numberOfLines={numberOfLines}
+      linkColor={colors.primary}
+      enableMentions
+      enableHashtags
+      mentionColor={colors.primary}
+      hashtagColor={colors.primary}
+    />
   );
 }
-
-const styles = StyleSheet.create({
-  tag: { fontWeight: '600' },
-});

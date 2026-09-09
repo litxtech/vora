@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
+import { RichText, CommentLinkAttachment } from '@/features/richtext';
 import { MarketplaceCommentMediaViewer } from '@/features/marketplace/components/MarketplaceCommentMediaViewer';
 import { isVideoUrl } from '@/features/marketplace/services/descriptionBlocks';
 import { formatMarketplaceDate, MARKETPLACE_ACCENT } from '@/features/marketplace/constants';
@@ -16,7 +17,7 @@ type Props = {
 const THUMB_SIZE = 56;
 
 export function MarketplaceCommentRow({ comment }: Props) {
-  const { colors } = useTheme();
+  const { colors, metrics } = useTheme();
   const [viewerOpen, setViewerOpen] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
 
@@ -52,9 +53,18 @@ export function MarketplaceCommentRow({ comment }: Props) {
       </View>
 
       {comment.body.trim() && comment.body !== 'Medya paylaşımı' ? (
-        <Text variant="caption" style={styles.body}>
-          {comment.body}
-        </Text>
+        <>
+          <RichText
+            content={comment.body}
+            style={[metrics.typography.caption, { color: colors.text }, styles.body]}
+            linkColor={MARKETPLACE_ACCENT}
+            enableMentions
+            enableHashtags
+            mentionColor={MARKETPLACE_ACCENT}
+            hashtagColor={colors.accent}
+          />
+          <CommentLinkAttachment content={comment.body} />
+        </>
       ) : null}
 
       {comment.mediaUrls.length ? (

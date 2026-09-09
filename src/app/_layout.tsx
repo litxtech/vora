@@ -24,7 +24,7 @@ import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 import { BootShellBackgroundSync } from '@/features/app-appearance/hooks/useBootShellBackground';
 import { resolveBootShellBackground } from '@/lib/boot/resolveBootShellBackground';
-import { resolveStackAnimation } from '@/constants/navigation';
+import { resolveStackAnimation, getDefaultStackScreenOptions } from '@/constants/navigation';
 import { AppearanceProvider } from '@/providers/AppearanceProvider';
 import { AccountSwitchProvider } from '@/features/account-switch/providers/AccountSwitchProvider';
 import { CallProvider } from '@/providers/CallProvider';
@@ -54,18 +54,10 @@ function RootNavigator() {
     <>
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack
-        screenOptions={{
-          headerShown: false,
+        screenOptions={getDefaultStackScreenOptions({
           contentStyle: { backgroundColor: colors.background },
           animation: resolveStackAnimation('default'),
-          ...(Platform.OS === 'android'
-            ? {
-                animationDuration: 0,
-                freezeOnBlur: false,
-                detachInactiveScreens: true,
-              }
-            : {}),
-        }}
+        })}
       >
         <Stack.Screen name="index" options={{ animation: 'none' }} />
         <Stack.Screen name="(tabs)" options={{ animation: 'none' }} />

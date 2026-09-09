@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
-import { Image, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { GradientBackground } from '@/components/ui/GradientBackground';
 import { Text } from '@/components/ui/Text';
 import { LEGAL_DOCUMENTS } from '@/constants/legal';
-import { APP_ICON, APP_NAME } from '@/constants/branding';
-import { radius, spacing } from '@/constants/theme';
+import { APP_NAME } from '@/constants/branding';
+import { spacing } from '@/constants/theme';
 import { LobbyWelcomeCard } from '@/features/auth/components/LobbyWelcomeCard';
 import { LobbyDeveloperFeedbackSheet } from '@/features/auth/components/LobbyDeveloperFeedbackSheet';
 import { isAppleSignInAvailable, signInWithApple } from '@/features/auth/services/appleSignIn';
@@ -197,15 +197,6 @@ export function LobbyScreen() {
         keyboardShouldPersistTaps="handled"
       >
         <View style={styles.hero}>
-          <Image
-            source={
-              appearance.branding.lobby_icon_url
-                ? { uri: appearance.branding.lobby_icon_url }
-                : APP_ICON
-            }
-            style={styles.appIcon}
-            accessibilityLabel={`${APP_NAME} uygulama simgesi`}
-          />
           <Text style={[styles.brandTitle, { color: colors.text }]}>{APP_NAME}</Text>
           <Text secondary style={styles.tagline}>
             {lobby.tagline}
@@ -294,12 +285,6 @@ const styles = StyleSheet.create({
   hero: {
     alignItems: 'center',
     gap: spacing.sm,
-  },
-  appIcon: {
-    width: 88,
-    height: 88,
-    borderRadius: radius.xl,
-    marginBottom: spacing.xs,
   },
   brandTitle: {
     fontSize: 40,

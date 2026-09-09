@@ -12,6 +12,7 @@ import { PERSONNEL_ACCENT, PERSONNEL_GRADIENT, jobTypeLabel } from '@/features/p
 import { employerNameDistinctFromAuthor } from '@/features/personnel-center/utils/employerDisplayName';
 import type { JobType } from '@/features/personnel-center/types';
 import { radius, spacing } from '@/constants/theme';
+import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type FeedJobCardProps = {
@@ -51,14 +52,20 @@ export const FeedJobCard = memo(function FeedJobCard({ item }: FeedJobCardProps)
   );
   const timeLabel = formatFeedTime(item.createdAt);
 
-  const openDetail = () => {
+  const warmDetail = () => {
     prefetchFeedDetail('job', item.sourceId);
+  };
+
+  const openDetail = () => {
+    warmDetail();
     navigateToFeedDetail('job', item.sourceId, item.isDemo);
   };
 
   return (
     <Pressable
+      onPressIn={warmDetail}
       onPress={openDetail}
+      {...getAndroidInstantPressableProps()}
       style={({ pressed }) => [
         styles.wrap,
         {

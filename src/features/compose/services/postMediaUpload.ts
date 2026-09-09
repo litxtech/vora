@@ -28,13 +28,27 @@ async function prepareUploadBytes(
   }
 
   const maxWidth = isAndroidTablet() ? 1600 : Platform.OS === 'android' ? 1920 : 2048;
-  const compressed = await manipulateAsync(
-    localUri,
-    [{ resize: { width: maxWidth } }],
-    { compress: 0.82, format: SaveFormat.JPEG },
-  );
-  const bytes = await readLocalFileBytes(compressed.uri);
-  return { bytes, contentType: 'image/jpeg', ext: 'jpg' };
+  try {
+    const compressed = await manipulateAsync(
+      localUri,
+      [{ resize: { width: maxWidth } }],
+      { compress: 0.82, format: SaveFormat.JPEG },
+    );
+    const bytes = await readLocalFileBytes(compressed.uri);
+    return { bytes, contentType: 'image/jpeg', ext: 'jpg' };
+  } catch {
+    // renderAsync / "image content has been lost" — orijinal dosyayı yükle
+    const bytes = await readLocalFileBytes(localUri);
+    const ext =
+      contentType === 'image/png'
+        ? 'png'
+        : contentType === 'image/webp'
+          ? 'webp'
+          : contentType === 'image/heic' || contentType === 'image/heif'
+            ? 'heic'
+            : 'jpg';
+    return { bytes, contentType, ext };
+  }
 }
 
 export type PostMediaUploadResult = {

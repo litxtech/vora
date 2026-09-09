@@ -111,12 +111,81 @@ export async function fetchAdminMusicCategories(): Promise<MusicCategoryAdminRow
 }
 
 export async function createMusicCategory(label: string, slug: string): Promise<{ error: string | null }> {
+  const { data: existing } = await supabase
+    .from('music_categories')
+    .select('sort_order')
+    .order('sort_order', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
   const { error } = await supabase.from('music_categories').insert({
     label: label.trim(),
     slug: slug.trim().toLowerCase().replace(/\s+/g, '-'),
+    sort_order: (existing?.sort_order ?? 0) + 1,
+    is_active: true,
   });
   if (!error) invalidateMusicCache();
   return { error: supabaseErrorMessage(error) };
+}
+
+export async function updateMusicCategory(input: {
+  id: string;
+  label: string;
+  slug?: string;
+  sortOrder?: number;
+  isActive?: boolean;
+}): Promise<{ error: string | null }> {
+  const payload: Record<string, unknown> = {
+    label: input.label.trim(),
+    updated_at: new Date().toISOString(),
+  };
+  if (input.slug != null) {
+    payload.slug = input.slug.trim().toLowerCase().replace(/\s+/g, '-');
+  }
+  if (input.sortOrder != null) payload.sort_order = input.sortOrder;
+  if (input.isActive != null) payload.is_active = input.isActive;
+
+  const { error } = await supabase.from('music_categories').update(payload).eq('id', input.id);
+  if (!error) invalidateMusicCache();
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function deleteMusicCategory(categoryId: string): Promise<{ error: string | null }> {
+  const { error } = await supabase.from('music_categories').delete().eq('id', categoryId);
+  if (!error) invalidateMusicCache();
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function reorderMusicCategory(
+  categoryId: string,
+  direction: 'up' | 'down',
+): Promise<{ error: string | null }> {
+  const categories = await fetchAdminMusicCategories();
+  const index = categories.findIndex((c) => c.id === categoryId);
+  if (index < 0) return { error: 'Kategori bulunamadı.' };
+
+  const swapIndex = direction === 'up' ? index - 1 : index + 1;
+  if (swapIndex < 0 || swapIndex >= categories.length) return { error: null };
+
+  const current = categories[index]!;
+  const other = categories[swapIndex]!;
+
+  const [a, b] = await Promise.all([
+    supabase
+      .from('music_categories')
+      .update({ sort_order: other.sortOrder, updated_at: new Date().toISOString() })
+      .eq('id', current.id),
+    supabase
+      .from('music_categories')
+      .update({ sort_order: current.sortOrder, updated_at: new Date().toISOString() })
+      .eq('id', other.id),
+  ]);
+
+  if (a.error || b.error) {
+    return { error: supabaseErrorMessage(a.error ?? b.error) };
+  }
+  invalidateMusicCache();
+  return { error: null };
 }
 
 export type UpsertMusicTrackInput = {

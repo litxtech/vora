@@ -76,6 +76,17 @@ function mapMusicPlayback(row: {
   };
 }
 
+function mapVideoOriginalMuted(row: {
+  music_track_id: string | null;
+  original_audio_volume: number | null;
+}): boolean {
+  return (
+    !row.music_track_id &&
+    row.original_audio_volume != null &&
+    Number(row.original_audio_volume) <= 0.001
+  );
+}
+
 function mapEditManifest(raw: unknown): PublishedEditManifest | null {
   if (!raw || typeof raw !== 'object') return null;
   const manifest = raw as PublishedEditManifest;
@@ -222,6 +233,7 @@ export async function fetchReels(
       pinnedAt: row.pinned_at,
       music: mapMusic(row),
       musicPlayback: mapMusicPlayback(row),
+      videoOriginalMuted: mapVideoOriginalMuted(row),
       editManifest: mapEditManifest(row.edit_manifest),
     });
   }
@@ -296,6 +308,7 @@ function mapReelRow(
     isSensitive: row.is_sensitive ?? false,
     music: mapMusic(row),
     musicPlayback: mapMusicPlayback(row),
+    videoOriginalMuted: mapVideoOriginalMuted(row),
     editManifest: mapEditManifest(row.edit_manifest),
   };
 }

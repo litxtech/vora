@@ -208,6 +208,7 @@ export const ADMIN_MENU_SECTIONS = [
       { id: 'messaging', label: 'Mesaj Moderasyonu', icon: 'chatbox-outline' as const, href: '/admin/messaging', adminOnly: false, accent: 'primary' as const },
       { id: 'heyet', label: 'Heyet', icon: 'shield-checkmark-outline' as const, href: '/admin/heyet', adminOnly: true, accent: 'accent' as const },
       { id: 'content', label: 'İçerik', icon: 'document-text-outline' as const, href: '/admin/content', adminOnly: false, accent: 'accent' as const },
+      { id: 'removed-content', label: 'Kaldırılanlar', icon: 'archive-outline' as const, href: '/admin/removed-content', adminOnly: false, accent: 'danger' as const },
       { id: 'businesses', label: 'Kurumsal', icon: 'business-outline' as const, href: '/admin/businesses', adminOnly: true, accent: 'success' as const },
       { id: 'business-shops', label: 'İşletme Mağazaları', icon: 'storefront-outline' as const, href: '/admin/business-shops', adminOnly: true, accent: 'warning' as const },
       { id: 'account-links', label: 'Hesap Bağlama', icon: 'link-outline' as const, href: '/admin/account-links', adminOnly: true, accent: 'primary' as const },
@@ -442,7 +443,7 @@ function buildPresetValues(mode: RolePermissionPresetId): Record<string, boolean
     if (mode === 'full' || mode === 'admin') {
       values[item.key] = true;
     } else if (mode === 'minimal') {
-      values[item.key] = ['reports', 'content', 'appeals', 'ai-moderation', 'messaging', 'users'].includes(item.menuId);
+      values[item.key] = ['reports', 'content', 'removed-content', 'appeals', 'ai-moderation', 'messaging', 'users'].includes(item.menuId);
     } else {
       values[item.key] = !item.adminOnly;
     }

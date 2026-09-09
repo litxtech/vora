@@ -26,10 +26,21 @@ type PostCardProps = {
   onWarn: () => void;
   onHide: () => void;
   onRemove: () => void;
+  onRestore?: () => void;
+  onDeletePermanent?: () => void;
   busy?: boolean;
 };
 
-export function AdminPostContentCard({ item, onPreview, onWarn, onHide, onRemove, busy = false }: PostCardProps) {
+export function AdminPostContentCard({
+  item,
+  onPreview,
+  onWarn,
+  onHide,
+  onRemove,
+  onRestore,
+  onDeletePermanent,
+  busy = false,
+}: PostCardProps) {
   const { colors } = useTheme();
   const previewUrl = adminPostPreviewUrl(item);
   const categoryColor = colors.accent;
@@ -80,9 +91,22 @@ export function AdminPostContentCard({ item, onPreview, onWarn, onHide, onRemove
 
       <View style={styles.actions}>
         <AdminActionChip label="Önizle" icon="eye-outline" tone="primary" compact onPress={onPreview} />
-        <AdminActionChip label="Uyar" icon="alert-circle-outline" tone="warning" compact loading={busy} onPress={onWarn} />
-        <AdminActionChip label="Gizle" icon="eye-off-outline" compact loading={busy} onPress={onHide} />
-        <AdminActionChip label="Kaldır" icon="trash-outline" tone="danger" compact loading={busy} onPress={onRemove} />
+        {item.status === 'published' ? (
+          <>
+            <AdminActionChip label="Uyar" icon="alert-circle-outline" tone="warning" compact loading={busy} onPress={onWarn} />
+            <AdminActionChip label="Gizle" icon="eye-off-outline" compact loading={busy} onPress={onHide} />
+            <AdminActionChip label="Kaldır" icon="trash-outline" tone="danger" compact loading={busy} onPress={onRemove} />
+          </>
+        ) : (
+          <>
+            {onRestore ? (
+              <AdminActionChip label="Geri yükle" icon="refresh-outline" tone="success" compact loading={busy} onPress={onRestore} />
+            ) : null}
+            {onDeletePermanent ? (
+              <AdminActionChip label="Kalıcı sil" icon="trash-outline" tone="danger" compact loading={busy} onPress={onDeletePermanent} />
+            ) : null}
+          </>
+        )}
       </View>
     </GlassCard>
   );
@@ -94,10 +118,21 @@ type ReelCardProps = {
   onWarn: () => void;
   onHide: () => void;
   onRemove: () => void;
+  onRestore?: () => void;
+  onDeletePermanent?: () => void;
   busy?: boolean;
 };
 
-export function AdminReelContentCard({ item, onPreview, onWarn, onHide, onRemove, busy = false }: ReelCardProps) {
+export function AdminReelContentCard({
+  item,
+  onPreview,
+  onWarn,
+  onHide,
+  onRemove,
+  onRestore,
+  onDeletePermanent,
+  busy = false,
+}: ReelCardProps) {
   const { colors } = useTheme();
   const previewUrl = adminReelPreviewUrl(item);
 
@@ -139,9 +174,22 @@ export function AdminReelContentCard({ item, onPreview, onWarn, onHide, onRemove
 
       <View style={styles.actions}>
         <AdminActionChip label="Önizle" icon="eye-outline" tone="primary" compact onPress={onPreview} />
-        <AdminActionChip label="Uyar" icon="alert-circle-outline" tone="warning" compact loading={busy} onPress={onWarn} />
-        <AdminActionChip label="Gizle" icon="eye-off-outline" compact loading={busy} onPress={onHide} />
-        <AdminActionChip label="Kaldır" icon="trash-outline" tone="danger" compact loading={busy} onPress={onRemove} />
+        {item.status === 'published' ? (
+          <>
+            <AdminActionChip label="Uyar" icon="alert-circle-outline" tone="warning" compact loading={busy} onPress={onWarn} />
+            <AdminActionChip label="Gizle" icon="eye-off-outline" compact loading={busy} onPress={onHide} />
+            <AdminActionChip label="Kaldır" icon="trash-outline" tone="danger" compact loading={busy} onPress={onRemove} />
+          </>
+        ) : (
+          <>
+            {onRestore ? (
+              <AdminActionChip label="Geri yükle" icon="refresh-outline" tone="success" compact loading={busy} onPress={onRestore} />
+            ) : null}
+            {onDeletePermanent ? (
+              <AdminActionChip label="Kalıcı sil" icon="trash-outline" tone="danger" compact loading={busy} onPress={onDeletePermanent} />
+            ) : null}
+          </>
+        )}
       </View>
     </GlassCard>
   );

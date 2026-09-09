@@ -1,5 +1,1 @@
-import { ServiceRequestDetailScreen } from '@/features/vora-hizmetler/components/ServiceRequestDetailScreen';
-
-export default function ServiceRequestDetailRoute() {
-  return <ServiceRequestDetailScreen />;
-}
+export { ServiceRequestDetailRouteScreen as default } from '@/lib/navigation/lazyRouteScreens';

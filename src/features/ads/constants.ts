@@ -46,6 +46,13 @@ export const AD_CPC_CENTS = 8;
 export const MIN_AD_BUDGET_CENTS = 1000;
 export const MIN_AD_TOPUP_CENTS = 5000;
 export const MAX_AD_TOPUP_CENTS = 1_000_000;
+/** Reklam hedeflemesi uygulama 18+ politikasıyla aynı tabanı kullanır. */
+export const AD_TARGET_AGE_MIN = 18;
+
+export function clampAdTargetAgeMin(value: number | null | undefined): number {
+  if (value == null || !Number.isFinite(value)) return AD_TARGET_AGE_MIN;
+  return Math.max(AD_TARGET_AGE_MIN, Math.floor(value));
+}
 
 /** Hızlı yükleme paketleri (kuruş) */
 export const AD_TOPUP_PRESETS_CENTS = [5000, 10_000, 25_000, 50_000, 100_000, 250_000] as const;

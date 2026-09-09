@@ -247,6 +247,46 @@ function navigateSystemNotification(
       safePush('/support-center' as Href);
       return;
     }
+    case 'city_election_started':
+    case 'city_election_completed': {
+      const electionId = data.election_id ?? data.electionId;
+      const deepLink = pickDeepLink(data);
+      if (deepLink) {
+        safePush(deepLink as Href);
+      } else if (isLikelyUuid(electionId)) {
+        safePush(`/election/${electionId}` as Href);
+      } else {
+        safePush('/(tabs)/discover' as Href);
+      }
+      return;
+    }
+    case 'city_diplomacy_request_received':
+    case 'leader_call_received':
+    case 'city_leader_call': {
+      if (tryNavigateDeepLink(data)) return;
+      const regionId = data.region_id ?? data.regionId;
+      if (typeof regionId === 'string') {
+        safePush(`/city/${regionId}/diplomacy` as Href);
+      }
+      return;
+    }
+    case 'joint_room_proposed':
+    case 'joint_room_started': {
+      const roomId = data.room_id ?? data.roomId;
+      if (tryNavigateDeepLink(data)) return;
+      if (isLikelyUuid(roomId)) {
+        safePush(`/room/${roomId}` as Href);
+      }
+      return;
+    }
+    case 'council_session_started': {
+      const sessionId = data.session_id ?? data.sessionId;
+      if (tryNavigateDeepLink(data)) return;
+      if (isLikelyUuid(sessionId)) {
+        safePush(`/council/${sessionId}` as Href);
+      }
+      return;
+    }
     default:
       break;
   }
@@ -564,6 +604,8 @@ function performNavigation(
       else safePush('/marketplace-center/account' as Href);
       break;
     case 'content_warning':
+    case 'content_removed':
+    case 'content_restored':
       if (ids.postId) navigateToPost(ids.postId);
       else if (ids.reelId) navigateToReel(ids.reelId);
       else navigateInboxFallback(options);

@@ -12,16 +12,20 @@ import { AdminSectionHeader } from '@/features/admin/components/shared/AdminSect
 import { AdminShell } from '@/features/admin/components/shared/AdminShell';
 import {
   createMusicCategory,
+  deleteMusicCategory,
   deleteMusicTrack,
   fetchAdminMusicCategories,
   fetchAdminMusicTracks,
   pickMusicAudioFile,
   pickMusicCoverFile,
+  reorderMusicCategory,
+  updateMusicCategory,
   uploadMusicAudio,
   uploadMusicCover,
   upsertMusicTrack,
   type UpsertMusicTrackInput,
 } from '@/features/admin/services/musicLibraryManagement';
+import type { MusicCategoryAdminRow } from '@/features/music/types';
 import {
   isMusicTrackPlayable,
   MUSIC_ACCEPTED_AUDIO_EXTENSIONS,
@@ -131,11 +135,13 @@ export function AdminMusicLibraryScreen() {
   const { user } = useAuth();
   const [search, setSearch] = useState('');
   const [tracks, setTracks] = useState<MusicTrackAdminRow[]>([]);
-  const [categories, setCategories] = useState<{ id: string; label: string }[]>([]);
+  const [categories, setCategories] = useState<MusicCategoryAdminRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [form, setForm] = useState<UpsertMusicTrackInput>(EMPTY_FORM);
   const [newCategory, setNewCategory] = useState('');
+  const [editingCategoryId, setEditingCategoryId] = useState<string | null>(null);
+  const [editingCategoryLabel, setEditingCategoryLabel] = useState('');
   const [saving, setSaving] = useState(false);
   const [pendingAudio, setPendingAudio] = useState<{ uri: string; name: string } | null>(null);
   const [pendingCover, setPendingCover] = useState<{ uri: string; name: string } | null>(null);
@@ -151,7 +157,7 @@ export function AdminMusicLibraryScreen() {
     ]);
 
     setTracks(trackRows);
-    setCategories(categoryRows.map((c) => ({ id: c.id, label: c.label })));
+    setCategories(categoryRows);
     setLoading(false);
     setRefreshing(false);
   }, [search]);
@@ -309,6 +315,52 @@ export function AdminMusicLibraryScreen() {
       setShowCategoryForm(false);
       await load(true);
     }
+  };
+
+  const handleSaveCategoryEdit = async () => {
+    if (!editingCategoryId || !editingCategoryLabel.trim()) return;
+    const { error } = await updateMusicCategory({
+      id: editingCategoryId,
+      label: editingCategoryLabel.trim(),
+      slug: editingCategoryLabel.trim().toLowerCase().replace(/\s+/g, '-'),
+    });
+    if (error) Alert.alert('Hata', error);
+    else {
+      setEditingCategoryId(null);
+      setEditingCategoryLabel('');
+      await load(true);
+    }
+  };
+
+  const handleToggleCategoryActive = async (category: MusicCategoryAdminRow) => {
+    const { error } = await updateMusicCategory({
+      id: category.id,
+      label: category.label,
+      isActive: !category.isActive,
+    });
+    if (error) Alert.alert('Hata', error);
+    else await load(true);
+  };
+
+  const handleReorderCategory = async (categoryId: string, direction: 'up' | 'down') => {
+    const { error } = await reorderMusicCategory(categoryId, direction);
+    if (error) Alert.alert('Hata', error);
+    else await load(true);
+  };
+
+  const handleDeleteCategory = (category: MusicCategoryAdminRow) => {
+    Alert.alert('Kategoriyi sil', `"${category.label}" silinsin mi? Parçalar kategorisiz kalır.`, [
+      { text: 'Vazgeç', style: 'cancel' },
+      {
+        text: 'Sil',
+        style: 'destructive',
+        onPress: async () => {
+          const { error } = await deleteMusicCategory(category.id);
+          if (error) Alert.alert('Hata', error);
+          else await load(true);
+        },
+      },
+    ]);
   };
 
   const resetForm = () => {
@@ -509,7 +561,7 @@ export function AdminMusicLibraryScreen() {
 
       <GlassCard style={styles.formCard}>
         <View style={styles.formTitleRow}>
-          <AdminSectionHeader title="Kategoriler" hint="Müzik listelerinde filtre" />
+          <AdminSectionHeader title="Kategoriler" hint="Ekle, düzenle, sırala, sil" />
           <AdminActionChip
             label={showCategoryForm ? 'Gizle' : 'Yeni kategori'}
             icon={showCategoryForm ? 'chevron-up' : 'add'}
@@ -523,10 +575,88 @@ export function AdminMusicLibraryScreen() {
             <AdminFormField label="Kategori adı" value={newCategory} onChangeText={setNewCategory} placeholder="Örn: Pop, Lo-fi" />
             <Button title="Kategori oluştur" variant="secondary" onPress={handleCreateCategory} />
           </>
-        ) : (
+        ) : null}
+
+        {categories.length === 0 ? (
           <Text secondary variant="caption">
-            {categories.length > 0 ? `${categories.length} kategori tanımlı` : 'Henüz kategori yok — eklemek için "Yeni kategori"ye dokunun'}
+            Henüz kategori yok — eklemek için &quot;Yeni kategori&quot;ye dokunun
           </Text>
+        ) : (
+          categories.map((category, index) => (
+            <View
+              key={category.id}
+              style={[styles.categoryRow, { borderColor: colors.border, backgroundColor: colors.surface }]}
+            >
+              {editingCategoryId === category.id ? (
+                <View style={styles.categoryEditBlock}>
+                  <AdminFormField
+                    label="Kategori adı"
+                    value={editingCategoryLabel}
+                    onChangeText={setEditingCategoryLabel}
+                  />
+                  <View style={styles.categoryActions}>
+                    <AdminActionChip label="Kaydet" icon="checkmark" compact tone="success" onPress={() => void handleSaveCategoryEdit()} />
+                    <AdminActionChip
+                      label="İptal"
+                      icon="close"
+                      compact
+                      onPress={() => {
+                        setEditingCategoryId(null);
+                        setEditingCategoryLabel('');
+                      }}
+                    />
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.categoryTitleBlock}>
+                    <Text variant="label">{category.label}</Text>
+                    <Text secondary variant="caption">
+                      {category.isActive ? 'Aktif' : 'Gizli'} · sıra {category.sortOrder}
+                    </Text>
+                  </View>
+                  <View style={styles.categoryActions}>
+                    <AdminActionChip
+                      label="Yukarı"
+                      icon="chevron-up"
+                      compact
+                      onPress={() => void handleReorderCategory(category.id, 'up')}
+                    />
+                    <AdminActionChip
+                      label="Aşağı"
+                      icon="chevron-down"
+                      compact
+                      onPress={() => void handleReorderCategory(category.id, 'down')}
+                    />
+                    <AdminActionChip
+                      label="Düzenle"
+                      icon="create-outline"
+                      compact
+                      onPress={() => {
+                        setEditingCategoryId(category.id);
+                        setEditingCategoryLabel(category.label);
+                      }}
+                    />
+                    <AdminActionChip
+                      label={category.isActive ? 'Gizle' : 'Aç'}
+                      icon={category.isActive ? 'eye-off-outline' : 'eye-outline'}
+                      compact
+                      tone={category.isActive ? 'warning' : 'success'}
+                      onPress={() => void handleToggleCategoryActive(category)}
+                    />
+                    <AdminActionChip
+                      label="Sil"
+                      icon="trash-outline"
+                      compact
+                      tone="danger"
+                      onPress={() => handleDeleteCategory(category)}
+                    />
+                  </View>
+                </>
+              )}
+              {index < categories.length - 1 ? null : null}
+            </View>
+          ))
         )}
       </GlassCard>
 
@@ -652,4 +782,14 @@ const styles = StyleSheet.create({
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   trackActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
+  categoryRow: {
+    gap: spacing.sm,
+    padding: spacing.sm,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+    marginTop: spacing.xs,
+  },
+  categoryEditBlock: { gap: spacing.sm },
+  categoryTitleBlock: { gap: 2 },
+  categoryActions: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.xs },
 });

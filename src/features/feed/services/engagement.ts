@@ -1,4 +1,5 @@
 import type { FeedComment } from '@/features/feed/types';
+import type { CapOverlayStyle } from '@/features/caps/types';
 import { toggleBusinessFollow } from '@/features/profile/services/businessFollow';
 import { canFollowUser } from '@/features/moderation/services/interactions';
 import { filterRestrictedComments } from '@/features/moderation/services/commentVisibility';
@@ -13,12 +14,35 @@ import { supabaseErrorMessage } from '@/lib/errors';
 import { trackReferralEvent } from '@/features/referral-earnings/services/referralTracking';
 import { notifyMapMarkerRemovedBySource } from '@/features/map/services/mapMarkerSync';
 
+type CapCreatorRow = {
+  id: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+};
+
+type CommentCapRow = {
+  id: string;
+  image_url: string;
+  thumb_url?: string | null;
+  video_url?: string | null;
+  width?: number | null;
+  height?: number | null;
+  start_ms?: number | null;
+  end_ms?: number | null;
+  overlay?: CapOverlayStyle | null;
+  creator_id: string;
+  profiles?: CapCreatorRow | CapCreatorRow[] | null;
+} | null;
+
 type CommentRow = {
   id: string;
   post_id: string;
   author_id: string;
   parent_id: string | null;
   content: string;
+  media_urls?: string[] | null;
+  cap_id?: string | null;
   like_count: number;
   is_edited: boolean;
   created_at: string;
@@ -31,7 +55,30 @@ type CommentRow = {
     is_verified: boolean;
     hidden_badges?: string[] | null;
   } | null;
+  caps?: CommentCapRow;
 };
+
+function mapCommentCap(row: CommentCapRow): FeedComment['cap'] {
+  if (!row) return null;
+  const creator = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
+  return {
+    id: row.id,
+    imageUrl: row.image_url,
+    thumbUrl: row.thumb_url ?? null,
+    videoUrl: row.video_url ?? null,
+    width: row.width ?? null,
+    height: row.height ?? null,
+    startMs: row.start_ms ?? null,
+    endMs: row.end_ms ?? null,
+    overlay: row.overlay ?? null,
+    creator: {
+      id: creator?.id ?? row.creator_id,
+      username: creator?.username ?? 'kullanici',
+      fullName: creator?.full_name ?? null,
+      avatarUrl: creator?.avatar_url ?? null,
+    },
+  };
+}
 
 function mapComment(row: CommentRow, likedIds: Set<string>): FeedComment {
   const profile = row.profiles;
@@ -48,6 +95,8 @@ function mapComment(row: CommentRow, likedIds: Set<string>): FeedComment {
       hiddenBadges: profile?.hidden_badges ?? [],
     },
     content: row.content,
+    mediaUrls: row.media_urls ?? [],
+    cap: mapCommentCap(row.caps ?? null),
     likeCount: row.like_count,
     isLiked: likedIds.has(row.id),
     isEdited: row.is_edited,
@@ -92,6 +141,8 @@ export async function fetchPostComments(
           isVerified: false,
         },
         content: 'Olay yerinden geçiyorum, trafik yavaş ama açık.',
+        mediaUrls: [],
+        cap: null,
         likeCount: 4,
         isLiked: false,
         isEdited: false,
@@ -110,6 +161,8 @@ export async function fetchPostComments(
               isVerified: true,
             },
             content: 'Teşekkürler, bilgi güncellendi.',
+            mediaUrls: [],
+            cap: null,
             likeCount: 1,
             isLiked: false,
             isEdited: false,
@@ -124,8 +177,9 @@ export async function fetchPostComments(
   const { data } = await supabase
     .from('post_comments')
     .select(
-      `id, post_id, author_id, parent_id, content, like_count, is_edited, created_at,
-       profiles!post_comments_author_id_fkey (id, username, full_name, avatar_url, role, is_verified, hidden_badges)`,
+      `id, post_id, author_id, parent_id, content, media_urls, cap_id, like_count, is_edited, created_at,
+       profiles!post_comments_author_id_fkey (id, username, full_name, avatar_url, role, is_verified, hidden_badges),
+       caps:cap_id (id, image_url, thumb_url, video_url, width, height, start_ms, end_ms, overlay, creator_id, profiles!caps_creator_id_fkey (id, username, full_name, avatar_url))`,
     )
     .eq('post_id', postId)
     .order('created_at', { ascending: true });
@@ -156,27 +210,41 @@ export async function addComment(
   authorId: string,
   content: string,
   parentId?: string,
+  mediaUrls: string[] = [],
+  capId?: string | null,
 ): Promise<{ error: string | null }> {
   if (postId.startsWith('demo-')) {
     return { error: null };
   }
 
+  const trimmed = content.trim();
+  const urls = mediaUrls.filter(Boolean);
+  const body = trimmed || (urls.length > 0 || capId ? (capId ? 'Caps' : 'Medya paylaşımı') : '');
+  if (!body) {
+    return { error: 'Yorum boş olamaz' };
+  }
+
   const { error } = await supabase.from('post_comments').insert({
     post_id: postId,
     author_id: authorId,
-    content: content.trim(),
+    content: body,
     parent_id: parentId ?? null,
+    media_urls: urls,
+    cap_id: capId ?? null,
   });
 
   if (!error) {
-    const trimmed = content.trim();
+    if (capId) {
+      const { recordCapUsage } = await import('@/features/caps/services/capsData');
+      void recordCapUsage(capId);
+    }
     void trackReferralEvent('interaction');
-    await notifyCommentReplyTargets(postId, authorId, parentId, trimmed);
+    await notifyCommentReplyTargets(postId, authorId, parentId, body);
     await notifyMentionedUsers(
-      trimmed,
+      body,
       authorId,
       'Senden bahsetti',
-      `${await getProfileLabel(authorId)}: ${trimmed.slice(0, 80)}`,
+      `${await getProfileLabel(authorId)}: ${body.slice(0, 80)}`,
       buildNotificationData({ postId }),
     );
   }

@@ -73,6 +73,16 @@ export async function findNearbyProximityCandidate(
   return mapCandidate(rows[0]);
 }
 
+/** Kart gösterildiğinde çağır — aynı kişiye ikinci kez aday dönülmez. */
+export async function markProximityCandidateOffered(otherUserId: string): Promise<void> {
+  const { error } = await supabase.rpc('mark_proximity_candidate_offered', {
+    p_other_user_id: otherUserId,
+  });
+  if (error) {
+    console.warn('[proximity-match] mark offered:', error.message);
+  }
+}
+
 export async function submitProximityMatchDecision(
   otherUserId: string,
   decision: 'yes' | 'no',

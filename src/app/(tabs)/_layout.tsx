@@ -10,7 +10,7 @@ import {
   getAndroidTabScreenOptions,
   isAndroid,
   shouldDetachInactiveTabScreens,
-  shouldUseFeedTabSwipeShell,
+  shouldUseScreenFreeze,
   shouldUseSolidAndroidTabBar,
 } from '@/lib/device/androidPerfProfile';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
@@ -39,9 +39,18 @@ const ReelsTabIcon = memo(function ReelsTabIcon({ color }: { color: string }) {
   return <Ionicons name="play-circle-outline" size={TAB_ICON_SIZE} color={color} />;
 });
 
+const MessagesTabIcon = memo(function MessagesTabIcon({ color }: { color: string }) {
+  return <Ionicons name="chatbubbles-outline" size={TAB_ICON_SIZE} color={color} />;
+});
+
+function useMessagesTabBadge(showMessagesTab: boolean): string | number | undefined {
+  const messagingBadge = useMessagingStore((s) => s.totalUnread);
+  if (!showMessagesTab || messagingBadge <= 0) return undefined;
+  return messagingBadge > 99 ? '99+' : messagingBadge;
+}
+
 export default function TabsLayout() {
   const { colors, isDark, mode, tabBar, metrics } = useTheme();
-  const messagingBadge = useMessagingStore((s) => s.totalUnread);
   const { isVisible } = useFeatureFlags();
   const tabBarBottomInset = useStableTabBarInset();
   const guard = useTabsGuard();
@@ -51,16 +60,12 @@ export default function TabsLayout() {
   const showMessagesTab = isVisible('messages');
   const showProfileTab = isVisible('profile');
   const showComposeTab = isVisible('compose');
-
-  const messagesTabBadge =
-    showMessagesTab && messagingBadge > 0
-      ? messagingBadge > 99
-        ? '99+'
-        : messagingBadge
-      : undefined;
+  const showRidesTab = isVisible('rides');
+  const messagesTabBadge = useMessagesTabBadge(showMessagesTab);
 
   const tabBarReserve = getFloatingTabBarReserve(tabBarBottomInset);
   const useSolidTabBar = shouldUseSolidAndroidTabBar();
+  const freezeInactiveTabs = shouldUseScreenFreeze();
 
   const baseTabBarStyle = useMemo(
     () =>
@@ -75,21 +80,38 @@ export default function TabsLayout() {
     [tabBarBottomInset, colors, isDark, mode, tabBar, metrics.radius.full],
   );
 
+  const tabBarButton = useMemo(
+    () => (props: BottomTabBarButtonProps) => (
+      <Pressable {...props} {...getAndroidInstantPressableProps()} />
+    ),
+    [],
+  );
+
+  const lazyPlaceholder = useMemo(
+    () => () => (
+      <View style={[styles.bootPlaceholder, { backgroundColor: colors.background }]} />
+    ),
+    [colors.background],
+  );
+
+  const tabBarBackground = useMemo(
+    () =>
+      useSolidTabBar
+        ? undefined
+        : () => <TabBarBackgroundView isDark={isDark} mode={mode} />,
+    [useSolidTabBar, isDark, mode],
+  );
+
   const screenOptions = useMemo(
     () => ({
       headerShown: false as const,
-      freezeOnBlur: false,
+      // iOS: pasif sekmeleri dondur — JS/GPU yükü düşer. Android: dokunma gecikmesi riski.
+      freezeOnBlur: freezeInactiveTabs,
+      // Kaydırma animasyonu TabSwipeShell'de; native tab geçişi ekstra takılma yapmasın.
+      animation: 'none' as const,
       tabBarStyle: baseTabBarStyle,
-      ...(useSolidTabBar
-        ? {}
-        : {
-            tabBarBackground: () => (
-              <TabBarBackgroundView isDark={isDark} mode={mode} />
-            ),
-          }),
-      tabBarButton: (props: BottomTabBarButtonProps) => (
-        <Pressable {...props} {...getAndroidInstantPressableProps()} />
-      ),
+      ...(tabBarBackground ? { tabBarBackground } : {}),
+      tabBarButton,
       tabBarActiveTintColor: tabBar.activeTint,
       tabBarInactiveTintColor: tabBar.inactiveTint,
       ...getAndroidTabScreenOptions(),
@@ -103,8 +125,31 @@ export default function TabsLayout() {
         paddingVertical: 0,
       },
       sceneStyle: { backgroundColor: colors.background },
+      // null yerine tema rengi — lazy sekme ilk açılışında boş flash azalır.
+      lazyPlaceholder,
     }),
-    [baseTabBarStyle, tabBar.activeTint, tabBar.inactiveTint, colors.background, isDark, mode, useSolidTabBar],
+    [
+      baseTabBarStyle,
+      tabBar.activeTint,
+      tabBar.inactiveTint,
+      colors.background,
+      freezeInactiveTabs,
+      tabBarButton,
+      tabBarBackground,
+      lazyPlaceholder,
+    ],
+  );
+
+  const messagesScreenOptions = useMemo(
+    () => ({
+      title: 'Mesaj',
+      href: showMessagesTab ? undefined : null,
+      tabBarBadge: messagesTabBadge,
+      tabBarBadgeStyle: { backgroundColor: colors.danger },
+      tabBarIcon: ({ color }: { color: string }) => <MessagesTabIcon color={color} />,
+      ...getAndroidTabLazyOption('messages'),
+    }),
+    [showMessagesTab, messagesTabBadge, colors.danger],
   );
 
   if (guard.status === 'loading' && !isAndroid()) {
@@ -128,10 +173,9 @@ export default function TabsLayout() {
       safeAreaInsets={{ bottom: tabBarReserve, top: 0, left: 0, right: 0 }}
       screenOptions={screenOptions}
       screenLayout={({ children, route, navigation }) => {
+        // Tablet: jest yok. Android telefon: yalnızca Akış (menü + sekme kaydırma).
+        // iOS: tüm ana sekmeler — en solda sağa çekince hamburger menü.
         if (isAndroidTablet() || (isAndroid() && route.name !== 'index')) {
-          return children;
-        }
-        if (!shouldUseFeedTabSwipeShell() && route.name === 'index') {
           return children;
         }
         return (
@@ -165,7 +209,7 @@ export default function TabsLayout() {
           title: 'Harita',
           href: null,
           tabBarIcon: ({ color }) => <Ionicons name="map-outline" size={TAB_ICON_SIZE} color={color} />,
-          sceneStyle: { backgroundColor: 'transparent' },
+          sceneStyle: { backgroundColor: colors.background },
           ...getAndroidTabLazyOption('map'),
         }}
       />
@@ -179,6 +223,17 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="rides"
+        options={{
+          title: 'Yolculuk',
+          href: showRidesTab ? undefined : null,
+          tabBarIcon: ({ color }) => (
+            <Ionicons name="car-sport-outline" size={TAB_ICON_SIZE} color={color} />
+          ),
+          ...getAndroidTabLazyOption('rides'),
+        }}
+      />
+      <Tabs.Screen
         name="create"
         listeners={{
           tabPress: (event) => {
@@ -188,22 +243,14 @@ export default function TabsLayout() {
         options={{
           title: 'Paylaş',
           href: showComposeTab ? undefined : null,
+          tabBarLabel: () => null,
           tabBarButton: (props) => <CreateTabButton {...props} />,
           ...getAndroidTabLazyOption('create'),
         }}
       />
       <Tabs.Screen
         name="messages"
-        options={{
-          title: 'Mesaj',
-          href: showMessagesTab ? undefined : null,
-          tabBarBadge: messagesTabBadge,
-          tabBarBadgeStyle: { backgroundColor: colors.danger },
-          tabBarIcon: ({ color }) => (
-            <Ionicons name="chatbubbles-outline" size={TAB_ICON_SIZE} color={color} />
-          ),
-          ...getAndroidTabLazyOption('messages'),
-        }}
+        options={messagesScreenOptions}
       />
       <Tabs.Screen
         name="services"

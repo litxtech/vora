@@ -1,6 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { openChat as navigateToChat } from '../services/messagingNavigation';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import {
+  openChat as navigateToChat,
+  prefetchChatNavigation,
+} from '../services/messagingNavigation';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { CallAvatar } from '@/features/calls/components/CallAvatar';
@@ -32,6 +35,7 @@ export function ContactsList() {
   }, [user?.id]);
 
   const openChat = async (contact: CallParticipant) => {
+    prefetchChatNavigation();
     if (!(await requireAuth('Mesaj'))) return;
     setBusyId(contact.id);
     const { conversationId, error } = await getOrCreateDirectConversation(contact.id);
@@ -40,7 +44,7 @@ export function ContactsList() {
       Alert.alert('Sohbet başlatılamadı', error);
       return;
     }
-    if (conversationId) navigateToChat(conversationId);
+    if (conversationId) navigateToChat(conversationId, { userId: user?.id });
   };
 
   const handleCall = async (contact: CallParticipant, callType: 'audio' | 'video') => {
@@ -93,7 +97,7 @@ export function ContactsList() {
   const keyExtractor = useCallback((item: CallParticipant) => item.id, []);
 
   if (loading) {
-    return <ActivityIndicator color={colors.primary} style={styles.loader} />;
+    return <View style={styles.loader} />;
   }
 
   return (

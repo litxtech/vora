@@ -231,17 +231,26 @@ export function AdminUserDetailScreen() {
 
   const handleActivate = () => {
     if (!id) return;
+    const restoringDeleted = String(user?.account_status) === 'deleted';
     Alert.alert(
-      'Hesabı aktif et',
-      'Hesap yeniden etkinleştirilecek ve kullanıcıya "Hesabınız aktif edildi" bildirimi gönderilecek.',
+      restoringDeleted ? 'Silinen hesabı aç' : 'Hesabı aktif et',
+      restoringDeleted
+        ? 'Hesap yeniden açılacak. Profil verileri silinmiş olabilir; kullanıcı giriş yapıp profilini güncelleyebilir. Bildirim gönderilir.'
+        : 'Hesap yeniden etkinleştirilecek ve kullanıcıya "Hesabınız aktif edildi" bildirimi gönderilecek.',
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
-          text: 'Aktif Et',
+          text: restoringDeleted ? 'Hesabı Aç' : 'Aktif Et',
           onPress: async () => {
             const { error } = await adminReactivateAccount(id);
             if (error) Alert.alert('Hata', error);
-            else load(true);
+            else {
+              Alert.alert(
+                'Tamam',
+                restoringDeleted ? 'Silinen hesap yeniden açıldı.' : 'Hesap aktifleştirildi.',
+              );
+              load(true);
+            }
           },
         },
       ],
@@ -822,8 +831,20 @@ export function AdminUserDetailScreen() {
           <GlassCard style={styles.card}>
             <Text variant="label">Hesap durumu</Text>
             <View style={styles.actions}>
-              <AdminActionChip compact label="Askıya al" icon="pause-circle-outline" tone="warning" onPress={handleSuspend} />
-              <AdminActionChip compact label="Aktifleştir" icon="checkmark-circle-outline" tone="success" onPress={handleActivate} />
+              {isDeleted ? (
+                <AdminActionChip
+                  compact
+                  label="Silinen hesabı aç"
+                  icon="refresh-outline"
+                  tone="success"
+                  onPress={handleActivate}
+                />
+              ) : (
+                <>
+                  <AdminActionChip compact label="Askıya al" icon="pause-circle-outline" tone="warning" onPress={handleSuspend} />
+                  <AdminActionChip compact label="Aktifleştir" icon="checkmark-circle-outline" tone="success" onPress={handleActivate} />
+                </>
+              )}
               <AdminActionChip
                 compact
                 label="Oturum kapat"
@@ -831,7 +852,7 @@ export function AdminUserDetailScreen() {
                 tone="warning"
                 onPress={handleRevokeAllSessions}
               />
-              {user.account_status !== 'deleted' ? (
+              {!isDeleted ? (
                 <AdminActionChip
                   compact
                   label="Hesabı sil"

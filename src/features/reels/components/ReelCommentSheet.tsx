@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSharedValue } from 'react-native-reanimated';
 import { KeyboardSheetLayout, KeyboardPersistButton } from '@/components/keyboard';
 import { SocialText } from '@/features/feed/components/SocialText';
+import { RichText, CommentLinkAttachment, ComposerLinkPreview } from '@/features/richtext';
 import { Text } from '@/components/ui/Text';
 import { UserBadge } from '@/features/feed/components/UserBadge';
 import { ReportSheet } from '@/features/feed/components/ReportSheet';
@@ -244,6 +245,8 @@ export function ReelCommentSheet({
         </View>
       ) : null}
 
+      <ComposerLinkPreview content={text} />
+
       <View style={[styles.inputRow, { borderColor: colors.border }]}>
         <TextInput
           style={[styles.input, { color: colors.text }]}
@@ -374,7 +377,17 @@ const CommentRow = memo(function CommentRow({
           linkToProfile
         />
       </View>
-      <SocialText content={comment.content} style={styles.commentText} />
+      <RichText
+        content={comment.content}
+        style={styles.commentText}
+        linkColor={colors.accent}
+        enableMentions
+        enableHashtags
+        mentionColor={colors.primary}
+        hashtagColor={colors.accent}
+        onBeforeOpen={onAuthorNavigate}
+      />
+      <CommentLinkAttachment content={comment.content} onBeforeOpen={onAuthorNavigate} />
       <View style={styles.commentActions}>
         <Pressable
           onPress={() => onLike(comment)}

@@ -10,6 +10,7 @@ import { SettingsRow } from '@/features/settings/components/SettingsRow';
 import { spacing } from '@/constants/theme';
 import { INSIGHTS_ACCENT } from '@/features/insights/constants';
 import { SCREEN_TIME_ACCENT } from '@/features/screen-time/constants';
+import { STORY_ARCHIVE_ACCENT } from '@/features/stories/constants';
 import { subscriptionsCommerceEnabled } from '@/features/profile/services/premiumAccess';
 import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
 import { SETTINGS_FEATURE } from '@/features/settings/featureFlags';
@@ -18,6 +19,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { useAccountSwitch } from '@/features/account-switch/providers/AccountSwitchProvider';
 import { AccountLinkStatusCard } from '@/features/account-switch/components/AccountLinkStatusCard';
 import { ACCOUNT_SWITCH_ROUTES } from '@/features/account-switch/constants';
+import { ShakeToComposeSettingsRow } from '@/features/compose/components/ShakeToComposeSettingsRow';
 import { cycleThemePreference, themePreferenceLabel, useTheme } from '@/providers/ThemeProvider';
 
 export function SettingsScreen() {
@@ -207,6 +209,19 @@ export function SettingsScreen() {
               accent={SCREEN_TIME_ACCENT}
               onPress={() => router.push('/settings/screen-time' as Href)}
             />
+          </FeatureGate>
+          {!isGuest ? (
+            <FeatureGate featureId={SETTINGS_FEATURE.storyArchive}>
+              <SettingsRow
+                icon="archive-outline"
+                label="Hikâye Arşivi"
+                accent={STORY_ARCHIVE_ACCENT}
+                onPress={() => router.push('/settings/story-archive' as Href)}
+              />
+            </FeatureGate>
+          ) : null}
+          <FeatureGate featureId="compose">
+            <ShakeToComposeSettingsRow />
           </FeatureGate>
         </GlassCard>
 

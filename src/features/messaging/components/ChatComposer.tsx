@@ -1,5 +1,6 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Platform,
   Pressable,
   ScrollView,
@@ -20,10 +21,29 @@ import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
 import { useTheme } from '@/providers/ThemeProvider';
 import { CHAT_COMPOSER_MIN_HEIGHT } from '../constants';
 import { useChatTheme } from '../hooks/useChatTheme';
+import { useLocalVideoThumbnail } from '../hooks/useLocalVideoThumbnail';
 import type { ChatMessage, ComposerAttachmentPreview } from '../types';
 import { displayParticipantName, formatReplyPreview } from '../utils';
 import { formatVoiceDuration } from '../utils/voiceMessage';
 import { ChatVoiceMessage } from './ChatVoiceMessage';
+
+function ComposerVideoThumb({ uri }: { uri: string }) {
+  const thumb = useLocalVideoThumbnail(uri);
+  return (
+    <>
+      {thumb ? (
+        <Image source={{ uri: thumb }} style={styles.attachmentThumb} contentFit="cover" />
+      ) : (
+        <View style={[styles.attachmentThumb, styles.attachmentVideoPlaceholder]}>
+          <ActivityIndicator color="#fff" size="small" />
+        </View>
+      )}
+      <View style={styles.attachmentVideoBadge}>
+        <Ionicons name="play" size={14} color="#fff" />
+      </View>
+    </>
+  );
+}
 
 export type ChatComposerHandle = {
   setDraft: (text: string) => void;
@@ -36,6 +56,7 @@ type ChatComposerProps = {
   onSend: (content: string) => void;
   onTyping?: () => void;
   onAttach?: () => void;
+  onCaps?: () => void;
   onPickImage?: () => void;
   onQuickCapture?: () => void;
   onQuickCaptureModeToggle?: () => void;
@@ -69,6 +90,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
     onSend,
     onTyping,
     onAttach,
+    onCaps,
     onPickImage,
     onQuickCapture,
     onQuickCaptureModeToggle,
@@ -215,10 +237,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               style={({ pressed }) => [{ opacity: pressed ? 0.92 : 1 }]}
               accessibilityLabel="Video önizlemesini aç"
             >
-              <Image source={{ uri: attachmentPreview.uri }} style={styles.attachmentThumb} contentFit="cover" />
-              <View style={styles.attachmentVideoBadge}>
-                <Ionicons name="play" size={14} color="#fff" />
-              </View>
+              <ComposerVideoThumb uri={attachmentPreview.uri} />
             </Pressable>
             <Pressable
               onPress={onClearAttachment}
@@ -382,6 +401,17 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               scrollEnabled
               underlineColorAndroid="transparent"
             />
+            {onCaps && !editingMessage ? (
+              <Pressable
+                hitSlop={8}
+                {...getAndroidInstantPressableProps()}
+                {...keyboardPersistPress(onCaps)}
+                style={({ pressed }) => [styles.inlineCapsBtn, { opacity: pressed ? 0.55 : 1 }]}
+                accessibilityLabel="Caps gönder"
+              >
+                <Ionicons name="happy-outline" size={21} color={colors.primary} />
+              </Pressable>
+            ) : null}
           </View>
 
           {showSendButton ? (
@@ -421,7 +451,7 @@ export const ChatComposer = forwardRef<ChatComposerHandle, ChatComposerProps>(fu
               {...getAndroidInstantPressableProps()}
               {...keyboardPersistPress(onQuickCapture)}
               style={({ pressed }) => [styles.trailingIconBtn, { opacity: pressed ? 0.55 : 1 }]}
-              accessibilityLabel="Kamera — anlık fotoğraf çek"
+              accessibilityLabel="Kamera — fotoğraf veya video çek"
             >
               <Ionicons
                 name={quickCaptureEphemeral ? 'timer-outline' : 'camera-outline'}
@@ -564,18 +594,29 @@ const styles = StyleSheet.create({
   },
   inputWrap: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
     borderRadius: 24,
     minHeight: 42,
     maxHeight: 120,
     justifyContent: 'center',
   },
   input: {
+    flex: 1,
     fontSize: 16,
     lineHeight: 20,
-    paddingHorizontal: 14,
+    paddingLeft: 14,
+    paddingRight: 8,
     paddingTop: Platform.OS === 'ios' ? 10 : 8,
     paddingBottom: Platform.OS === 'ios' ? 10 : 8,
     maxHeight: 120,
+  },
+  inlineCapsBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
   sendBtn: {
     width: 42,
@@ -608,6 +649,11 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: radius.md,
+  },
+  attachmentVideoPlaceholder: {
+    backgroundColor: '#121820',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   attachmentVideoBadge: {
     ...StyleSheet.absoluteFillObject,

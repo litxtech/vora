@@ -77,6 +77,8 @@ export const NOTIFICATION_EVENT_TYPES = [
   { id: 'izdivac_invite_accepted', label: 'İzdivaç Davet Kabul', prefKey: 'system', category: 'system' },
   { id: 'security_alert', label: 'Güvenlik Uyarısı', prefKey: 'emergency', category: 'emergency' },
   { id: 'content_warning', label: 'İçerik Uyarısı', prefKey: 'system', category: 'system' },
+  { id: 'content_removed', label: 'İçerik Kaldırıldı', prefKey: 'system', category: 'system' },
+  { id: 'content_restored', label: 'İçerik Geri Yüklendi', prefKey: 'system', category: 'system' },
   { id: 'system', label: 'Sistem Duyurusu', prefKey: 'system', category: 'system' },
   { id: 'marketplace_order_paid', label: 'Pazar Ödemesi', prefKey: 'marketplace', category: 'jobs' },
   { id: 'marketplace_ship_request', label: 'Pazar Teslim', prefKey: 'marketplace', category: 'jobs' },
@@ -122,6 +124,8 @@ export const NOTIFICATION_EVENT_TYPES = [
   { id: 'hotel_payout_due', label: 'Otel Ödeme Planı', prefKey: 'hotels', category: 'jobs' },
   { id: 'hotel_payout_completed', label: 'Otel Kazanç Yatırıldı', prefKey: 'hotels', category: 'jobs' },
   { id: 'hotel_marketing_campaign', label: 'Otel Kampanyası', prefKey: 'hotels', category: 'businesses' },
+  { id: 'city_election_started', label: 'Şehir Seçimi Başladı', prefKey: 'system', category: 'social' },
+  { id: 'city_election_completed', label: 'Şehir Seçimi Tamamlandı', prefKey: 'system', category: 'social' },
 ] as const;
 
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number]['id'];
@@ -199,6 +203,8 @@ export const EVENT_CATEGORY_MAP: Record<string, NotificationCategoryId> = {
   incident_update: 'emergency',
   security_alert: 'emergency',
   content_warning: 'system',
+  content_removed: 'system',
+  content_restored: 'system',
   trust_score_change: 'system',
   friend_invite_referral: 'system',
   trust_milestone_80: 'system',
@@ -256,6 +262,18 @@ export const EVENT_CATEGORY_MAP: Record<string, NotificationCategoryId> = {
   hotel_payout_due: 'jobs',
   hotel_payout_completed: 'jobs',
   hotel_marketing_campaign: 'businesses',
+  city_election_started: 'social',
+  city_election_completed: 'social',
+  city_diplomacy_request_received: 'social',
+  leader_call_received: 'social',
+  joint_room_proposed: 'social',
+  joint_room_started: 'social',
+  city_leader_call: 'social',
+  council_session_started: 'social',
+  city_proposal_qualified: 'social',
+  decision_approved: 'social',
+  agreement_proposed: 'social',
+  agreement_approved: 'social',
 };
 
 export function emergencyLabel(type?: string): string {

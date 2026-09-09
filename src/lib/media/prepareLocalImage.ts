@@ -1,5 +1,7 @@
 import { cacheDirectory, copyAsync, getInfoAsync } from 'expo-file-system/legacy';
-import { normalizeLocalFileUri } from '@/lib/files/readLocalFile';
+import { getLocalFileSize, normalizeLocalFileUri } from '@/lib/files/readLocalFile';
+
+const PREPARED_IMAGE_MARKER = '/upload-image-';
 
 function extFromUri(uri: string, mimeType?: string | null): string {
   if (mimeType) {
@@ -18,6 +20,10 @@ export async function prepareLocalImageUri(uri: string, mimeType?: string | null
   if (!uri) throw new Error('Fotoğraf dosyası bulunamadı.');
 
   const normalized = normalizeLocalFileUri(uri);
+  if (isPreparedLocalImageUri(normalized)) {
+    return normalized;
+  }
+
   const info = await getInfoAsync(normalized);
   if (!info.exists) {
     throw new Error('Fotoğraf dosyası okunamadı.');
@@ -32,4 +38,12 @@ export async function prepareLocalImageUri(uri: string, mimeType?: string | null
   }
 
   return dest;
+}
+
+/** prepareLocalImageUri ile önbelleğe alınmış görsel — tekrar kopyalamayı önler. */
+export function isPreparedLocalImageUri(uri: string | null | undefined): boolean {
+  if (!uri?.trim()) return false;
+  const normalized = normalizeLocalFileUri(uri.trim());
+  if (!normalized.includes(PREPARED_IMAGE_MARKER)) return false;
+  return getLocalFileSize(normalized) > 0;
 }

@@ -9,10 +9,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MediaEditorBottomSheet } from '@/features/compose/components/MediaEditorBottomSheet';
+import { useMediaEditorSheetTopInset } from '@/features/compose/hooks/useMediaEditorSheetTopInset';
 import { Text } from '@/components/ui/Text';
 import {
   DEFAULT_STORY_LINK_COLOR,
-  STORY_LINK_COLOR_PRESETS,
   STORY_MAX_LINKS,
 } from '@/features/stories/constants/storyLinkColors';
 import {
@@ -20,7 +20,7 @@ import {
   type StoryLinkManifest,
 } from '@/features/stories/utils/storyLinks';
 import { normalizeLinkInput } from '@/lib/linking/openUrl';
-import { spacing } from '@/constants/theme';
+import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type StoryLinkSheetProps = {
@@ -42,9 +42,9 @@ function labelFromUrl(url: string): string {
 
 export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkSheetProps) {
   const { colors } = useTheme();
+  const sheetTopInset = useMediaEditorSheetTopInset();
   const [url, setUrl] = useState('');
   const [label, setLabel] = useState('');
-  const [selectedColor, setSelectedColor] = useState(DEFAULT_STORY_LINK_COLOR);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,7 +52,6 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
       setUrl('');
       setLabel('');
       setEditingId(null);
-      setSelectedColor(DEFAULT_STORY_LINK_COLOR);
     }
   }, [visible]);
 
@@ -60,17 +59,12 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
     setEditingId(link.id);
     setUrl(link.url);
     setLabel(link.label);
-    const preset =
-      STORY_LINK_COLOR_PRESETS.find((p) => p.backgroundColor === link.backgroundColor) ??
-      DEFAULT_STORY_LINK_COLOR;
-    setSelectedColor(preset);
   }, []);
 
   const resetForm = useCallback(() => {
     setEditingId(null);
     setUrl('');
     setLabel('');
-    setSelectedColor(DEFAULT_STORY_LINK_COLOR);
   }, []);
 
   const handleSave = useCallback(() => {
@@ -90,8 +84,8 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
                 ...link,
                 url: normalized,
                 label: nextLabel,
-                backgroundColor: selectedColor.backgroundColor,
-                textColor: selectedColor.textColor,
+                backgroundColor: DEFAULT_STORY_LINK_COLOR.backgroundColor,
+                textColor: DEFAULT_STORY_LINK_COLOR.textColor,
               }
             : link,
         ),
@@ -111,12 +105,12 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
         url: normalized,
         label: nextLabel,
         index: links.length,
-        backgroundColor: selectedColor.backgroundColor,
-        textColor: selectedColor.textColor,
+        backgroundColor: DEFAULT_STORY_LINK_COLOR.backgroundColor,
+        textColor: DEFAULT_STORY_LINK_COLOR.textColor,
       }),
     ]);
     resetForm();
-  }, [editingId, label, links, onChange, resetForm, selectedColor, url]);
+  }, [editingId, label, links, onChange, resetForm, url]);
 
   const handleRemove = useCallback(
     (id: string) => {
@@ -127,7 +121,18 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
   );
 
   return (
-    <MediaEditorBottomSheet visible={visible} onClose={onClose} title="Web bağlantısı">
+    <MediaEditorBottomSheet
+      visible={visible}
+      onClose={onClose}
+      title="Web bağlantısı"
+      topInset={sheetTopInset}
+    >
+      <ScrollView
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        nestedScrollEnabled
+      >
       {links.length > 0 ? (
         <View style={styles.list}>
           {links.map((link) => {
@@ -135,20 +140,30 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
             return (
               <Pressable
                 key={link.id}
-                style={[styles.linkRow, active && { borderColor: colors.primary }]}
+                style={[
+                  styles.linkRow,
+                  {
+                    borderColor: active ? colors.primary : colors.border,
+                    backgroundColor: colors.surface,
+                  },
+                ]}
                 onPress={() => startEdit(link)}
               >
                 <View style={[styles.colorDot, { backgroundColor: link.backgroundColor }]} />
                 <View style={styles.linkMeta}>
-                  <Text variant="caption" style={styles.linkLabel} numberOfLines={1}>
+                  <Text variant="caption" style={[styles.linkLabel, { color: colors.text }]} numberOfLines={1}>
                     {link.label}
                   </Text>
-                  <Text variant="caption" style={styles.linkUrl} numberOfLines={1}>
+                  <Text
+                    variant="caption"
+                    style={[styles.linkUrl, { color: colors.textSecondary }]}
+                    numberOfLines={1}
+                  >
                     {link.url}
                   </Text>
                 </View>
                 <Pressable onPress={() => handleRemove(link.id)} hitSlop={8}>
-                  <Ionicons name="trash-outline" size={18} color="rgba(255,255,255,0.65)" />
+                  <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
                 </Pressable>
               </Pressable>
             );
@@ -157,22 +172,22 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
       ) : null}
 
       {links.length === 1 ? (
-        <View style={styles.hintBox}>
+        <View style={[styles.hintBox, { backgroundColor: `${colors.primary}12` }]}>
           <Ionicons name="chevron-up" size={16} color={colors.primary} />
-          <Text variant="caption" style={styles.hintText}>
+          <Text variant="caption" style={[styles.hintText, { color: colors.textSecondary }]}>
             Tek link yukarı kaydırma ile açılır
           </Text>
         </View>
       ) : links.length > 1 ? (
-        <View style={styles.hintBox}>
+        <View style={[styles.hintBox, { backgroundColor: `${colors.primary}12` }]}>
           <Ionicons name="move-outline" size={16} color={colors.primary} />
-          <Text variant="caption" style={styles.hintText}>
+          <Text variant="caption" style={[styles.hintText, { color: colors.textSecondary }]}>
             Butonları önizlemede istediğiniz yere sürükleyin
           </Text>
         </View>
       ) : null}
 
-      <Text variant="caption" style={styles.fieldLabel}>
+      <Text variant="caption" style={[styles.fieldLabel, { color: colors.textSecondary }]}>
         {editingId ? 'Linki düzenle' : 'Yeni link'}
       </Text>
       <TextInput
@@ -182,44 +197,41 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
           if (!label.trim()) setLabel(labelFromUrl(text));
         }}
         placeholder="https://ornek.com"
-        placeholderTextColor="rgba(255,255,255,0.35)"
+        placeholderTextColor={colors.textMuted}
         autoCapitalize="none"
         autoCorrect={false}
         keyboardType="url"
-        style={styles.input}
+        style={[
+          styles.input,
+          {
+            color: colors.text,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+          },
+        ]}
       />
       <TextInput
         value={label}
         onChangeText={setLabel}
         placeholder="Buton metni"
-        placeholderTextColor="rgba(255,255,255,0.35)"
-        style={styles.input}
+        placeholderTextColor={colors.textMuted}
+        style={[
+          styles.input,
+          {
+            color: colors.text,
+            borderColor: colors.border,
+            backgroundColor: colors.surface,
+          },
+        ]}
       />
-
-      <Text variant="caption" style={styles.fieldLabel}>
-        Renk
-      </Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.colorRow}>
-        {STORY_LINK_COLOR_PRESETS.map((preset) => {
-          const active = selectedColor.id === preset.id;
-          return (
-            <Pressable
-              key={preset.id}
-              onPress={() => setSelectedColor(preset)}
-              style={[
-                styles.colorSwatch,
-                { backgroundColor: preset.backgroundColor },
-                active && { borderColor: colors.primary, borderWidth: 2 },
-              ]}
-            />
-          );
-        })}
-      </ScrollView>
 
       <View style={styles.actions}>
         {editingId ? (
-          <Pressable style={styles.secondaryBtn} onPress={resetForm}>
-            <Text variant="caption" style={styles.secondaryText}>
+          <Pressable
+            style={[styles.secondaryBtn, { borderColor: colors.border }]}
+            onPress={resetForm}
+          >
+            <Text variant="caption" style={{ color: colors.textSecondary, fontWeight: '600' }}>
               İptal
             </Text>
           </Pressable>
@@ -233,11 +245,15 @@ export function StoryLinkSheet({ visible, links, onChange, onClose }: StoryLinkS
           </Text>
         </Pressable>
       </View>
+      </ScrollView>
     </MediaEditorBottomSheet>
   );
 }
 
 const styles = StyleSheet.create({
+  scrollContent: {
+    paddingBottom: spacing.md,
+  },
   list: {
     gap: spacing.sm,
     marginBottom: spacing.md,
@@ -247,28 +263,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderRadius: 12,
+    borderRadius: radius.md,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.12)',
-    backgroundColor: 'rgba(255,255,255,0.06)',
   },
   colorDot: {
     width: 14,
     height: 14,
     borderRadius: 7,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
+    borderColor: 'rgba(0,0,0,0.12)',
   },
   linkMeta: {
     flex: 1,
     gap: 2,
   },
   linkLabel: {
-    color: '#fff',
     fontWeight: '700',
   },
   linkUrl: {
-    color: 'rgba(255,255,255,0.55)',
     fontSize: 11,
   },
   hintBox: {
@@ -277,37 +289,22 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
     marginBottom: spacing.md,
     padding: spacing.sm,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: radius.md,
   },
   hintText: {
-    color: 'rgba(255,255,255,0.8)',
     flex: 1,
   },
   fieldLabel: {
-    color: 'rgba(255,255,255,0.65)',
     marginBottom: spacing.xs,
     fontWeight: '600',
   },
   input: {
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 12,
+    borderRadius: radius.md,
     paddingHorizontal: spacing.md,
     paddingVertical: 12,
-    color: '#fff',
     marginBottom: spacing.sm,
-  },
-  colorRow: {
-    gap: spacing.sm,
-    paddingBottom: spacing.md,
-  },
-  colorSwatch: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
+    fontSize: 16,
   },
   actions: {
     flexDirection: 'row',
@@ -318,7 +315,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     paddingVertical: 12,
-    borderRadius: 999,
+    borderRadius: radius.full,
   },
   primaryText: {
     color: '#fff',
@@ -328,12 +325,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 999,
+    borderRadius: radius.full,
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-  },
-  secondaryText: {
-    color: 'rgba(255,255,255,0.75)',
-    fontWeight: '600',
   },
 });

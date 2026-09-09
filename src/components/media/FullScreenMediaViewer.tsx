@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
-  LayoutChangeEvent,
   Modal,
   Pressable,
   StyleSheet,
@@ -19,9 +18,12 @@ import { useVideoPlayer, VideoView } from 'expo-video';
 import { Text } from '@/components/ui/Text';
 import { PostMusicSoundToggle } from '@/features/music/components/PostMusicSoundToggle';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
-import { isProcessingVideoUrl } from '@/lib/media/videoProcessingUrl';
+import { isProcessingVideoUrl, parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
 import { isPlayableVideoUrl, toVideoSource } from '@/lib/media/videoSource';
+import { resolvePlaybackUrl } from '@/lib/media/resolvePlaybackUrl';
 import { VideoProcessingOverlay } from '@/components/media/VideoProcessingOverlay';
+import { useLocalVideoPreviewStore } from '@/features/feed/store/localVideoPreviewStore';
+import { normalizeLocalFileUri } from '@/lib/files/readLocalFile';
 import { radius, spacing } from '@/constants/theme';
 
 type FullScreenMediaViewerProps = {
@@ -33,29 +35,64 @@ type FullScreenMediaViewerProps = {
   onMusicSoundToggle?: () => void;
 };
 
-function ViewerVideo({ uri, isActive }: { uri: string; isActive: boolean }) {
-  if (isProcessingVideoUrl(uri) || !isPlayableVideoUrl(uri)) {
+function resolveViewerUri(uri: string): string | null {
+  const videoId = parseProcessingVideoId(uri);
+  if (videoId) {
+    const local = useLocalVideoPreviewStore.getState().byVideoId[videoId]?.uri;
+    if (local && isPlayableVideoUrl(local)) return normalizeLocalFileUri(local);
+    return null;
+  }
+  const playback = resolvePlaybackUrl(uri);
+  if (playback && isPlayableVideoUrl(playback)) return playback;
+  if (isPlayableVideoUrl(uri)) return uri;
+  return null;
+}
+
+function formatVideoTime(seconds: number): string {
+  const safeSeconds = Number.isFinite(seconds) ? Math.max(0, Math.floor(seconds)) : 0;
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainder = safeSeconds % 60;
+  return `${minutes}:${remainder.toString().padStart(2, '0')}`;
+}
+
+function ViewerVideo({
+  uri,
+  isActive,
+  onClose,
+}: {
+  uri: string;
+  isActive: boolean;
+  onClose: () => void;
+}) {
+  const resolved = resolveViewerUri(uri);
+  if (!resolved) {
     return <VideoProcessingOverlay style={styles.media} />;
   }
 
-  return <ViewerVideoPlayer uri={uri} isActive={isActive} />;
+  return <ViewerVideoPlayer uri={resolved} isActive={isActive} onClose={onClose} />;
 }
 
-function ViewerVideoPlayer({ uri, isActive }: { uri: string; isActive: boolean }) {
-  const [layout, setLayout] = useState({ width: 0, height: 0 });
+function ViewerVideoPlayer({
+  uri,
+  isActive,
+  onClose,
+}: {
+  uri: string;
+  isActive: boolean;
+  onClose: () => void;
+}) {
+  const { width, height } = useWindowDimensions();
   const source = useMemo(() => toVideoSource(uri)!, [uri]);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const longPressRef = useRef(false);
 
   const player = useVideoPlayer(source, (p) => {
-    p.loop = false;
+    p.loop = true;
     p.muted = false;
+    p.volume = 1;
+    p.timeUpdateEventInterval = 0.25;
   });
-
-  const onLayout = (event: LayoutChangeEvent) => {
-    const { width, height } = event.nativeEvent.layout;
-    if (width > 0 && height > 0) {
-      setLayout({ width, height });
-    }
-  };
 
   useEffect(() => {
     void setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false });
@@ -73,39 +110,97 @@ function ViewerVideoPlayer({ uri, isActive }: { uri: string; isActive: boolean }
 
     const statusSub = player.addListener('statusChange', ({ status }) => {
       if (status === 'readyToPlay' && isActive) {
+        setDuration(player.duration);
         start();
       }
+    });
+    const sourceSub = player.addListener('sourceLoad', ({ duration: loadedDuration }) => {
+      setDuration(loadedDuration);
+    });
+    const timeSub = player.addListener('timeUpdate', ({ currentTime: nextTime }) => {
+      setCurrentTime(nextTime);
     });
 
     if (!isActive) {
       try {
         player.pause();
+        player.playbackRate = 1;
       } catch {
         // released
       }
-    } else if (player.status === 'readyToPlay') {
+    } else {
+      setDuration(player.duration);
       start();
     }
 
     return () => {
       statusSub.remove();
+      sourceSub.remove();
+      timeSub.remove();
+      try {
+        player.playbackRate = 1;
+      } catch {
+        // released
+      }
     };
   }, [isActive, player, uri]);
 
+  const startFastForward = () => {
+    longPressRef.current = true;
+    try {
+      player.playbackRate = 2;
+      player.play();
+    } catch {
+      // released
+    }
+  };
+
+  const stopFastForward = () => {
+    try {
+      player.playbackRate = 1;
+    } catch {
+      // released
+    }
+    setTimeout(() => {
+      longPressRef.current = false;
+    }, 0);
+  };
+
+  const handleVideoPress = () => {
+    if (longPressRef.current) return;
+    onClose();
+  };
+
+  // Modal içinde onLayout gecikebilir / 0 kalabilir — pencere boyutunu hemen kullan.
   return (
-    <View style={styles.mediaWrap} onLayout={onLayout}>
-      {layout.width > 0 ? (
-        <VideoView
-          player={player}
-          style={{ width: layout.width, height: layout.height }}
-          contentFit="contain"
-          nativeControls
-          allowsPictureInPicture
-        />
-      ) : null}
+    <View style={[styles.mediaWrap, { width, height }]} collapsable={false}>
+      <VideoView
+        player={player}
+        style={StyleSheet.absoluteFill}
+        contentFit="contain"
+        nativeControls
+        allowsPictureInPicture
+      />
+      <Pressable
+        style={styles.videoGestureZone}
+        onPress={handleVideoPress}
+        onLongPress={startFastForward}
+        onPressOut={stopFastForward}
+        delayLongPress={300}
+        accessibilityRole="button"
+        accessibilityLabel="Videoyu kapat; basılı tutarak iki kat hızlandır"
+      />
+      <View style={styles.videoTimeBadge} pointerEvents="none">
+        <Text variant="caption" style={styles.videoTimeText}>
+          {formatVideoTime(currentTime)} / {formatVideoTime(duration)}
+        </Text>
+      </View>
     </View>
   );
 }
+
+/** Açılış dokunuşunun modal içine sızıp hemen kapatmasını engeller (öz. Android animasyonsuz Modal). */
+const DISMISS_ARM_MS = 320;
 
 export function FullScreenMediaViewer({
   urls,
@@ -119,6 +214,19 @@ export function FullScreenMediaViewer({
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(startIndex);
   const listRef = useRef<FlatList<string>>(null);
+  const dismissArmedRef = useRef(false);
+
+  useEffect(() => {
+    if (!visible) {
+      dismissArmedRef.current = false;
+      return;
+    }
+    dismissArmedRef.current = false;
+    const timer = setTimeout(() => {
+      dismissArmedRef.current = true;
+    }, DISMISS_ARM_MS);
+    return () => clearTimeout(timer);
+  }, [visible]);
 
   useEffect(() => {
     if (!visible) return;
@@ -139,6 +247,11 @@ export function FullScreenMediaViewer({
     },
     [],
   );
+
+  const handleBackdropPress = useCallback(() => {
+    if (!dismissArmedRef.current) return;
+    onClose();
+  }, [onClose]);
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
 
@@ -171,12 +284,16 @@ export function FullScreenMediaViewer({
           renderItem={({ item, index: itemIndex }) => (
             <Pressable
               style={[styles.page, { width, height }]}
-              onPress={onClose}
+              onPress={isVideoUrl(item) ? undefined : handleBackdropPress}
               accessibilityLabel="Kapat"
             >
               {isVideoUrl(item) ? (
                 <View style={styles.mediaWrap} pointerEvents="box-none">
-                  <ViewerVideo uri={item} isActive={visible && itemIndex === safeIndex} />
+                  <ViewerVideo
+                    uri={item}
+                    isActive={visible && itemIndex === safeIndex}
+                    onClose={handleBackdropPress}
+                  />
                 </View>
               ) : (
                 <Image
@@ -239,6 +356,29 @@ const styles = StyleSheet.create({
   media: {
     width: '100%',
     height: '100%',
+  },
+  videoGestureZone: {
+    position: 'absolute',
+    top: 64,
+    left: 0,
+    right: 0,
+    bottom: 88,
+    zIndex: 3,
+  },
+  videoTimeBadge: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: 96,
+    zIndex: 4,
+    borderRadius: radius.full,
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 5,
+  },
+  videoTimeText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
   },
   counter: {
     position: 'absolute',

@@ -111,6 +111,7 @@ export function MediaEditorMusicPanel({
       >
         <MusicEditorPanel
           mode={isPhoto ? 'photo' : 'video'}
+          showPreviewAction={isPhoto}
           track={track}
           clipDurationSec={resolvedClipDuration}
           musicStartSec={music.musicStartSec}
@@ -118,7 +119,16 @@ export function MediaEditorMusicPanel({
           musicVolume={music.musicVolume}
           originalAudioVolume={isPhoto ? 0 : music.originalAudioVolume}
           isPlaying={previewPlaying}
-          onStartChange={(sec) => onUpdate({ musicStartSec: sec })}
+          onStartChange={(sec) =>
+            onUpdate(
+              isPhoto
+                ? { musicStartSec: sec }
+                : {
+                    musicStartSec: sec,
+                    musicEndSec: Math.min(sec + resolvedClipDuration, track.durationSec),
+                  },
+            )
+          }
           onRangeChange={(startSec, endSec) => onUpdate({ musicStartSec: startSec, musicEndSec: endSec })}
           onMusicVolumeChange={(volume) => onUpdate({ musicVolume: volume })}
           onOriginalVolumeChange={(volume) => onUpdate({ originalAudioVolume: volume })}

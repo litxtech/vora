@@ -9,7 +9,7 @@ import type { FeaturedProfileCard } from '@/features/profile/services/featuredPr
 import { radius, spacing } from '@/constants/theme';
 import { shouldUsePlainScreenBackground } from '@/lib/device/androidPerfProfile';
 import { themedAlphaHex } from '@/lib/ui/gradientColors';
-import { prefetchProfileBundle } from '@/features/profile/services/profileSessionLoad';
+import { prefetchProfileVisit } from '@/features/profile/services/profileSessionLoad';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -90,7 +90,7 @@ export function FeaturedProfilesCarousel({
           return (
             <Pressable
               key={profile.id}
-              onPressIn={() => prefetchProfileBundle(profile.id, user?.id ?? null)}
+              onPressIn={() => prefetchProfileVisit(profile.id, user?.id ?? null)}
               onPress={() => router.push(`/user/${profile.id}` as never)}
               style={styles.cardOuter}
             >

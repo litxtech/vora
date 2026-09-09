@@ -26,6 +26,7 @@ export default function AdminLayout() {
       <Stack.Screen name="vora-ai" />
       <Stack.Screen name="messaging" />
       <Stack.Screen name="content" />
+      <Stack.Screen name="removed-content" />
       <Stack.Screen name="businesses" />
       <Stack.Screen name="business-shops" />
       <Stack.Screen name="hotels" />

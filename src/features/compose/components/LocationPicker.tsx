@@ -10,8 +10,13 @@ import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { resolvePlaceCoordinates } from '@/features/map/services/resolvePlaceCoordinates';
-import { locationSourceLabel, searchMapLocations } from '@/features/map/services/locationSearch';
+import {
+  fetchNearbyMapLocations,
+  locationSourceLabel,
+  searchMapLocations,
+} from '@/features/map/services/locationSearch';
 import type { MapCoordinate, MapLocationSource, MapLocationSuggestion } from '@/features/map/types';
+import type { LocationGeoScope } from '@/features/map/utils/geoBounds';
 import type { RegionId } from '@/constants/regions';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -34,6 +39,9 @@ type LocationPickerProps = {
   onChange: (location: SelectedLocation | null) => void;
   onTextChange?: (text: string) => void;
   compact?: boolean;
+  /** Gönderi / story: dünya geneli. Harita / otel: bölge. */
+  scope?: LocationGeoScope;
+  hideSelectedChip?: boolean;
 };
 
 const SOURCE_ICONS: Record<MapLocationSource, keyof typeof Ionicons.glyphMap> = {
@@ -41,6 +49,8 @@ const SOURCE_ICONS: Record<MapLocationSource, keyof typeof Ionicons.glyphMap> = 
   event: 'calendar-outline',
   tourism: 'compass-outline',
   marketplace: 'pricetag-outline',
+  vora_needs: 'hand-left-outline',
+  vora_hizmetler: 'construct-outline',
   district: 'map-outline',
   post_label: 'pin-outline',
   place: 'location-outline',
@@ -65,6 +75,7 @@ async function resolveSelectedCoordinates(
   selected: SelectedLocation,
   regionId: RegionId,
   proximity: MapCoordinate | null,
+  scope: LocationGeoScope,
 ): Promise<SelectedLocation> {
   const coords = await resolvePlaceCoordinates({
     label: selected.label,
@@ -77,6 +88,7 @@ async function resolveSelectedCoordinates(
     sessionToken: selected.sessionToken,
     source: selected.source,
     proximity: proximity ?? undefined,
+    scope,
   });
 
   if (!coords) {
@@ -94,16 +106,26 @@ async function resolveSelectedCoordinates(
   };
 }
 
-export function LocationPicker({ regionId, value, onChange, onTextChange, compact }: LocationPickerProps) {
+export function LocationPicker({
+  regionId,
+  value,
+  onChange,
+  onTextChange,
+  compact,
+  scope = 'region',
+  hideSelectedChip = false,
+}: LocationPickerProps) {
   const { colors } = useTheme();
   const [query, setQuery] = useState(value?.label ?? '');
   const [suggestions, setSuggestions] = useState<MapLocationSuggestion[]>([]);
+  const [nearby, setNearby] = useState<MapLocationSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [focused, setFocused] = useState(false);
   const [proximity, setProximity] = useState<MapCoordinate | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sessionTokenRef = useRef(`ks-${Date.now()}`);
+  const nearbyLoadedRef = useRef(false);
 
   useEffect(() => {
     setQuery(value?.label ?? '');
@@ -113,7 +135,9 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
     void (async () => {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== 'granted') return;
-      const position = await Location.getLastKnownPositionAsync();
+      const position =
+        (await Location.getLastKnownPositionAsync()) ??
+        (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).catch(() => null));
       if (position) {
         setProximity({
           latitude: position.coords.latitude,
@@ -122,6 +146,22 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
       }
     })();
   }, []);
+
+  const loadNearby = useCallback(async (coords: MapCoordinate) => {
+    if (nearbyLoadedRef.current) return;
+    nearbyLoadedRef.current = true;
+    try {
+      const results = await fetchNearbyMapLocations(coords);
+      setNearby(results);
+    } catch {
+      setNearby([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!proximity || scope !== 'world') return;
+    void loadNearby(proximity);
+  }, [proximity, scope, loadNearby]);
 
   const runSearch = useCallback(
     async (text: string) => {
@@ -136,6 +176,7 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
         const results = await searchMapLocations(text, regionId, {
           proximity: proximity ?? undefined,
           sessionToken: sessionTokenRef.current,
+          scope,
         });
         setSuggestions(results);
       } catch {
@@ -144,7 +185,7 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
         setLoading(false);
       }
     },
-    [regionId, proximity],
+    [regionId, proximity, scope],
   );
 
   const handleChangeText = (text: string) => {
@@ -170,7 +211,7 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
     setResolvingId(suggestion.id);
     try {
       let selected = toSelected(suggestion);
-      selected = await resolveSelectedCoordinates(selected, regionId, proximity);
+      selected = await resolveSelectedCoordinates(selected, regionId, proximity, scope);
       onChange(selected);
       setQuery(selected.label);
       setSuggestions([]);
@@ -197,10 +238,13 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
         longitude: position.coords.longitude,
         source: 'gps',
       };
-      setProximity({
+      const nextProximity = {
         latitude: position.coords.latitude,
         longitude: position.coords.longitude,
-      });
+      };
+      setProximity(nextProximity);
+      nearbyLoadedRef.current = false;
+      if (scope === 'world') void loadNearby(nextProximity);
       onChange(selected);
       setQuery(selected.label);
       setSuggestions([]);
@@ -216,7 +260,15 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
     setSuggestions([]);
   };
 
-  const showSuggestions = focused && (loading || suggestions.length > 0 || query.trim().length >= 2);
+  const queryActive = query.trim().length >= 2;
+  const listItems = queryActive ? suggestions : nearby;
+  const showSuggestions =
+    focused && (loading || listItems.length > 0 || queryActive || (scope === 'world' && !!proximity));
+
+  const placeholder =
+    scope === 'world'
+      ? 'Dünya genelinde konum ara…'
+      : 'Esnaf, market, otel, işletme veya adres ara…';
 
   return (
     <View style={styles.wrap}>
@@ -225,13 +277,14 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
         <Ionicons name="location-outline" size={18} color={colors.primary} />
         <TextInput
           style={[styles.input, { color: colors.text }]}
-          placeholder="Esnaf, market, otel, işletme veya adres ara…"
+          placeholder={placeholder}
           placeholderTextColor={colors.textMuted}
           value={query}
           onChangeText={handleChangeText}
           onFocus={() => {
             setFocused(true);
             if (query.trim().length >= 2) void runSearch(query);
+            else if (proximity && scope === 'world') void loadNearby(proximity);
           }}
           onBlur={() => {
             setTimeout(() => setFocused(false), 180);
@@ -247,22 +300,28 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
 
       {showSuggestions ? (
         <View style={[styles.suggestions, { borderColor: colors.border, backgroundColor: colors.surfaceElevated }]}>
-          {loading && suggestions.length === 0 ? (
+          {loading && listItems.length === 0 ? (
             <View style={styles.suggestionLoading}>
               <ActivityIndicator size="small" color={colors.primary} />
               <Text variant="caption" secondary>
-                Konumlar aranıyor…
+                {queryActive ? 'Konumlar aranıyor…' : 'Yakın konumlar yükleniyor…'}
               </Text>
             </View>
           ) : null}
 
-          {!loading && suggestions.length === 0 && query.trim().length >= 2 ? (
+          {!loading && listItems.length === 0 && queryActive ? (
             <Text variant="caption" secondary style={styles.emptyHint}>
               Sonuç bulunamadı. GPS kullanın veya farklı bir arama deneyin.
             </Text>
           ) : null}
 
-          {suggestions.map((item) => (
+          {!loading && !queryActive && listItems.length > 0 ? (
+            <Text variant="caption" secondary style={styles.sectionHint}>
+              Yakınındaki öneriler
+            </Text>
+          ) : null}
+
+          {listItems.map((item) => (
             <Pressable
               key={item.id}
               style={({ pressed }) => [
@@ -273,7 +332,7 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
               disabled={resolvingId !== null}
             >
               <View style={[styles.suggestionIcon, { backgroundColor: `${colors.primary}14` }]}>
-                <Ionicons name={SOURCE_ICONS[item.source]} size={16} color={colors.primary} />
+                <Ionicons name={SOURCE_ICONS[item.source] ?? 'location-outline'} size={16} color={colors.primary} />
               </View>
               <View style={styles.suggestionText}>
                 <Text variant="caption" numberOfLines={1}>
@@ -295,10 +354,10 @@ export function LocationPicker({ regionId, value, onChange, onTextChange, compac
         </View>
       ) : null}
 
-      {value ? (
+      {value && !hideSelectedChip ? (
         <View style={[styles.selectedChip, { backgroundColor: `${colors.accent}12`, borderColor: colors.accent }]}>
           <Ionicons
-            name={value.source ? SOURCE_ICONS[value.source] : 'pin-outline'}
+            name={value.source ? SOURCE_ICONS[value.source] ?? 'pin-outline' : 'pin-outline'}
             size={14}
             color={colors.accent}
           />
@@ -379,6 +438,12 @@ const styles = StyleSheet.create({
   },
   emptyHint: {
     padding: spacing.md,
+  },
+  sectionHint: {
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+    fontWeight: '600',
   },
   suggestionRow: {
     flexDirection: 'row',

@@ -100,7 +100,7 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
     label: 'Hikayeler',
     group: 'social',
     kind: 'root',
-    routes: ['/stories', '/stories/publish'],
+    routes: ['/stories', '/stories/publish', '/settings/story-archive'],
   },
   {
     id: 'user-sounds',
@@ -116,6 +116,18 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
     kind: 'root',
     routes: ['/proximity-matches'],
   },
+  {
+    id: 'city-system',
+    label: 'Şehir Sistemi',
+    group: 'social',
+    kind: 'root',
+    routes: ['/city'],
+    hint: 'Şehir topluluğu, liderlik ve diplomasi ana ekranı',
+  },
+  { id: 'city-elections', label: 'Şehir Seçimleri', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city', '/election'], hint: 'Liderlik seçimleri' },
+  { id: 'city-diplomacy', label: 'Şehir Diplomasisi', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city'], hint: 'Liderler arası diplomasi' },
+  { id: 'city-council', label: 'Şehir Meclisi', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city', '/council'], hint: 'Meclis ve halk gündemi' },
+  { id: 'city-voice-rooms', label: 'Şehir Sesli Odaları', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/room'], hint: 'Ortak şehir sesli odaları' },
 ];
 
 const ACTION_FEATURES: AppFeatureDef[] = [

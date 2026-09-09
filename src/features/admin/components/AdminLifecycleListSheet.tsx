@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   BackHandler,
   FlatList,
   Modal,
@@ -21,6 +22,7 @@ import {
   type LifecycleStatFilter,
 } from '@/features/account-lifecycle/constants';
 import {
+  adminReactivateAccount,
   fetchAccountLifecycleRequests,
   fetchLifecycleAccountsByStat,
 } from '@/features/account-lifecycle/services/adminLifecycle';
@@ -29,6 +31,7 @@ import type {
   AccountLifecycleRequestRow,
 } from '@/features/account-lifecycle/types';
 import { formatDeletedAccountDate } from '@/features/account-deletion/utils';
+import { AdminActionChip } from '@/features/admin/components/shared/AdminActionChip';
 import { ACCOUNT_STATUS_LABELS } from '@/features/moderation/constants';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -47,8 +50,11 @@ export function AdminLifecycleListSheet({ visible, filter, onClose }: AdminLifec
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [busyId, setBusyId] = useState<string | null>(null);
+
   const isRequestList = filter === 'pending_requests';
   const title = filter ? LIFECYCLE_STAT_FILTER_LABELS[filter] : '';
+  const showRestoreActions = filter === 'deleted_accounts' || filter === 'deleted_this_month';
 
   const load = useCallback(async () => {
     if (!filter) return;
@@ -92,6 +98,30 @@ export function AdminLifecycleListSheet({ visible, filter, onClose }: AdminLifec
     router.push(`/admin/users/${userId}`);
   };
 
+  const handleRestoreDeleted = (item: AccountLifecycleAccountRow) => {
+    Alert.alert(
+      'Silinen hesabı aç',
+      `@${item.username} yeniden açılsın mı? Profil verileri silinmiş olabilir.`,
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Hesabı Aç',
+          onPress: async () => {
+            setBusyId(item.id);
+            const { error } = await adminReactivateAccount(item.id);
+            setBusyId(null);
+            if (error) {
+              Alert.alert('Hata', error);
+              return;
+            }
+            Alert.alert('Tamam', 'Silinen hesap yeniden açıldı.');
+            void load();
+          },
+        },
+      ],
+    );
+  };
+
   const renderAccount = ({ item }: { item: AccountLifecycleAccountRow }) => {
     const statusLabel = ACCOUNT_STATUS_LABELS[item.account_status] ?? item.account_status;
     const statusColor =
@@ -106,39 +136,48 @@ export function AdminLifecycleListSheet({ visible, filter, onClose }: AdminLifec
               : colors.textMuted;
 
     return (
-      <Pressable onPress={() => handleAccountPress(item.id)}>
-        <GlassCard style={styles.row}>
-          <View style={styles.rowTop}>
-            <View style={[styles.avatar, { backgroundColor: `${colors.primary}18` }]}>
-              <Ionicons name="person-outline" size={16} color={colors.primary} />
-            </View>
-            <View style={styles.rowCopy}>
-              <Text variant="label">@{item.username}</Text>
-              {item.full_name ? (
-                <Text secondary variant="caption" numberOfLines={1}>
-                  {item.full_name}
-                </Text>
-              ) : null}
-            </View>
-            <View style={[styles.statusBadge, { backgroundColor: `${statusColor}18`, borderColor: `${statusColor}44` }]}>
-              <Text variant="caption" style={{ color: statusColor, fontWeight: '700', fontSize: 11 }}>
-                {statusLabel}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+      <GlassCard style={styles.row}>
+        <Pressable onPress={() => handleAccountPress(item.id)} style={styles.rowTop}>
+          <View style={[styles.avatar, { backgroundColor: `${colors.primary}18` }]}>
+            <Ionicons name="person-outline" size={16} color={colors.primary} />
           </View>
-          <View style={styles.metaRow}>
-            <Text variant="caption" muted>
-              Açılış: {formatDeletedAccountDate(item.created_at)}
-            </Text>
-            {item.deleted_at ? (
-              <Text variant="caption" muted>
-                Silindi: {formatDeletedAccountDate(item.deleted_at)}
+          <View style={styles.rowCopy}>
+            <Text variant="label">@{item.username}</Text>
+            {item.full_name ? (
+              <Text secondary variant="caption" numberOfLines={1}>
+                {item.full_name}
               </Text>
             ) : null}
           </View>
-        </GlassCard>
-      </Pressable>
+          <View style={[styles.statusBadge, { backgroundColor: `${statusColor}18`, borderColor: `${statusColor}44` }]}>
+            <Text variant="caption" style={{ color: statusColor, fontWeight: '700', fontSize: 11 }}>
+              {statusLabel}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={14} color={colors.textMuted} />
+        </Pressable>
+        <View style={styles.metaRow}>
+          <Text variant="caption" muted>
+            Açılış: {formatDeletedAccountDate(item.created_at)}
+          </Text>
+          {item.deleted_at ? (
+            <Text variant="caption" muted>
+              Silindi: {formatDeletedAccountDate(item.deleted_at)}
+            </Text>
+          ) : null}
+        </View>
+        {showRestoreActions && item.account_status === 'deleted' ? (
+          <AdminActionChip
+            compact
+            label="Silinen hesabı aç"
+            icon="refresh-outline"
+            tone="success"
+            loading={busyId === item.id}
+            disabled={busyId !== null}
+            onPress={() => handleRestoreDeleted(item)}
+          />
+        ) : null}
+      </GlassCard>
     );
   };
 

@@ -15,6 +15,8 @@ import { CENTER_GROUPS, centersByGroup } from '@/constants/centers';
 import { useCenterEntryVisible } from '@/features/centers/hooks/useCenterEntryVisible';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { CENTERS_HUB_FEATURE } from '@/features/centers/featureFlags';
+import { CITY_SYSTEM_FEATURE } from '@/features/city-governance/featureFlags';
+import { cityPath } from '@/features/city-governance/constants';
 import { WALLET_ROUTE } from '@/features/wallet/constants';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
@@ -58,6 +60,8 @@ export function CentersDrawerMenu({
   const showHubSearch = useFeatureVisible(CENTERS_HUB_FEATURE.search);
   const showHubSupport = useFeatureVisible(CENTERS_HUB_FEATURE.support);
   const showCentersHub = useFeatureVisible('centers-hub');
+  const showCitySystem = useFeatureVisible(CITY_SYSTEM_FEATURE.id);
+  const citySlug = (feedRegionId ?? (profile?.region_id as RegionId | undefined) ?? 'trabzon') as RegionId;
   const [search, setSearch] = useState('');
   const query = normalizeSearch(search);
 
@@ -74,7 +78,7 @@ export function CentersDrawerMenu({
 
   const showEmptySearch = query.length > 0 && sections.length === 0;
   const showSupport = isCenterVisible('support-center') && showHubSupport;
-  const showFeedShortcuts = showLeaderboard || showLivePulse || showMap;
+  const showFeedShortcuts = showLeaderboard || showLivePulse || showMap || showCitySystem;
 
   const handleSupportPress = () => {
     router.push('/support-center' as Href);
@@ -166,6 +170,15 @@ export function CentersDrawerMenu({
               label="Harita"
               href="/(tabs)/map"
               onNavigate={onCenterNavigate}
+            />
+          ) : null}
+          {showCitySystem ? (
+            <CentersDrawerLinkRow
+              icon="business-outline"
+              label="Şehir"
+              href={cityPath(citySlug)}
+              onNavigate={onCenterNavigate}
+              accentIcon
             />
           ) : null}
           {showCentersHub && sections.length > 0 ? (

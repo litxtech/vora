@@ -1,5 +1,1 @@
-import { PostDetailScreen } from '@/features/feed/components/PostDetailScreen';
-
-export default function PostDetailPage() {
-  return <PostDetailScreen />;
-}
+export { PostDetailRouteScreen as default } from '@/lib/navigation/lazyRouteScreens';

@@ -54,7 +54,7 @@ const EMPTY_DRAFT: AdStudioDraft = {
   audienceScope: 'general',
   targetRegionIds: [],
   targetDistrict: '',
-  targetAgeMin: null,
+  targetAgeMin: 18,
   targetAgeMax: null,
   targetInterests: [],
   endsAt: null,
@@ -72,7 +72,7 @@ export function AdStudioScreen() {
   const [step, setStep] = useState<AdStudioStepId>('placement');
   const [draft, setDraft] = useState<AdStudioDraft>(EMPTY_DRAFT);
   const [budgetText, setBudgetText] = useState('100');
-  const [ageMinText, setAgeMinText] = useState('');
+  const [ageMinText, setAgeMinText] = useState('18');
   const [ageMaxText, setAgeMaxText] = useState('');
   const [wallet, setWallet] = useState<AdWalletSummary | null>(null);
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -394,7 +394,7 @@ export function AdStudioScreen() {
                 />
                 <View style={styles.ageRow}>
                   <View style={styles.ageField}>
-                    <Input label="Min yaş" value={ageMinText} onChangeText={setAgeMinText} keyboardType="numeric" />
+                    <Input label="Min yaş (18+)" value={ageMinText} onChangeText={setAgeMinText} keyboardType="numeric" />
                   </View>
                   <View style={styles.ageField}>
                     <Input label="Max yaş" value={ageMaxText} onChangeText={setAgeMaxText} keyboardType="numeric" />

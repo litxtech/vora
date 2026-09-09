@@ -95,7 +95,7 @@ const EXTRA_KEYWORDS: Record<string, string[]> = {
 };
 
 const SECTION_SUGGESTED_IDS: Record<string, readonly string[]> = {
-  Yönetim: ['reports', 'users', 'content', 'messaging', 'ai-moderation', 'support'],
+  Yönetim: ['reports', 'users', 'content', 'removed-content', 'messaging', 'ai-moderation', 'support'],
   Programlar: ['reporter', 'communities', 'discovery-curation', 'ads', 'feed-curation'],
   İletişim: ['broadcasts', 'emergency', 'push-automation', 'sounds'],
   Analiz: ['statistics', 'map', 'revenue', 'logs'],

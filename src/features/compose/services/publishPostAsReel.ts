@@ -12,6 +12,8 @@ export async function publishPostAsReel(input: {
   caption: string;
   postId?: string | null;
   music?: MusicSelection | null;
+  /** Paylaşımda "Ses" kapatıldı — videonun orijinal sesi hiç çalmaz */
+  originalAudioMuted?: boolean;
   editManifest?: PublishedEditManifest | null;
 }): Promise<{ reelId: string | null; error: string | null }> {
   const { data, error } = await supabase
@@ -24,6 +26,7 @@ export async function publishPostAsReel(input: {
       caption: input.caption.trim() || null,
       status: 'published',
       ...audioSelectionToDbFields(input.music ?? null),
+      ...(input.originalAudioMuted ? { original_audio_volume: 0 } : {}),
       ...editManifestToDbField(input.editManifest ?? null),
     })
     .select('id')

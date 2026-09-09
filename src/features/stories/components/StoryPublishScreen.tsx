@@ -2,8 +2,10 @@ import { useCallback, useEffect, useRef, useState, useMemo } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  LayoutChangeEvent,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type View as RNView,
 } from 'react-native';
@@ -11,7 +13,6 @@ import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
-import { MediaEditorLocationSheet } from '@/features/compose/components/MediaEditorLocationSheet';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
 import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
 import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
@@ -19,33 +20,36 @@ import { useMusicSelectionStore } from '@/features/music/store/musicSelectionSto
 import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { musicSelectionToManifest } from '@/features/stories/utils/storyManifest';
+import {
+  DEFAULT_STORY_LOCATION_POSITION,
+  type StoryLocationPosition,
+} from '@/features/stories/utils/storyLocation';
 import { PHOTO_POST_MUSIC_DURATION_SEC } from '@/features/music/constants';
 import { StoryPublishCanvas } from '@/features/stories/components/StoryPublishCanvas';
-import { useStoryPublishText } from '@/features/stories/hooks/useStoryPublishText';
+import { StoryFramingEditor } from '@/features/stories/components/StoryFramingEditor';
+import { StoryPublishMedia } from '@/features/stories/components/StoryPublishMedia';
+import { useStoryCardMetrics } from '@/features/stories/hooks/useStoryCardMetrics';
 import { StoryLinkEditor } from '@/features/stories/components/StoryLinkEditor';
 import { StoryLinkSheet } from '@/features/stories/components/StoryLinkSheet';
+import { StoryLocationEditor } from '@/features/stories/components/StoryLocationEditor';
+import { StoryLocationSheet } from '@/features/stories/components/StoryLocationSheet';
 import { StoryMusicBadge } from '@/features/stories/components/StoryMusicBadge';
 import { StoryMusicInfoSheet } from '@/features/stories/components/StoryMusicInfoSheet';
-import { StoryMusicTrimCard } from '@/features/stories/components/StoryMusicTrimCard';
+import { StoryMusicStrip } from '@/features/stories/components/StoryMusicStrip';
 import {
   StoryPublishRail,
   type StoryPublishToolId,
 } from '@/features/stories/components/StoryPublishRail';
-import { MediaEditorTrashZone } from '@/features/compose/components/MediaEditorTrashZone';
-import {
-  createOverlayDragDeleteHandlers,
-} from '@/features/compose/store/mediaEditorDragStore';
-import { StoryTextPanel } from '@/features/stories/components/StoryTextPanel';
-import { serializeStoryTextOverlays } from '@/features/stories/utils/storyTextOverlays';
 import { bakeStoryFramedImage } from '@/features/stories/services/bakeStoryFramedImage';
 import { STORY_MAX_VIDEO_SEC } from '@/features/stories/constants';
 import { routeStoryVideo, normalizeIncomingDurationSec } from '@/features/stories/services/routeStoryVideo';
 import { useStoryUploadStore } from '@/features/stories/store/storyUploadStore';
 import { documentDirectory } from 'expo-file-system/legacy';
 import { getLocalFileSize, normalizeLocalFileUri } from '@/lib/files/readLocalFile';
-import { prepareLocalImageUri } from '@/lib/media/prepareLocalImage';
+import { prepareLocalImageUri, isPreparedLocalImageUri } from '@/lib/media/prepareLocalImage';
 import { stabilizeStoryVideoUri } from '@/features/stories/services/stabilizeStoryMedia';
-import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
+import { prepareStoryVideoPreviewUri } from '@/features/stories/services/prepareStoryVideoPreview';
+import { probeVideoDuration } from '@/features/vora-studio';
 import { useStoryPublishStore } from '@/features/stories/store/storyPublishStore';
 import {
   DEFAULT_STORY_FRAMING,
@@ -58,7 +62,9 @@ import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import { useFeedStore } from '@/features/feed/store/feedStore';
 import { resolveMarketplaceRegionId } from '@/constants/regions';
 import { spacing } from '@/constants/theme';
-import { STORY_CARD_HORIZONTAL_INSET } from '@/features/stories/constants';
+import { STORY_PUBLISH_BOTTOM_CHROME_HEIGHT, STORY_PUBLISH_HORIZONTAL_INSET, STORY_PUBLISH_RAIL_TOP_EXTRA } from '@/features/stories/constants';
+import { fitStoryCardInStage } from '@/features/stories/utils/storyCardChrome';
+import type { StoryCardMetrics } from '@/features/stories/hooks/useStoryCardMetrics';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
 
@@ -92,6 +98,7 @@ export function StoryPublishScreen({
   const normalizedDurationSec = normalizeIncomingDurationSec(durationSec);
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const { user, profile } = useAuth();
   const regionId = useFeedStore((s) => s.regionId);
   const startStoryPublish = useStoryUploadStore((s) => s.startPublish);
@@ -105,10 +112,13 @@ export function StoryPublishScreen({
 
   const [publishing, setPublishing] = useState(false);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
-  const [publishUri, setPublishUri] = useState(mediaUri);
+  const [publishUri, setPublishUri] = useState(() => normalizeLocalFileUri(mediaUri));
   const [stabilizing, setStabilizing] = useState(false);
-  const [mediaSize, setMediaSize] = useState<{ width: number; height: number } | null>(() =>
-    resolveInitialMediaSize(mediaWidth, mediaHeight),
+  const [mediaSize, setMediaSize] = useState<{ width: number; height: number }>(() =>
+    resolveInitialMediaSize(mediaWidth, mediaHeight) ?? {
+      width: DEFAULT_STORY_FRAMING.mediaWidth,
+      height: DEFAULT_STORY_FRAMING.mediaHeight,
+    },
   );
   const [framing, setFraming] = useState<StoryFraming>(() => {
     const size = resolveInitialMediaSize(mediaWidth, mediaHeight);
@@ -119,30 +129,24 @@ export function StoryPublishScreen({
   const [activeTool, setActiveTool] = useState<StoryPublishToolId | null>(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [musicEditing, setMusicEditing] = useState(false);
+  const [musicConfirmed, setMusicConfirmed] = useState(false);
   const [musicInfoOpen, setMusicInfoOpen] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<SelectedLocation | null>(null);
+  const [locationPosition, setLocationPosition] = useState<StoryLocationPosition>(
+    DEFAULT_STORY_LOCATION_POSITION,
+  );
   const [links, setLinks] = useState<StoryLinkManifest[]>([]);
-  const [textTransformActive, setTextTransformActive] = useState(false);
-  const [hideOverlaysForCapture, setHideOverlaysForCapture] = useState(false);
+  const [hideChromeForCapture, setHideChromeForCapture] = useState(false);
+  const [imagePreviewReady, setImagePreviewReady] = useState(mediaType !== 'image');
+  const [imagePreviewError, setImagePreviewError] = useState(false);
+  const [headerHeight, setHeaderHeight] = useState(44);
 
   const {
-    textOverlays,
-    textEditing,
-    selectedTextId,
-    activeOverlay,
-    hasText,
-    setTextEditing,
-    setSelectedTextId,
-    updateOverlay: updateTextOverlay,
-    startEditing: startTextEditing,
-    finishEditing: finishTextEditing,
-    addOverlay: addTextOverlay,
-    removeOverlay: removeTextOverlay,
-    selectOverlay: handleSelectTextOverlay,
-    commitForPublish,
-    closeEditing: closeTextEditing,
-  } = useStoryPublishText();
+    metrics: cardMetrics,
+    isReady: cardMetricsReady,
+    onStageLayout,
+  } = useStoryCardMetrics();
 
   const storyVideoClipSec =
     normalizedDurationSec != null && normalizedDurationSec > 0
@@ -154,7 +158,8 @@ export function StoryPublishScreen({
       ? storyVideoClipSec
       : Math.min(PHOTO_POST_MUSIC_DURATION_SEC, musicSelection?.durationSec ?? PHOTO_POST_MUSIC_DURATION_SEC);
 
-  const musicPlaysOnStory = Boolean(musicSelection) && !musicOpen;
+  const musicPlaysOnStory =
+    Boolean(musicSelection) && !musicOpen && (musicEditing || musicConfirmed);
 
   const videoOriginalMuted = musicSelection
     ? musicSelection.originalAudioVolume <= 0.001
@@ -181,8 +186,12 @@ export function StoryPublishScreen({
   }, []);
 
   useEffect(() => {
-    setPublishUri(mediaUri);
-  }, [mediaUri]);
+    if (mediaType !== 'video') return;
+    setPublishUri((current) => {
+      const next = normalizeLocalFileUri(mediaUri);
+      return next || current;
+    });
+  }, [mediaType, mediaUri]);
 
   useEffect(() => {
     if (mediaType !== 'video' || trimmedInStudio) return;
@@ -226,8 +235,8 @@ export function StoryPublishScreen({
       try {
         const size =
           mediaType === 'image'
-            ? await probeImageSize(publishUri)
-            : await probeVideoSize(publishUri);
+            ? await probeImageSize(normalizeLocalFileUri(publishUri))
+            : await probeVideoSize(normalizeLocalFileUri(publishUri));
         if (cancelled) return;
         setMediaSize(size);
         setFraming((prev) => {
@@ -238,7 +247,7 @@ export function StoryPublishScreen({
             backgroundColor: prev.backgroundColor,
           });
         });
-      } catch {
+      } catch (err) {
         if (!cancelled) {
           setMediaSize(fallback);
           setFraming((prev) =>
@@ -260,13 +269,11 @@ export function StoryPublishScreen({
     if (mediaType !== 'image') return;
 
     const normalized = normalizeLocalFileUri(mediaUri);
-    const alreadyStable =
-      Boolean(documentDirectory) &&
-      normalized.includes(documentDirectory!) &&
-      getLocalFileSize(normalized) > 0;
 
-    if (alreadyStable) {
-      setPublishUri(normalized);
+    if (isPreparedLocalImageUri(normalized)) {
+      if (publishUri !== normalized) {
+        setPublishUri(normalized);
+      }
       return;
     }
 
@@ -275,18 +282,26 @@ export function StoryPublishScreen({
     void prepareLocalImageUri(mediaUri)
       .then((stable) => {
         if (cancelled) return;
-        setPublishUri(stable);
-        useStoryPublishStore.getState().setDraft({
-          mediaUri: stable,
-          mediaType: 'image',
-          durationSec: normalizedDurationSec,
-          mediaWidth,
-          mediaHeight,
-          trimmedInStudio,
-        });
+        const normalizedStable = normalizeLocalFileUri(stable);
+        setPublishUri(normalizedStable);
+        const draft = useStoryPublishStore.getState().draft;
+        if (draft?.mediaUri !== stable) {
+          useStoryPublishStore.getState().setDraft({
+            mediaUri: stable,
+            mediaType: 'image',
+            durationSec: normalizedDurationSec,
+            mediaWidth,
+            mediaHeight,
+            trimmedInStudio,
+          });
+        }
       })
-      .catch(() => {
-        /* Galeri URI'si olduğu gibi kullanılır */
+      .catch((err) => {
+        if (cancelled) return;
+        Alert.alert(
+          'Fotoğraf hazırlanamadı',
+          err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
+        );
       });
 
     return () => {
@@ -297,59 +312,56 @@ export function StoryPublishScreen({
   useEffect(() => {
     if (mediaType !== 'video') return;
 
-    const normalized = normalizeLocalFileUri(mediaUri);
-    const alreadyStable =
-      Boolean(documentDirectory) &&
-      normalized.includes(documentDirectory!) &&
-      getLocalFileSize(normalized) > 0;
-
-    if (alreadyStable) {
-      setPublishUri(normalized);
-      return;
-    }
-
     let cancelled = false;
     setStabilizing(true);
 
-    void stabilizeStoryVideoUri(mediaUri)
-      .then((stable) => {
+    void (async () => {
+      try {
+        const previewUri = await prepareStoryVideoPreviewUri(mediaUri);
         if (cancelled) return;
-        if (stable !== mediaUri) {
-          setPublishUri(stable);
+        setPublishUri(previewUri);
+
+        const alreadyStable =
+          Boolean(documentDirectory) &&
+          previewUri.includes(documentDirectory!) &&
+          getLocalFileSize(previewUri) > 0;
+
+        if (alreadyStable) return;
+
+        const stableUri = await stabilizeStoryVideoUri(previewUri);
+        if (cancelled) return;
+
+        const normalizedStable = normalizeLocalFileUri(stableUri);
+        if (normalizedStable !== previewUri) {
+          setPublishUri(normalizedStable);
           useStoryPublishStore.getState().setDraft({
-            mediaUri: stable,
+            mediaUri: normalizedStable,
             mediaType: 'video',
             durationSec: normalizedDurationSec,
             trimmedInStudio,
           });
         }
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         Alert.alert(
           'Video hazırlanamadı',
           err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
         );
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setStabilizing(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
   }, [mediaType, mediaUri, normalizedDurationSec, trimmedInStudio]);
 
-  const handleFramingChange = useCallback((next: StoryFraming) => {
-    setFraming(next);
-  }, []);
-
   const closeOtherTools = useCallback(() => {
     setMusicOpen(false);
     setMusicEditing(false);
     setActiveTool(null);
-    closeTextEditing();
-  }, [closeTextEditing]);
+  }, []);
 
   const handleToggleVideoAudio = useCallback(() => {
     if (musicSelection) {
@@ -363,36 +375,8 @@ export function StoryPublishScreen({
     setVideoMuted((muted) => !muted);
   }, [musicSelection, setMusicSelection]);
 
-  const overlayDragDelete = useMemo(() => createOverlayDragDeleteHandlers(), []);
-
-  const handleDeleteTextOverlay = useCallback(
-    (id: string) => {
-      removeTextOverlay(id);
-    },
-    [removeTextOverlay],
-  );
-
   const handleToolPress = useCallback(
     (tool: StoryPublishToolId) => {
-      if (tool === 'text') {
-        setMusicOpen(false);
-        setMusicEditing(false);
-        if (activeTool === 'text' && textEditing) {
-          finishTextEditing();
-          return;
-        }
-        setActiveTool('text');
-        if (textOverlays.length === 0) {
-          startTextEditing();
-          return;
-        }
-        setTextEditing(true);
-        if (!selectedTextId && textOverlays.length > 0) {
-          setSelectedTextId(textOverlays[textOverlays.length - 1].id);
-        }
-        return;
-      }
-
       if (tool === 'audio') {
         handleToggleVideoAudio();
         return;
@@ -412,12 +396,6 @@ export function StoryPublishScreen({
 
       setMusicOpen(false);
       setMusicEditing(false);
-      if (textEditing) {
-        finishTextEditing();
-      } else {
-        setTextEditing(false);
-        setSelectedTextId(null);
-      }
 
       if (tool === 'link') {
         setActiveTool(activeTool === 'link' ? null : 'link');
@@ -428,7 +406,12 @@ export function StoryPublishScreen({
         setActiveTool(activeTool === 'location' ? null : 'location');
       }
     },
-    [activeTool, closeOtherTools, finishTextEditing, handleToggleVideoAudio, musicSelection, selectedTextId, setTextEditing, setSelectedTextId, startTextEditing, textEditing, textOverlays.length],
+    [
+      activeTool,
+      closeOtherTools,
+      handleToggleVideoAudio,
+      musicSelection,
+    ],
   );
 
   const handleMusicSelect = useCallback(
@@ -448,6 +431,7 @@ export function StoryPublishScreen({
         musicVolume: 0.85,
         originalAudioVolume: mediaType === 'video' ? 0 : 0,
       });
+      setMusicConfirmed(false);
       setMusicOpen(false);
       setMusicEditing(true);
       setActiveTool(null);
@@ -484,15 +468,10 @@ export function StoryPublishScreen({
   );
 
   const handleHeaderBack = useCallback(() => {
-    if (textEditing) {
-      finishTextEditing();
-      return;
-    }
-    if (selectedTextId) {
-      setSelectedTextId(null);
-      return;
-    }
     if (musicEditing) {
+      if (!musicConfirmed) {
+        setMusicSelection(null);
+      }
       setMusicEditing(false);
       return;
     }
@@ -509,21 +488,47 @@ export function StoryPublishScreen({
       return;
     }
     router.back();
-  }, [activeTool, finishTextEditing, musicEditing, musicInfoOpen, musicOpen, selectedTextId, textEditing]);
+  }, [
+    activeTool,
+    musicConfirmed,
+    musicEditing,
+    musicInfoOpen,
+    musicOpen,
+    setMusicSelection,
+  ]);
+
+  const previewTop = insets.top + headerHeight;
+  const previewBottom = STORY_PUBLISH_BOTTOM_CHROME_HEIGHT + insets.bottom;
+
+  const fallbackMetrics = useMemo((): StoryCardMetrics | null => {
+    const stageWidth = Math.max(0, windowWidth - STORY_PUBLISH_HORIZONTAL_INSET * 2);
+    const stageHeight = Math.max(0, windowHeight - previewTop - previewBottom);
+    if (stageWidth <= 8 || stageHeight <= 8) return null;
+    const card = fitStoryCardInStage(stageWidth, stageHeight);
+    if (card.width <= 8 || card.height <= 8) return null;
+    return {
+      stageWidth,
+      stageHeight,
+      cardWidth: card.width,
+      cardHeight: card.height,
+    };
+  }, [previewBottom, previewTop, windowHeight, windowWidth]);
+
+  const effectiveMetrics = cardMetrics ?? fallbackMetrics;
+  const canRenderStoryCard = Boolean(effectiveMetrics);
 
   const handlePublish = useCallback(async () => {
     if (!user?.id || publishing) return;
     if (!publishUri && !mediaUri) return;
-    if (mediaType === 'video' && (!mediaSize || stabilizing)) return;
+    if (mediaType === 'video' && stabilizing) return;
+    if (mediaType === 'image' && (!imagePreviewReady || imagePreviewError || !canRenderStoryCard)) {
+      Alert.alert('Görsel hazır değil', 'Fotoğraf yüklenene kadar kısa bir süre bekleyip tekrar deneyin.');
+      return;
+    }
     if (storyUploadBusy) {
       Alert.alert('Yükleniyor', 'Önceki hikâye yüklemesi bitene kadar bekleyin.');
       return;
     }
-
-    const publishedTextOverlays =
-      textEditing || textOverlays.some((item) => item.text.trim())
-        ? commitForPublish()
-        : (serializeStoryTextOverlays(textOverlays) ?? []);
 
     setPublishing(true);
     setUploadMessage(mediaType === 'image' ? 'Görsel hazırlanıyor…' : null);
@@ -533,7 +538,10 @@ export function StoryPublishScreen({
 
     if (mediaType === 'image') {
       try {
-        setHideOverlaysForCapture(true);
+        setHideChromeForCapture(true);
+        await new Promise<void>((resolve) => {
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+        });
         await new Promise<void>((resolve) => {
           requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
         });
@@ -541,20 +549,24 @@ export function StoryPublishScreen({
       } catch (err) {
         setPublishing(false);
         setUploadMessage(null);
-        setHideOverlaysForCapture(false);
+        setHideChromeForCapture(false);
         Alert.alert(
           'Görsel hazırlanamadı',
           err instanceof Error ? err.message : 'Lütfen tekrar deneyin.',
         );
         return;
       } finally {
-        setHideOverlaysForCapture(false);
+        setHideChromeForCapture(false);
       }
-    } else if (mediaSize) {
+    } else if (mediaType === 'video') {
+      const size = mediaSize ?? {
+        width: mediaWidth ?? DEFAULT_STORY_FRAMING.mediaWidth,
+        height: mediaHeight ?? DEFAULT_STORY_FRAMING.mediaHeight,
+      };
       uploadFraming = {
         ...framing,
-        mediaWidth: mediaSize.width,
-        mediaHeight: mediaSize.height,
+        mediaWidth: size.width,
+        mediaHeight: size.height,
       };
     }
 
@@ -568,8 +580,8 @@ export function StoryPublishScreen({
         framing: uploadFraming,
         music: musicSelection,
         location: selectedLocation,
+        locationPosition,
         links,
-        textOverlays: publishedTextOverlays,
         trimmedInStudio,
         videoOriginalAudioVolume:
           mediaType === 'video'
@@ -589,18 +601,20 @@ export function StoryPublishScreen({
     setUploadMessage(null);
     router.dismissTo('/(tabs)' as Href);
   }, [
-    normalizedDurationSec,
     framing,
+    normalizedDurationSec,
     mediaSize,
     mediaType,
+    imagePreviewError,
+    imagePreviewReady,
+    canRenderStoryCard,
     musicSelection,
     publishUri,
     publishing,
     regionId,
     selectedLocation,
+    locationPosition,
     links,
-    commitForPublish,
-    textEditing,
     stabilizing,
     startStoryPublish,
     storyUploadBusy,
@@ -610,8 +624,22 @@ export function StoryPublishScreen({
     mediaUri,
   ]);
 
-  const displayUri = publishUri || mediaUri;
-  const canShowMediaPreview = Boolean(displayUri);
+  const displayUri = normalizeLocalFileUri(publishUri || mediaUri);
+  const canShowMediaPreview = displayUri.length > 0;
+
+  useEffect(() => {
+    if (mediaType !== 'image') return;
+    setImagePreviewReady(false);
+    setImagePreviewError(false);
+  }, [displayUri, mediaType]);
+
+  useEffect(() => {
+    if (mediaType !== 'image' || imagePreviewReady || imagePreviewError) return;
+    const timer = setTimeout(() => {
+      setImagePreviewReady(true);
+    }, 1800);
+    return () => clearTimeout(timer);
+  }, [displayUri, imagePreviewError, imagePreviewReady, mediaType]);
   const previewMusicConfig = musicSelection
     ? {
         audioUrl: musicSelection.audioUrl,
@@ -628,75 +656,134 @@ export function StoryPublishScreen({
     playing: mediaType === 'image' && musicPlaysOnStory,
   });
 
-  const framingGesturesEnabled =
-    !publishing && !textTransformActive && !musicEditing && !textEditing;
-  const linkEditorEnabled = !publishing && !musicEditing && !textEditing;
-  const overlayEditable = !publishing && !musicEditing;
-  const showTextLayer =
-    !hideOverlaysForCapture &&
-    (textEditing || textOverlays.some((item) => item.text.trim()));
+  const handleLocationChange = useCallback((location: SelectedLocation | null) => {
+    const hadLocation = selectedLocation != null;
+    setSelectedLocation(location);
+    if (location && !hadLocation) {
+      setLocationPosition(DEFAULT_STORY_LOCATION_POSITION);
+    }
+  }, [selectedLocation]);
 
-  const previewFraming = useMemo(
-    (): StoryFraming => ({
-      ...framing,
-      mediaWidth: mediaSize?.width ?? mediaWidth ?? DEFAULT_STORY_FRAMING.mediaWidth,
-      mediaHeight: mediaSize?.height ?? mediaHeight ?? DEFAULT_STORY_FRAMING.mediaHeight,
-    }),
-    [framing, mediaHeight, mediaSize, mediaWidth],
+  const linkEditorEnabled = !publishing && !musicEditing;
+  const locationEditorEnabled = linkEditorEnabled;
+  const musicStackedWithLocation =
+    Boolean(selectedLocation) && locationPosition.yNorm >= 0.72;
+
+  // Link/konum sürüklerken medya pan/pinch ile çakışmasın.
+  const mediaGesturesEnabled =
+    !publishing && !musicEditing && activeTool !== 'location' && activeTool !== 'link';
+
+  const handleFramingChange = useCallback((next: StoryFraming) => {
+    setFraming(next);
+  }, []);
+
+  const publishMediaNode = useMemo(
+    () => (
+      <StoryPublishMedia
+        uri={displayUri}
+        mediaType={mediaType}
+        music={musicSelection}
+        musicPlaysOnStory={musicPlaysOnStory}
+        videoMuted={videoOriginalMuted}
+        onImageLoad={() => {
+          setImagePreviewError(false);
+          setImagePreviewReady(true);
+        }}
+        onImageError={() => {
+          setImagePreviewReady(false);
+          setImagePreviewError(true);
+        }}
+      />
+    ),
+    [
+      displayUri,
+      mediaType,
+      musicPlaysOnStory,
+      musicSelection,
+      videoOriginalMuted,
+    ],
+  );
+
+  const framedPublishMediaNode = useMemo(
+    () => (
+      <StoryFramingEditor
+        framing={framing}
+        onFramingChange={handleFramingChange}
+        mediaWidth={framing.mediaWidth}
+        mediaHeight={framing.mediaHeight}
+        interactive={mediaGesturesEnabled}
+        mediaGesturesEnabled={mediaGesturesEnabled}
+      >
+        {publishMediaNode}
+      </StoryFramingEditor>
+    ),
+    [framing, handleFramingChange, mediaGesturesEnabled, publishMediaNode],
+  );
+
+  const handlePreviewStackLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      const { width, height } = event.nativeEvent.layout;
+      onStageLayout(width, height);
+    },
+    [onStageLayout],
   );
 
   return (
-    <View style={[styles.root, { backgroundColor: '#000', paddingTop: insets.top }]}>
-      <View style={styles.header}>
+    <View style={[styles.root, { backgroundColor: '#000' }]}>
+      <View
+        style={[styles.header, { paddingTop: insets.top }]}
+        onLayout={(event) => {
+          const { height } = event.nativeEvent.layout;
+          if (height > 0) setHeaderHeight(height);
+        }}
+      >
         <Pressable onPress={handleHeaderBack} hitSlop={10} disabled={publishing}>
           <Ionicons name="chevron-back" size={26} color="#fff" />
         </Pressable>
         <Text variant="h3" style={styles.headerTitle}>
-          {musicEditing ? 'Müzik' : textEditing ? 'Metin' : 'Hikaye paylaş'}
+          {musicEditing ? 'Müzik' : 'Hikaye paylaş'}
         </Text>
         <View style={{ width: 26 }} />
       </View>
 
-      <View style={styles.previewStage}>
+      <View
+        style={[
+          styles.previewStage,
+          {
+            top: previewTop,
+            bottom: previewBottom,
+            marginHorizontal: STORY_PUBLISH_HORIZONTAL_INSET,
+          },
+        ]}
+        pointerEvents={musicEditing ? 'none' : 'auto'}
+      >
         {canShowMediaPreview ? (
-          <StoryPublishCanvas
-            captureRef={captureRef}
-            displayUri={displayUri}
-            mediaType={mediaType}
-            framing={previewFraming}
-            onFramingChange={handleFramingChange}
-            framingGesturesEnabled={framingGesturesEnabled}
-            music={musicSelection}
-            musicPlaysOnStory={musicPlaysOnStory}
-            videoMuted={videoOriginalMuted}
-            textOverlays={textOverlays}
-            textEditing={textEditing}
-            plainMediaPreview={textEditing || musicEditing}
-            selectedTextId={selectedTextId}
-            overlaysEditable={overlayEditable}
-            showTextLayer={showTextLayer}
-            onUpdateText={updateTextOverlay}
-            onSelectText={handleSelectTextOverlay}
-            onDeleteText={handleDeleteTextOverlay}
-            dragDelete={overlayDragDelete}
-            onTextTransformActiveChange={setTextTransformActive}
-          >
-            {musicSelection && !musicEditing ? (
+          <View style={styles.previewStack} onLayout={handlePreviewStackLayout}>
+            {canRenderStoryCard && effectiveMetrics ? (
+            <StoryPublishCanvas
+              captureRef={captureRef}
+              metrics={effectiveMetrics}
+              mediaNode={framedPublishMediaNode}
+            >
+            {!hideChromeForCapture ? (
+              <>
+            {musicSelection && musicConfirmed && !musicEditing ? (
               <StoryMusicBadge
                 title={musicSelection.displayTitle}
                 artist={musicSelection.artist}
-                stacked={Boolean(selectedLocation)}
+                stacked={musicStackedWithLocation}
                 onPress={() => setMusicInfoOpen(true)}
               />
             ) : null}
 
             {selectedLocation ? (
-              <View style={styles.locationPreview}>
-                <Ionicons name="location" size={13} color="#fff" />
-                <Text variant="caption" style={styles.locationPreviewText} numberOfLines={1}>
-                  {selectedLocation.label}
-                </Text>
-              </View>
+              <StoryLocationEditor
+                location={selectedLocation}
+                position={locationPosition}
+                onPositionChange={setLocationPosition}
+                onPress={() => setActiveTool('location')}
+                enabled={locationEditorEnabled}
+              />
             ) : null}
 
             {mediaType === 'video' && normalizedDurationSec && !musicEditing ? (
@@ -715,89 +802,123 @@ export function StoryPublishScreen({
             ) : null}
 
             <StoryLinkEditor links={links} onLinksChange={setLinks} enabled={linkEditorEnabled} />
-
-            {musicSelection && musicEditing ? (
-              <StoryMusicTrimCard
-                music={musicSelection}
-                mediaType={mediaType}
-                clipDurationSec={musicClipDurationSec}
-                onStartChange={handleMusicStartChange}
-                onRangeChange={handleMusicRangeChange}
-                onChangeTrack={() => {
-                  setMusicEditing(false);
-                  setMusicOpen(true);
-                }}
-                onRemove={() => {
-                  setMusicSelection(null);
-                  setMusicEditing(false);
-                }}
-                onDone={() => setMusicEditing(false)}
-              />
+              </>
             ) : null}
-          </StoryPublishCanvas>
+            </StoryPublishCanvas>
+            ) : (
+              <View style={[styles.previewFallbackCard, effectiveMetrics ? { width: effectiveMetrics.cardWidth, height: effectiveMetrics.cardHeight } : null]}>
+                {framedPublishMediaNode}
+              </View>
+            )}
+          </View>
         ) : (
           <View style={styles.previewLoading}>
             <ActivityIndicator color={colors.primary} size="large" />
+            {imagePreviewError ? (
+              <Text variant="caption" style={styles.previewLoadingText}>
+                Fotoğraf açılamadı. Geri dönüp yeniden seçmeyi deneyin.
+              </Text>
+            ) : null}
+            {mediaType === 'video' && stabilizing ? (
+              <Text variant="caption" style={styles.previewLoadingText}>
+                Video hazırlanıyor…
+              </Text>
+            ) : null}
           </View>
         )}
       </View>
 
-      {!musicEditing && !textEditing && activeTool !== 'location' && activeTool !== 'link' ? (
+      {!musicEditing && activeTool !== 'location' && activeTool !== 'link' ? (
         <StoryPublishRail
           isVideo={mediaType === 'video'}
           activeTool={activeTool}
-          hasMusic={Boolean(musicSelection)}
+          hasMusic={Boolean(musicSelection) && musicConfirmed}
           hasLocation={Boolean(selectedLocation)}
           hasLinks={links.length > 0}
-          hasText={hasText}
           videoAudioMuted={videoOriginalMuted}
+          topOffset={previewTop + STORY_PUBLISH_RAIL_TOP_EXTRA}
           onPress={handleToolPress}
         />
       ) : null}
 
-      <MediaEditorTrashZone elevated={textEditing || musicEditing} />
-
-      <StoryTextPanel
-        visible={textEditing}
-        overlay={activeOverlay}
-        onUpdate={updateTextOverlay}
-        onDone={() => finishTextEditing()}
-        onAdd={addTextOverlay}
-      />
-
-      {!textEditing ? (
-        <>
-          {uploadMessage ? (
-            <Text variant="caption" style={styles.uploadHint}>
-              {uploadMessage}
-            </Text>
-          ) : null}
-
-          <Pressable
-            style={[
-              styles.publishBtn,
-              {
-                backgroundColor: colors.primary,
-                opacity: publishing || !displayUri || stabilizing || musicEditing ? 0.5 : 1,
-              },
-            ]}
-            onPress={() => void handlePublish()}
-            disabled={publishing || !displayUri || stabilizing || musicEditing}
-          >
-            {publishing ? (
-              <View style={styles.publishingRow}>
-                <ActivityIndicator color="#fff" size="small" />
-                <Text variant="label" style={{ color: '#fff' }}>
-                  {uploadMessage ?? 'Paylaşılıyor…'}
-                </Text>
-              </View>
-            ) : (
-              <Text variant="label" style={{ color: '#fff' }}>
-                Hikayeyi paylaş
+      <View
+        style={[styles.bottomDock, { height: previewBottom, paddingBottom: insets.bottom }]}
+        pointerEvents={musicEditing ? 'none' : 'auto'}
+      >
+        {musicEditing ? (
+          <View style={styles.bottomChromeSpacer} />
+        ) : (
+          <>
+            {uploadMessage ? (
+              <Text variant="caption" style={styles.uploadHint}>
+                {uploadMessage}
               </Text>
-            )}
-          </Pressable>
-        </>
+            ) : null}
+
+            <Pressable
+              style={[
+                styles.publishBtn,
+                {
+                  backgroundColor: colors.primary,
+                  opacity:
+                    publishing ||
+                    !displayUri ||
+                    stabilizing ||
+                    musicEditing ||
+                    (mediaType === 'image' && !imagePreviewReady)
+                      ? 0.5
+                      : 1,
+                },
+              ]}
+              onPress={() => void handlePublish()}
+              disabled={
+                publishing ||
+                !displayUri ||
+                stabilizing ||
+                musicEditing ||
+                (mediaType === 'image' && !imagePreviewReady)
+              }
+            >
+              {publishing ? (
+                <View style={styles.publishingRow}>
+                  <ActivityIndicator color="#fff" size="small" />
+                  <Text variant="label" style={{ color: '#fff' }}>
+                    {uploadMessage ?? 'Paylaşılıyor…'}
+                  </Text>
+                </View>
+              ) : (
+                <Text variant="label" style={{ color: '#fff' }}>
+                  Hikayeyi paylaş
+                </Text>
+              )}
+            </Pressable>
+          </>
+        )}
+      </View>
+
+      {musicSelection && musicEditing ? (
+        <View style={styles.musicStripHost} pointerEvents="box-none">
+          <StoryMusicStrip
+            visible
+            music={musicSelection}
+            mediaType={mediaType}
+            clipDurationSec={musicClipDurationSec}
+            onStartChange={handleMusicStartChange}
+            onRangeChange={handleMusicRangeChange}
+            onChangeTrack={() => {
+              setMusicOpen(true);
+            }}
+            onRemove={() => {
+              setMusicSelection(null);
+              setMusicConfirmed(false);
+              setMusicEditing(false);
+            }}
+            onDone={() => {
+              setMusicConfirmed(true);
+              setMusicEditing(false);
+            }}
+          />
+        </View>
       ) : null}
 
       <AudioPickerSheet
@@ -809,11 +930,11 @@ export function StoryPublishScreen({
         onSelect={handleMusicSelect}
       />
 
-      <MediaEditorLocationSheet
+      <StoryLocationSheet
         visible={activeTool === 'location'}
         regionId={resolveMarketplaceRegionId(regionId)}
         value={selectedLocation}
-        onChange={setSelectedLocation}
+        onChange={handleLocationChange}
         onClose={() => setActiveTool(null)}
       />
 
@@ -837,7 +958,7 @@ export function StoryPublishScreen({
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 },
+  root: { flex: 1, minHeight: 0, position: 'relative' },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -849,26 +970,58 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
   previewStage: {
-    flex: 1,
-    marginHorizontal: STORY_CARD_HORIZONTAL_INSET,
-    marginBottom: spacing.sm,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    minHeight: 0,
+    width: '100%',
+    overflow: 'hidden',
+  },
+  musicStripHost: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 80,
+    elevation: 80,
   },
   previewStack: {
     flex: 1,
-    position: 'relative',
+    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  previewWrap: {
+  previewFallbackCard: {
     flex: 1,
-  },
-  mediaFill: {
     width: '100%',
-    height: '100%',
+    minHeight: 280,
+    borderRadius: 36,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
+  bottomDock: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'flex-end',
+  },
+  bottomChrome: {
+    minHeight: STORY_PUBLISH_BOTTOM_CHROME_HEIGHT,
+    justifyContent: 'flex-end',
+  },
+  bottomChromeSpacer: {
+    height: STORY_PUBLISH_BOTTOM_CHROME_HEIGHT,
   },
   previewLoading: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#111',
+    gap: spacing.sm,
+  },
+  previewLoadingText: {
+    color: 'rgba(255,255,255,0.7)',
   },
   durationBadge: {
     position: 'absolute',
@@ -897,24 +1050,6 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.45)',
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  locationPreview: {
-    position: 'absolute',
-    bottom: spacing.md,
-    left: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 999,
-    maxWidth: '70%',
-  },
-  locationPreviewText: {
-    color: '#fff',
-    fontWeight: '700',
-    flexShrink: 1,
   },
   uploadHint: {
     textAlign: 'center',

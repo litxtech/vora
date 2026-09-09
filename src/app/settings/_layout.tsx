@@ -24,6 +24,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="platform-guide" />
       <Stack.Screen name="share-app" />
       <Stack.Screen name="screen-time" />
+      <Stack.Screen name="story-archive" />
       <Stack.Screen name="invite-center" />
       <Stack.Screen name="business-application" />
       <Stack.Screen name="link-business-account" />

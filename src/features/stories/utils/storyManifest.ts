@@ -10,12 +10,15 @@ import {
 import {
   parseStoryTextOverlays,
   serializeStoryTextOverlays,
-} from '@/features/stories/utils/storyTextOverlays';
+} from '@/features/stories/utils/storyTextLayer';
 
 export type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 
 export type StoryLocationManifest = {
   label: string;
+  subtitle?: string;
+  xNorm?: number;
+  yNorm?: number;
 };
 
 export type StoryMusicManifest = {
@@ -99,6 +102,11 @@ export function parseStoryManifest(raw: unknown): StoryManifest {
     const l = locationRaw as Record<string, unknown>;
     if (typeof l.label === 'string' && l.label.trim()) {
       location = { label: l.label.trim() };
+      if (typeof l.subtitle === 'string' && l.subtitle.trim()) {
+        location.subtitle = l.subtitle.trim();
+      }
+      if (typeof l.xNorm === 'number') location.xNorm = l.xNorm;
+      if (typeof l.yNorm === 'number') location.yNorm = l.yNorm;
     }
   }
 

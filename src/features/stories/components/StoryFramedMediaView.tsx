@@ -43,40 +43,50 @@ export function StoryFramedMediaView({ framing, children }: StoryFramedMediaView
       onLayout={onLayout}
       collapsable={false}
     >
-      {!hasLayout ? (
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {children}
-        </View>
-      ) : (
-        <View style={styles.stage} pointerEvents="none">
-          <View
-            style={{
-              width: metrics.baseWidth,
-              height: metrics.baseHeight,
-              transform: [
-                { translateX: pixels.translateX },
-                { translateY: pixels.translateY },
-                { scale: zoom },
-              ],
-            }}
-          >
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {!hasLayout ? (
+          <View style={styles.preLayoutFill} pointerEvents="none">
             {children}
           </View>
-        </View>
-      )}
+        ) : (
+          <View style={styles.stage} pointerEvents="none">
+            <View
+              style={[
+                styles.framedMedia,
+                {
+                  width: metrics.baseWidth,
+                  height: metrics.baseHeight,
+                  transform: [
+                    { translateX: pixels.translateX },
+                    { translateY: pixels.translateY },
+                    { scale: zoom },
+                  ],
+                },
+              ]}
+            >
+              {children}
+            </View>
+          </View>
+        )}
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
-    width: '100%',
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
   stage: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  preLayoutFill: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  framedMedia: {
+    overflow: 'hidden',
   },
 });

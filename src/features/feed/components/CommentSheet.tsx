@@ -4,16 +4,22 @@ import {
   Alert,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
+import * as ImagePicker from 'expo-image-picker';
+import { Image } from 'expo-image';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { Ionicons } from '@expo/vector-icons';
 import { useSharedValue } from 'react-native-reanimated';
 import { KeyboardSheetLayout, KeyboardPersistButton } from '@/components/keyboard';
 import { CommentActionMenu, useCommentTapGestures, type CommentAction } from '@/components/comments';
+import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
+import { RichText, CommentLinkAttachment, ComposerLinkPreview } from '@/features/richtext';
 import { Text } from '@/components/ui/Text';
 import { UserBadge } from '@/features/feed/components/UserBadge';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -25,8 +31,14 @@ import {
   fetchPostComments,
   toggleCommentLike,
 } from '@/features/feed/services/engagement';
+import {
+  MAX_COMMENT_IMAGES,
+  uploadCommentMedia,
+} from '@/features/feed/services/commentMediaUpload';
 import type { FeedComment } from '@/features/feed/types';
 import { formatFeedTime } from '@/features/feed/utils';
+import { CapsPickerSheet, CapAttachment, CapLoopVideo } from '@/features/caps';
+import type { Cap } from '@/features/caps/types';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { FEED_FEATURE } from '@/features/feed/featureFlags';
 import { radius, spacing } from '@/constants/theme';
@@ -52,6 +64,9 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
   const [comments, setComments] = useState<FeedComment[]>([]);
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState('');
+  const [mediaUris, setMediaUris] = useState<string[]>([]);
+  const [pendingCap, setPendingCap] = useState<Cap | null>(null);
+  const [capsPickerOpen, setCapsPickerOpen] = useState(false);
   const [replyTo, setReplyTo] = useState<FeedComment | null>(null);
   const [editing, setEditing] = useState<FeedComment | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -78,18 +93,56 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
   useEffect(() => {
     if (!visible) {
       setText('');
+      setMediaUris([]);
+      setPendingCap(null);
       setReplyTo(null);
       setEditing(null);
       submitLock.current = false;
     }
   }, [visible]);
 
+  const canSend = text.trim().length > 0 || mediaUris.length > 0 || Boolean(pendingCap);
+
+  const pickCommentImage = useCallback(async () => {
+    if (editing) return;
+    if (mediaUris.length >= MAX_COMMENT_IMAGES) {
+      Alert.alert('Limit', `En fazla ${MAX_COMMENT_IMAGES} görsel ekleyebilirsin.`);
+      return;
+    }
+    if (!(await requireAuth('Yorum'))) return;
+
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert('İzin gerekli', 'Galeriden görsel seçmek için izin vermelisin.');
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      quality: 0.85,
+      allowsMultipleSelection: true,
+      selectionLimit: MAX_COMMENT_IMAGES - mediaUris.length,
+      // HEIC vb. formatlarda manipulator "image content has been lost" vermesin
+      preferredAssetRepresentationMode:
+        ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible,
+    });
+
+    if (result.canceled) return;
+    const next = result.assets
+      .map((asset) => asset.uri)
+      .filter(Boolean)
+      .slice(0, MAX_COMMENT_IMAGES - mediaUris.length);
+    if (next.length === 0) return;
+    setMediaUris((prev) => [...prev, ...next].slice(0, MAX_COMMENT_IMAGES));
+  }, [editing, mediaUris.length, requireAuth]);
+
   const handleStartEdit = useCallback(
     (comment: FeedComment) => {
       if (!user || user.id !== comment.author.id) return;
       setReplyTo(null);
+      setMediaUris([]);
       setEditing(comment);
-      setText(comment.content);
+      setText(comment.content === 'Medya paylaşımı' ? '' : comment.content);
     },
     [user],
   );
@@ -102,15 +155,17 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
   const cancelEdit = () => {
     setEditing(null);
     setText('');
+    setMediaUris([]);
   };
 
   const handleSubmit = async () => {
     if (submitLock.current || submitting) return;
     if (!(await requireAuth('Yorum'))) return;
-    if (!user || !text.trim()) return;
+    if (!user) return;
 
     if (editing) {
       const newContent = text.trim();
+      if (!newContent) return;
       submitLock.current = true;
       setSubmitting(true);
       const { error } = await editComment(editing.id, user.id, newContent);
@@ -134,18 +189,49 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
       setComments((prev) => updateTree(prev));
       setEditing(null);
       setText('');
+      setMediaUris([]);
+      setPendingCap(null);
       return;
     }
 
+    if (!text.trim() && mediaUris.length === 0 && !pendingCap) return;
+
     submitLock.current = true;
     setSubmitting(true);
-    const { error } = await addComment(postId, user.id, text.trim(), replyTo?.id);
+
+    let uploadedUrls: string[] = [];
+    if (mediaUris.length > 0 && !pendingCap) {
+      const upload = await uploadCommentMedia(user.id, mediaUris);
+      if (upload.error) {
+        submitLock.current = false;
+        setSubmitting(false);
+        Alert.alert('Hata', upload.error);
+        return;
+      }
+      uploadedUrls = upload.urls;
+    }
+
+    const capUrls = pendingCap ? [pendingCap.imageUrl] : uploadedUrls;
+
+    const { error } = await addComment(
+      postId,
+      user.id,
+      text.trim(),
+      replyTo?.id,
+      capUrls,
+      pendingCap?.id ?? null,
+    );
     submitLock.current = false;
     setSubmitting(false);
 
-    if (error) return;
+    if (error) {
+      Alert.alert('Hata', error);
+      return;
+    }
 
     setText('');
+    setMediaUris([]);
+    setPendingCap(null);
     setReplyTo(null);
     onCommentAdded?.();
 
@@ -247,29 +333,118 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
         </View>
       ) : null}
 
+      <ComposerLinkPreview content={text} />
+
+      {!editing && pendingCap ? (
+        <View style={styles.pendingCapWrap}>
+          {pendingCap.videoUrl ? (
+            <CapLoopVideo
+              videoUrl={pendingCap.videoUrl}
+              posterUrl={pendingCap.thumbUrl ?? pendingCap.imageUrl}
+              style={styles.pendingThumb}
+              contentFit="cover"
+            />
+          ) : (
+            <Image
+              source={{ uri: pendingCap.thumbUrl ?? pendingCap.imageUrl }}
+              style={styles.pendingThumb}
+              contentFit="contain"
+            />
+          )}
+          <Pressable
+            style={styles.pendingRemove}
+            onPress={() => setPendingCap(null)}
+            hitSlop={6}
+            accessibilityLabel="Caps kaldır"
+          >
+            <Ionicons name="close-circle" size={18} color="#fff" />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {!editing && !pendingCap && mediaUris.length > 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.pendingMediaRow}
+        >
+          {mediaUris.map((uri, index) => (
+            <View key={`${uri}-${index}`} style={styles.pendingThumbWrap}>
+              <Image source={{ uri }} style={styles.pendingThumb} />
+              <Pressable
+                style={styles.pendingRemove}
+                onPress={() => setMediaUris((prev) => prev.filter((_, i) => i !== index))}
+                hitSlop={6}
+                accessibilityLabel="Görseli kaldır"
+              >
+                <Ionicons name="close-circle" size={18} color="#fff" />
+              </Pressable>
+            </View>
+          ))}
+        </ScrollView>
+      ) : null}
+
       <View style={[styles.inputRow, { borderColor: colors.border }]}>
-        <TextInput
-          style={[styles.input, { color: colors.text }]}
-          placeholder={editing ? 'Yorumu düzenle...' : 'Yorum yaz...'}
-          placeholderTextColor={colors.textMuted}
-          value={text}
-          onChangeText={setText}
-          multiline
-          submitBehavior="submit"
-          returnKeyType="send"
-          enterKeyHint="send"
-          blurOnSubmit={false}
-          onSubmitEditing={handleSubmit}
-        />
+        {!editing ? (
+          <>
+            <Pressable
+              onPress={() => void pickCommentImage()}
+              hitSlop={8}
+              disabled={submitting || mediaUris.length >= MAX_COMMENT_IMAGES || Boolean(pendingCap)}
+              accessibilityLabel="Galeriden görsel ekle"
+              style={styles.mediaBtn}
+            >
+              <Ionicons
+                name="image-outline"
+                size={22}
+                color={
+                  mediaUris.length >= MAX_COMMENT_IMAGES || pendingCap
+                    ? colors.textMuted
+                    : colors.primary
+                }
+              />
+            </Pressable>
+          </>
+        ) : null}
+        <View style={[styles.commentInputWrap, { backgroundColor: colors.surfaceElevated }]}>
+          <TextInput
+            style={[styles.input, { color: colors.text }]}
+            placeholder={editing ? 'Yorumu düzenle...' : 'Yorum yaz...'}
+            placeholderTextColor={colors.textMuted}
+            value={text}
+            onChangeText={setText}
+            multiline
+            submitBehavior="submit"
+            returnKeyType="send"
+            enterKeyHint="send"
+            blurOnSubmit={false}
+            onSubmitEditing={handleSubmit}
+          />
+          {!editing ? (
+            <Pressable
+              onPress={() => setCapsPickerOpen(true)}
+              hitSlop={8}
+              disabled={submitting}
+              accessibilityLabel="Caps ekle"
+              style={styles.inlineCapsBtn}
+            >
+              <Ionicons name="happy-outline" size={20} color={colors.primary} />
+            </Pressable>
+          ) : null}
+        </View>
         {showCommentSubmit ? (
           <KeyboardPersistButton
             onPress={handleSubmit}
-            disabled={submitting || !text.trim()}
+            disabled={submitting || !canSend}
             hitSlop={SEND_HIT_SLOP}
-            style={[styles.sendBtn, { opacity: submitting || !text.trim() ? 0.45 : 1 }]}
+            style={[styles.sendBtn, { opacity: submitting || !canSend ? 0.45 : 1 }]}
             accessibilityLabel={editing ? 'Düzenlemeyi kaydet' : 'Yorum gönder'}
           >
-            <Ionicons name={editing ? 'checkmark' : 'send'} size={22} color={colors.primary} />
+            {submitting ? (
+              <ActivityIndicator size="small" color={colors.primary} />
+            ) : (
+              <Ionicons name={editing ? 'checkmark' : 'send'} size={22} color={colors.primary} />
+            )}
           </KeyboardPersistButton>
         ) : null}
       </View>
@@ -343,9 +518,89 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
           onClose={() => setReportCommentId(null)}
         />
       ) : null}
+      <CapsPickerSheet
+        visible={capsPickerOpen}
+        onClose={() => setCapsPickerOpen(false)}
+        onSelect={(cap) => {
+          setPendingCap(cap);
+          setMediaUris([]);
+        }}
+      />
     </Modal>
   );
 }
+
+const COMMENT_MEDIA_GAP = 4;
+const COMMENT_SHEET_H_PAD = spacing.lg * 2;
+
+const CommentMediaGrid = memo(function CommentMediaGrid({
+  urls,
+  depth,
+  onOpen,
+}: {
+  urls: string[];
+  depth: number;
+  onOpen: (index: number) => void;
+}) {
+  const { width: windowWidth } = useWindowDimensions();
+  const available = Math.max(
+    200,
+    windowWidth - COMMENT_SHEET_H_PAD - depth * spacing.lg - spacing.md,
+  );
+  const count = urls.length;
+
+  if (count === 1) {
+    return (
+      <Pressable
+        onPress={() => onOpen(0)}
+        style={[styles.mediaSolo, { width: available }]}
+        accessibilityRole="imagebutton"
+        accessibilityLabel="Yorum görselini aç"
+      >
+        <Image source={{ uri: urls[0] }} style={styles.mediaSoloImage} contentFit="cover" recyclingKey={urls[0]} />
+      </Pressable>
+    );
+  }
+
+  if (count === 2) {
+    const cell = (available - COMMENT_MEDIA_GAP) / 2;
+    return (
+      <View style={[styles.mediaRow, { width: available }]}>
+        {urls.map((url, index) => (
+          <Pressable
+            key={`${url}-${index}`}
+            onPress={() => onOpen(index)}
+            style={[styles.mediaCell, { width: cell, height: cell * 1.15 }]}
+          >
+            <Image source={{ uri: url }} style={styles.mediaFill} contentFit="cover" recyclingKey={url} />
+          </Pressable>
+        ))}
+      </View>
+    );
+  }
+
+  // 3+: 2 sütun grid, daha büyük hücreler
+  const cell = (available - COMMENT_MEDIA_GAP) / 2;
+  const preview = urls.slice(0, 4);
+  return (
+    <View style={[styles.mediaGrid, { width: available }]}>
+      {preview.map((url, index) => (
+        <Pressable
+          key={`${url}-${index}`}
+          onPress={() => onOpen(index)}
+          style={[styles.mediaCell, { width: cell, height: cell }]}
+        >
+          <Image source={{ uri: url }} style={styles.mediaFill} contentFit="cover" recyclingKey={url} />
+          {index === 3 && count > 4 ? (
+            <View style={styles.mediaMoreOverlay}>
+              <Text style={styles.mediaMoreText}>+{count - 4}</Text>
+            </View>
+          ) : null}
+        </Pressable>
+      ))}
+    </View>
+  );
+});
 
 const CommentRow = memo(function CommentRow({
   comment,
@@ -387,6 +642,14 @@ const CommentRow = memo(function CommentRow({
   const { colors } = useTheme();
   const isOwnComment = currentUserId === comment.author.id;
   const canReply = depth < 2 && showReply;
+  const [viewerOpen, setViewerOpen] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const mediaUrls = comment.mediaUrls ?? [];
+  const showText =
+    comment.content.trim().length > 0 &&
+    comment.content !== 'Medya paylaşımı' &&
+    comment.content !== 'Caps';
+  const showCap = Boolean(comment.cap);
 
   const actions: CommentAction[] = [];
   if (canReply && showMenuReply) {
@@ -395,7 +658,7 @@ const CommentRow = memo(function CommentRow({
   if (isOwnComment && showMenuEdit) {
     actions.push({ id: 'edit', label: 'Düzenle', icon: 'create-outline', onPress: () => onEdit(comment) });
   }
-  if (showMenuCopy) {
+  if (showMenuCopy && showText) {
     actions.push({ id: 'copy', label: 'Kopyala', icon: 'copy-outline', onPress: () => onCopy(comment) });
   }
   if (isOwnComment && showMenuDelete) {
@@ -410,7 +673,7 @@ const CommentRow = memo(function CommentRow({
       ? () => onEdit(comment)
       : canReply && showMenuReply
         ? () => onReply(comment)
-        : showMenuCopy
+        : showMenuCopy && showText
           ? () => onCopy(comment)
           : undefined,
   });
@@ -428,9 +691,48 @@ const CommentRow = memo(function CommentRow({
         </View>
         <CommentActionMenu actions={actions} iconColor={colors.textMuted} iconSize={16} />
       </View>
-      <Pressable {...tapGestures} style={styles.commentBody}>
-        <Text style={styles.commentText}>{comment.content}</Text>
-      </Pressable>
+      {showText ? (
+        <Pressable {...tapGestures} style={styles.commentBody}>
+          <RichText
+            content={comment.content}
+            style={styles.commentText}
+            linkColor={colors.accent}
+            enableMentions
+            enableHashtags
+            mentionColor={colors.primary}
+            hashtagColor={colors.accent}
+            onBeforeOpen={onAuthorNavigate}
+          />
+        </Pressable>
+      ) : null}
+      {showText ? (
+        <CommentLinkAttachment content={comment.content} onBeforeOpen={onAuthorNavigate} />
+      ) : null}
+      {showCap && comment.cap ? (
+        <View style={styles.capWrap}>
+          <CapAttachment
+            capId={comment.cap.id}
+            imageUrl={comment.cap.thumbUrl ?? comment.cap.imageUrl}
+            videoUrl={comment.cap.videoUrl}
+            width={comment.cap.width}
+            height={comment.cap.height}
+            startMs={comment.cap.startMs}
+            endMs={comment.cap.endMs}
+            overlay={comment.cap.overlay}
+            creator={comment.cap.creator}
+            autoplay={false}
+          />
+        </View>
+      ) : mediaUrls.length > 0 ? (
+        <CommentMediaGrid
+          urls={mediaUrls}
+          depth={depth}
+          onOpen={(index) => {
+            setViewerIndex(index);
+            setViewerOpen(true);
+          }}
+        />
+      ) : null}
       <View style={styles.commentActions}>
         {showLike ? (
           <Pressable
@@ -485,6 +787,12 @@ const CommentRow = memo(function CommentRow({
           showMenuReport={showMenuReport}
         />
       ))}
+      <FullScreenMediaViewer
+        visible={viewerOpen}
+        urls={mediaUrls}
+        startIndex={viewerIndex}
+        onClose={() => setViewerOpen(false)}
+      />
     </View>
   );
 });
@@ -538,11 +846,60 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.sm,
   },
+  mediaBtn: {
+    minWidth: 40,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 2,
+  },
+  pendingMediaRow: {
+    gap: spacing.sm,
+    paddingBottom: spacing.sm,
+  },
+  pendingCapWrap: {
+    position: 'relative',
+    alignSelf: 'flex-start',
+    marginBottom: spacing.sm,
+  },
+  pendingThumbWrap: {
+    position: 'relative',
+  },
+  pendingThumb: {
+    width: 72,
+    height: 72,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+  },
+  pendingRemove: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+  },
+  capWrap: {
+    marginTop: spacing.sm,
+    overflow: 'hidden',
+  },
+  commentInputWrap: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radius.full,
+    minHeight: 42,
+    paddingLeft: spacing.md,
+    paddingRight: 4,
+  },
   input: {
     flex: 1,
     maxHeight: 100,
     fontSize: 16,
     paddingVertical: spacing.sm,
+  },
+  inlineCapsBtn: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   sendBtn: {
     minWidth: 44,
@@ -554,16 +911,57 @@ const styles = StyleSheet.create({
     paddingTop: spacing.xs,
     paddingBottom: spacing.md,
   },
-  comment: { gap: spacing.xs, marginBottom: spacing.md, overflow: 'visible' },
+  comment: { gap: spacing.xs, marginBottom: spacing.md },
   commentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    overflow: 'visible',
   },
-  commentHeaderBadge: { flex: 1, overflow: 'visible' },
+  commentHeaderBadge: { flex: 1 },
   commentBody: { marginTop: spacing.xs },
   commentText: {},
+  mediaSolo: {
+    marginTop: spacing.xs,
+    borderRadius: radius.lg,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    height: 220,
+  },
+  mediaSoloImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaRow: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    gap: COMMENT_MEDIA_GAP,
+  },
+  mediaGrid: {
+    marginTop: spacing.xs,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: COMMENT_MEDIA_GAP,
+  },
+  mediaCell: {
+    borderRadius: radius.md,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(0,0,0,0.06)',
+  },
+  mediaFill: {
+    width: '100%',
+    height: '100%',
+  },
+  mediaMoreOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mediaMoreText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '700',
+  },
   commentActions: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center', flexWrap: 'wrap' },
   commentActionBtn: {
     flexDirection: 'row',

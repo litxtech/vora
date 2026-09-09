@@ -98,9 +98,16 @@ function LifecycleRequestCard({ request, onResolve, onInProgress }: LifecycleReq
             : colors.textMuted;
 
   const showReactivate =
-    request.request_type === 'reactivate' || request.current_account_status === 'frozen';
+    request.request_type === 'reactivate' ||
+    request.request_type === 'restore_access' ||
+    request.current_account_status === 'frozen' ||
+    request.current_account_status === 'deleted';
   const showCancelDeletion =
     request.request_type === 'cancel_deletion' || request.current_account_status === 'deletion_pending';
+  const reactivateLabel =
+    request.current_account_status === 'deleted' || request.request_type === 'restore_access'
+      ? 'Silinen hesabı aç'
+      : 'Aktif et';
 
   const typeIcon = REQUEST_TYPE_ICONS[request.request_type];
 
@@ -176,7 +183,7 @@ function LifecycleRequestCard({ request, onResolve, onInProgress }: LifecycleReq
               {showReactivate ? (
                 <AdminActionChip
                   compact
-                  label="Aktif et"
+                  label={reactivateLabel}
                   icon="refresh-outline"
                   tone="success"
                   style={styles.actionBtn}
@@ -305,7 +312,9 @@ export function AdminAccountLifecycleScreen() {
   ) => {
     const actionLabel =
       applyAction === 'reactivate'
-        ? 'Hesap aktif edilecek'
+        ? request.current_account_status === 'deleted' || request.request_type === 'restore_access'
+          ? 'Silinen hesap yeniden açılacak'
+          : 'Hesap aktif edilecek'
         : applyAction === 'cancel_deletion'
           ? 'Silme talebi iptal edilecek'
           : 'Yalnızca talep kapatılacak';

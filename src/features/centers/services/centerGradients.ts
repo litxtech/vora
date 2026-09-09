@@ -9,15 +9,19 @@ import { RIDES_GRADIENT } from '@/features/rides/constants';
 import { TIP_LINE_CENTER_DEF } from '@/features/tip-line/constants';
 import { VORA_NEEDS_GRADIENT } from '@/features/vora-needs/constants';
 import { IZDIVAC_GRADIENT } from '@/features/izdivac/constants';
+import { DATE_GRADIENT } from '@/features/date/constants';
+import { CITY_GOVERNANCE_ACCENT } from '@/features/city-governance/constants';
 import type { CenterDef, CenterId } from '@/features/centers/types';
 
 const CENTER_GRADIENTS: Partial<Record<CenterId, readonly [string, string]>> = {
+  'city-system': [CITY_GOVERNANCE_ACCENT, '#D97706'],
   marketplace: MARKETPLACE_GRADIENT,
   rides: RIDES_GRADIENT,
   'hotel-center': HOTEL_GRADIENT,
   'personnel-center': PERSONNEL_GRADIENT,
   'vora-needs': VORA_NEEDS_GRADIENT,
   'izdivac-center': IZDIVAC_GRADIENT,
+  'date-center': DATE_GRADIENT,
   'lost-center': [LOST_CENTER_DEF.accent, '#C62828'],
   'event-center': [EVENT_CENTER_DEF.accent, '#AD1457'],
   help: [HELP_CENTER_DEF.accent, '#C2185B'],

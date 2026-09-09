@@ -125,7 +125,7 @@ export async function recordReelShare(reelId: string, actorId?: string): Promise
         actorId,
         'Reelin paylaşıldı',
         `${actor} reelini paylaştı`,
-        buildNotificationData({ reelId }),
+        buildNotificationData({ reelId, sender_name: actor }),
       );
     }
   }

@@ -8,10 +8,19 @@ import { useMainTabSwipeStore } from '@/features/navigation/store/mainTabSwipeSt
  */
 export function useMainTabPrefetchActive(route: MainTabRoute): boolean {
   const isFocused = useIsFocused();
-  const partnerRoute = useMainTabSwipeStore((s) => s.partnerRoute);
   const warmRoutes = useMainTabSwipeStore((s) => s.warmRoutes);
 
-  return isFocused || partnerRoute === route || warmRoutes.includes(route);
+  return isFocused || warmRoutes.includes(route);
+}
+
+/**
+ * Seçili sekme — kök stack detayı üstteyken de true kalır.
+ * Liste/medya mount tutmak için; oynatma için useMainTabFocused kullan.
+ */
+export function useMainTabSelected(route: MainTabRoute): boolean {
+  const isFocused = useIsFocused();
+  const activeRoute = useMainTabSwipeStore((s) => s.activeRoute);
+  return isFocused || activeRoute === route;
 }
 
 /** Gerçek sekme odağı — ses, video ve realtime yalnızca burada. */

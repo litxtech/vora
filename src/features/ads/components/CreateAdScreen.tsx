@@ -27,7 +27,7 @@ export function CreateAdScreen() {
   const [budget, setBudget] = useState('500');
   const [regionId, setRegionId] = useState<RegionId | null>(null);
   const [district, setDistrict] = useState('');
-  const [ageMin, setAgeMin] = useState('');
+  const [ageMin, setAgeMin] = useState('18');
   const [ageMax, setAgeMax] = useState('');
   const [interests, setInterests] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -140,7 +140,7 @@ export function CreateAdScreen() {
 
       <View style={styles.ageRow}>
         <View style={styles.ageField}>
-          <Input label="Min Yaş" value={ageMin} onChangeText={setAgeMin} keyboardType="numeric" />
+          <Input label="Min Yaş (18+)" value={ageMin} onChangeText={setAgeMin} keyboardType="numeric" />
         </View>
         <View style={styles.ageField}>
           <Input label="Max Yaş" value={ageMax} onChangeText={setAgeMax} keyboardType="numeric" />

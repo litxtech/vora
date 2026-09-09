@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Ionicons } from '@expo/vector-icons';
-import { OptimizedImage } from '@/components/media/OptimizedImage';
 import { VideoProcessingOverlay } from '@/components/media/VideoProcessingOverlay';
 import { StoryFramedMediaView } from '@/features/stories/components/StoryFramedMediaView';
+import { StoryMediaImage } from '@/features/stories/components/StoryMediaImage';
 import { StoryTextOverlayView } from '@/features/stories/components/StoryTextOverlayView';
+import { StoryLocationOverlay } from '@/features/stories/components/StoryLocationOverlay';
 import { STORY_STICKER_CATEGORIES } from '@/features/stories/constants';
 import { useStoryMuxPlaybackUrl } from '@/features/stories/hooks/useStoryMuxPlaybackUrl';
 import { mapStoryMusicPlayback } from '@/features/stories/services/mapStoryMusic';
@@ -31,6 +32,8 @@ type StorySlideProps = {
   isPaused: boolean;
   onVideoPosition?: (sec: number, durationSec: number | null) => void;
   onVideoEnd?: () => void;
+  /** Metin katmanını dışarıda render etmek için (zoom transform dışında). */
+  includeTextOverlays?: boolean;
 };
 
 export function StorySlide(props: StorySlideProps) {
@@ -49,18 +52,17 @@ export function StoryPeekPreview({ item }: { item: StoryItem }) {
   }
 
   return (
-    <OptimizedImage
-      uri={uri}
-      tier="feed"
-      style={styles.mediaFill}
-      contentFit="cover"
-      recyclingKey={`peek-${item.id}`}
-      transition={0}
-    />
+    <View style={StyleSheet.absoluteFill}>
+      <StoryMediaImage
+        uri={uri}
+        recyclingKey={`peek-${item.id}`}
+        contentFit="cover"
+      />
+    </View>
   );
 }
 
-function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
+function StoryImageSlide({ item, isActive, isPaused, includeTextOverlays = true }: StorySlideProps) {
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
   const uri = resolveStoryMediaUrl(item.mediaUrl);
   const musicConfig = useMemo(() => mapStoryMusicPlayback(item.music), [item.music]);
@@ -73,17 +75,10 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
 
   const imageFit = 'cover';
 
-  const mediaNode = uri ? (
-    <OptimizedImage
-      uri={uri}
-      tier="feed"
-      style={styles.mediaFill}
-      contentFit={imageFit}
-      recyclingKey={item.id}
-      transition={0}
-    />
-  ) : (
-    <View style={styles.mediaFill} />
+  const mediaNode = (
+    <View style={StyleSheet.absoluteFill}>
+      <StoryMediaImage uri={uri} recyclingKey={item.id} contentFit={imageFit} />
+    </View>
   );
 
   return (
@@ -95,8 +90,8 @@ function StoryImageSlide({ item, isActive, isPaused }: StorySlideProps) {
       )}
       <StorySlideOverlays
         sticker={sticker}
-        locationLabel={item.location?.label ?? null}
-        textOverlays={item.textOverlays}
+        location={item.location}
+        textOverlays={includeTextOverlays ? item.textOverlays : []}
       />
     </View>
   );
@@ -108,6 +103,7 @@ function StoryVideoSlide({
   isPaused,
   onVideoPosition,
   onVideoEnd,
+  includeTextOverlays = true,
 }: StorySlideProps) {
   const sticker = STORY_STICKER_CATEGORIES.find((s) => s.id === item.stickerCategory);
   const resolvedUrl = resolveStoryMediaUrl(item.mediaUrl);
@@ -213,13 +209,10 @@ function StoryVideoSlide({
   const mediaContent = (
     <View style={StyleSheet.absoluteFill}>
       {posterUri ? (
-        <OptimizedImage
+        <StoryMediaImage
           uri={posterUri}
-          tier="feed"
-          style={StyleSheet.absoluteFill}
-          contentFit={videoFit}
           recyclingKey={`${item.id}-poster`}
-          transition={0}
+          contentFit={videoFit}
         />
       ) : null}
       {source ? (
@@ -245,8 +238,8 @@ function StoryVideoSlide({
       )}
       <StorySlideOverlays
         sticker={sticker}
-        locationLabel={item.location?.label ?? null}
-        textOverlays={item.textOverlays}
+        location={item.location}
+        textOverlays={includeTextOverlays ? item.textOverlays : []}
       />
     </View>
   );
@@ -254,18 +247,18 @@ function StoryVideoSlide({
 
 function StorySlideOverlays({
   sticker,
-  locationLabel,
+  location,
   textOverlays,
 }: {
   sticker: (typeof STORY_STICKER_CATEGORIES)[number] | undefined;
-  locationLabel: string | null;
+  location: StoryItem['location'];
   textOverlays: StoryItem['textOverlays'];
 }) {
   return (
     <>
       {textOverlays.length > 0 ? <StoryTextOverlayView overlays={textOverlays} /> : null}
       {sticker ? <StoryStickerBadge sticker={sticker} /> : null}
-      {locationLabel ? <StoryLocationBadge label={locationLabel} /> : null}
+      {location?.label ? <StoryLocationOverlay location={location} /> : null}
     </>
   );
 }
@@ -285,43 +278,19 @@ function StoryStickerBadge({
   );
 }
 
-function StoryLocationBadge({ label }: { label: string }) {
-  return (
-    <View style={styles.location}>
-      <Ionicons name="location" size={14} color="#fff" />
-      <Text variant="caption" style={styles.stickerText} numberOfLines={1}>
-        {label}
-      </Text>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   root: {
     flex: 1,
     width: '100%',
     backgroundColor: '#111',
   },
-  media: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
   mediaFit: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#000',
     overflow: 'hidden',
   },
-  mediaFill: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-  },
   peekFallback: {
-    flex: 1,
-    width: '100%',
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: '#111',
   },
   sticker: {
@@ -336,19 +305,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     maxWidth: '72%',
-  },
-  location: {
-    position: 'absolute',
-    bottom: spacing.xl + 48,
-    left: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.45)',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 6,
-    borderRadius: 999,
-    maxWidth: '78%',
   },
   stickerText: {
     color: '#fff',

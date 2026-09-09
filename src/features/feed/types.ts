@@ -1,6 +1,7 @@
 import type { GenderId } from '@/constants/registration';
 import type { MusicAttribution, MusicPlaybackConfig } from '@/features/music/types';
 import type { IzdivacSpecialBadgeType } from '@/features/izdivac/types';
+import type { CapOverlayStyle } from '@/features/caps/types';
 import type { UserRole } from '@/types/database';
 
 export type FeedCategory =
@@ -42,6 +43,9 @@ export type FeedAuthor = {
   gender?: GenderId | null;
   isAiAccount?: boolean;
   accountStatus?: 'active' | 'frozen' | 'deletion_pending' | 'deleted';
+  /** Aktif şehir lideri rozeti — yorum/akış başlığında gösterilir */
+  cityLeaderRegionId?: string | null;
+  cityLeaderRegionName?: string | null;
 };
 
 export type QuotedPostPreview = {
@@ -96,6 +100,8 @@ export type FeedItem = {
   vctsStatus?: string | null;
   music?: MusicAttribution | null;
   musicPlayback?: MusicPlaybackConfig | null;
+  /** Paylaşımda "Ses" kapatıldı — videonun orijinal sesi hiç çalmaz */
+  videoOriginalMuted?: boolean;
   lostItemType?: 'lost' | 'found';
   lostItemCategory?: string;
   jobType?: string;
@@ -112,11 +118,31 @@ export type FeedItem = {
   adDestinationUrl?: string | null;
 };
 
+export type FeedCommentCap = {
+  id: string;
+  imageUrl: string;
+  videoUrl?: string | null;
+  thumbUrl?: string | null;
+  width?: number | null;
+  height?: number | null;
+  startMs?: number | null;
+  endMs?: number | null;
+  overlay?: CapOverlayStyle | null;
+  creator: {
+    id: string;
+    username: string;
+    fullName: string | null;
+    avatarUrl: string | null;
+  };
+};
+
 export type FeedComment = {
   id: string;
   postId: string;
   author: FeedAuthor;
   content: string;
+  mediaUrls: string[];
+  cap?: FeedCommentCap | null;
   likeCount: number;
   isLiked: boolean;
   isEdited: boolean;

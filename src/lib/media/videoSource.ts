@@ -13,7 +13,8 @@ export function toVideoSource(uri: string): VideoSource | null {
   }
 
   if (uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('ph://')) {
-    return uri;
+    // String yerine { uri } — iOS kamera kopyalarında daha güvenilir.
+    return { uri };
   }
 
   return null;

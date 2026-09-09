@@ -31,7 +31,9 @@ import { StoryLinkOverlay } from '@/features/stories/components/StoryLinkOverlay
 import { StoryProgressBars } from '@/features/stories/components/StoryProgressBars';
 import { StoryReplyBar } from '@/features/stories/components/StoryReplyBar';
 import { StoryPeekPreview, StorySlide } from '@/features/stories/components/StorySlide';
+import { StoryTextOverlayView } from '@/features/stories/components/StoryTextOverlayView';
 import { storyCardFrameStyle } from '@/features/stories/utils/storyCardChrome';
+import { shouldStackStoryMusicAboveLocation } from '@/features/stories/utils/storyLocation';
 import {
   STORY_CARD_BOTTOM_GAP,
   STORY_CARD_HORIZONTAL_INSET,
@@ -42,9 +44,10 @@ import {
 } from '@/features/stories/constants';
 import { useStoryAutoAdvance } from '@/features/stories/hooks/useStoryAutoAdvance';
 import { useStoryKeyboardHeight } from '@/features/stories/hooks/useStoryKeyboardHeight';
+import { useStoryViewerMediaZoom } from '@/features/stories/hooks/useStoryViewerMediaZoom';
 import { deleteStoryItem } from '@/features/stories/services/deleteStoryItem';
 import { fetchStoryBundle } from '@/features/stories/services/fetchStoryBundle';
-import { fetchStoryRings } from '@/features/stories/services/fetchStoryRings';
+import { prefetchStoryRings } from '@/features/stories/services/storyRingSession';
 import { formatStoryTime } from '@/features/stories/utils/formatStoryTime';
 import { fetchStoryInsights } from '@/features/stories/services/fetchStoryInsights';
 import { recordStoryLinkAction } from '@/features/stories/services/recordStoryLinkAction';
@@ -139,6 +142,19 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
   const items = bundle?.items ?? [];
   const activeItem: StoryItem | null = items[currentItemIndex] ?? null;
   const isOwnStory = !!user?.id && bundle?.authorId === user.id;
+  const slideInteractive = Boolean(activeItem) && !isPaused && !insightsVisible;
+
+  const {
+    isZoomed: isMediaZoomed,
+    mediaZoomStyle,
+    pinchGesture,
+    zoomPanGesture,
+    doubleTapGesture,
+    resetZoom,
+  } = useStoryViewerMediaZoom({
+    resetKey: activeItem?.id ?? 'none',
+    enabled: slideInteractive,
+  });
   const storyMusicAuthor = useMemo(
     () =>
       bundle
@@ -570,7 +586,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
     .activeOffsetX([-16, 16])
     .activeOffsetY([-20, 20])
     .onUpdate((e) => {
-      if (insightsOpen.value) return;
+      if (insightsOpen.value || isMediaZoomed.value === 1) return;
 
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
@@ -590,7 +606,13 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
       }
     })
     .onEnd((e) => {
-      if (insightsOpen.value) return;
+      if (insightsOpen.value || isMediaZoomed.value === 1) {
+        if (isMediaZoomed.value === 1) {
+          panX.value = withSpring(0, STORY_SPRING);
+          dismissY.value = withSpring(0, STORY_SPRING);
+        }
+        return;
+      }
 
       const absX = Math.abs(e.translationX);
       const absY = Math.abs(e.translationY);
@@ -657,10 +679,34 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
   const longPressGesture = Gesture.LongPress()
     .minDuration(180)
-    .onStart(() => runOnJS(setIsPaused)(true))
+    .onStart(() => {
+      if (isMediaZoomed.value === 1) return;
+      runOnJS(setIsPaused)(true);
+    })
     .onFinalize(() => runOnJS(resumePlaybackIfAllowed)());
 
-  const composedGesture = Gesture.Simultaneous(panGesture, longPressGesture);
+  const tapNavGesture = Gesture.Tap()
+    .maxDistance(14)
+    .onEnd((e) => {
+      if (insightsOpen.value) return;
+      if (isMediaZoomed.value === 1) {
+        resetZoom();
+        return;
+      }
+      if (e.x < CARD_WIDTH * 0.38) {
+        runOnJS(handleTapBack)();
+      } else {
+        runOnJS(handleTapForward)();
+      }
+    });
+
+  const composedGesture = Gesture.Simultaneous(
+    panGesture,
+    longPressGesture,
+    pinchGesture,
+    zoomPanGesture,
+    Gesture.Exclusive(doubleTapGesture, tapNavGesture),
+  );
 
   const handleReply = async (text: string) => {
     if (!user?.id || !bundle || !activeItem) return;
@@ -721,8 +767,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
 
               const remaining = items.filter((item) => item.id !== activeItem.id);
               if (remaining.length === 0) {
-                const refreshed = await fetchStoryRings({ viewerId: user.id });
-                useStoryRingStore.getState().setRings(refreshed.rings);
+                await prefetchStoryRings(user.id, { background: true });
                 router.back();
                 return;
               }
@@ -731,9 +776,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               setCurrentItemIndex(Math.min(currentItemIndex, remaining.length - 1));
               setIsPaused(false);
 
-              void fetchStoryRings({ viewerId: user.id }).then((refreshed) => {
-                useStoryRingStore.getState().setRings(refreshed.rings);
-              });
+              void prefetchStoryRings(user.id, { background: true });
             })();
           },
         },
@@ -803,13 +846,19 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
               <Animated.View style={[styles.mediaDeck, mediaDeckStyle]} collapsable={false}>
                 {activeItem ? (
                   <View key={`${activeUserId}-${activeItem.id}`} style={styles.mediaFill}>
-                    <StorySlide
-                      item={activeItem}
-                      isActive={Boolean(activeItem) && !isPaused && !insightsVisible}
-                      isPaused={isPaused || insightsVisible}
-                      onVideoPosition={handleVideoPosition}
-                      onVideoEnd={handleVideoEnd}
-                    />
+                    <Animated.View style={[styles.mediaZoomLayer, mediaZoomStyle]} collapsable={false}>
+                      <StorySlide
+                        item={activeItem}
+                        isActive={slideInteractive}
+                        isPaused={isPaused || insightsVisible}
+                        includeTextOverlays={false}
+                        onVideoPosition={handleVideoPosition}
+                        onVideoEnd={handleVideoEnd}
+                      />
+                    </Animated.View>
+                    {(activeItem.textOverlays?.length ?? 0) > 0 ? (
+                      <StoryTextOverlayView overlays={activeItem.textOverlays} />
+                    ) : null}
                   </View>
                 ) : null}
               </Animated.View>
@@ -832,7 +881,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                 <StoryMusicBadge
                   title={activeItem.music.displayTitle}
                   artist={activeItem.music.artist}
-                  stacked={Boolean(activeItem.location?.label)}
+                  stacked={shouldStackStoryMusicAboveLocation(activeItem.location)}
                   onPress={() => {
                     setIsPaused(true);
                     setMusicInfoOpen(true);
@@ -892,9 +941,6 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                 accessibilityLabel="Klavyeyi kapat"
               />
             ) : null}
-
-            <Pressable style={styles.tapLeft} onPress={handleTapBack} />
-            <Pressable style={styles.tapRight} onPress={handleTapForward} />
           </Animated.View>
         </GestureDetector>
       </Animated.View>
@@ -977,6 +1023,10 @@ const styles = StyleSheet.create({
   mediaFill: {
     flex: 1,
     width: '100%',
+    overflow: 'hidden',
+  },
+  mediaZoomLayer: {
+    ...StyleSheet.absoluteFillObject,
   },
   peekLayer: {
     ...StyleSheet.absoluteFillObject,
@@ -1010,22 +1060,6 @@ const styles = StyleSheet.create({
   musicOverlayHost: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 9,
-  },
-  tapLeft: {
-    position: 'absolute',
-    left: 0,
-    top: 72,
-    bottom: 0,
-    width: '38%',
-    zIndex: 5,
-  },
-  tapRight: {
-    position: 'absolute',
-    right: 0,
-    top: 72,
-    bottom: 0,
-    width: '62%',
-    zIndex: 5,
   },
   topRow: {
     flexDirection: 'row',

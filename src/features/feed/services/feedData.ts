@@ -14,6 +14,7 @@ import {
   feedRankWindowStart,
   isChronoFeedCursor,
   isRankCursor,
+  needsFeedBackfill,
   paginateRankedFeed,
   parseChronoCursor,
   parseRankOffset,
@@ -228,6 +229,8 @@ function mapPostToFeedItem(
     vctsStatus: state.trust.get(row.id)?.status ?? null,
     music: mapPostMusicAttribution(row),
     musicPlayback: mapPostMusicPlayback(row),
+    videoOriginalMuted:
+      row.original_audio_volume != null && Number(row.original_audio_volume) <= 0.001,
   };
 }
 
@@ -385,7 +388,13 @@ function mergeAndSort(
   items: FeedItem[],
   cursor: string | null,
   boostedAuthors: Set<string> = new Set(),
-  options: { ranked?: boolean; poolFull?: boolean; windowStart?: string } = {},
+  options: {
+    ranked?: boolean;
+    poolFull?: boolean;
+    windowStart?: string;
+    /** Skorlanacak ana havuz dışında, alta eklenecek backfill id'leri. */
+    backfillIds?: Set<string>;
+  } = {},
 ): {
   items: FeedItem[];
   nextCursor: string | null;
@@ -395,7 +404,17 @@ function mergeAndSort(
   );
 
   if (options.ranked) {
-    const sorted = sortFeedRanked(tagged, boostedAuthors);
+    const backfillIds = options.backfillIds;
+    const primary = backfillIds?.size
+      ? tagged.filter((item) => !backfillIds.has(item.id))
+      : tagged;
+    const tail = backfillIds?.size
+      ? tagged
+          .filter((item) => backfillIds.has(item.id))
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      : [];
+
+    const sorted = [...sortFeedRanked(primary, boostedAuthors), ...tail];
     const offset = isRankCursor(cursor) ? parseRankOffset(cursor) : 0;
     const windowStart = options.windowStart ?? feedRankWindowStart();
 
@@ -409,6 +428,7 @@ function mergeAndSort(
       feedPageSize(),
       options.poolFull ?? false,
       windowStart,
+      (backfillIds?.size ?? 0) > 0,
     );
 
     return { items: page, nextCursor };
@@ -488,9 +508,34 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
     return q;
   };
 
+  const buildBackfillQuery = (select: string, excludeIds: string[]) => {
+    let q = excludeAdEngagementPosts(
+      excludeCommunityPosts(
+        supabase.from('posts').select(select).eq('status', 'published'),
+      ),
+    )
+      .lt('created_at', feedRankWindowStart())
+      .order('created_at', { ascending: false })
+      .limit(feedPageSize());
+
+    if (excludeIds.length > 0) {
+      q = q.not('id', 'in', `(${excludeIds.join(',')})`);
+    }
+    if (query.regionId) q = q.eq('region_id', query.regionId);
+    if (query.district) q = q.eq('district', query.district);
+    if (query.category !== 'all' && query.category !== 'following' && query.category !== 'general') {
+      q = q.eq('category', query.category);
+    }
+    return q;
+  };
+
   const useRanking = shouldRankFeedCategory(query.category) && !query.searchQuery.trim();
   const rankWindowStart = feedRankWindowStart();
   const rankPoolSize = feedRankPoolSize();
+  const isFirstRankedPage =
+    useRanking &&
+    !isChronoFeedCursor(query.cursor) &&
+    (!query.cursor || parseRankOffset(query.cursor) === 0);
 
   const [pinnedResult, feedResult] = await Promise.all([
     !query.cursor ? fetchActivePinnedPosts(query.regionId, query.district, query.category) : Promise.resolve([]),
@@ -512,6 +557,43 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
   const allowedIds = new Set(visible.map((v) => v.id));
   rows = rows.filter((r) => allowedIds.has(r.id));
 
+  let backfillIds = new Set<string>();
+  let hiddenEarly: Awaited<ReturnType<typeof fetchHiddenAuthors>> | null = null;
+
+  if (isFirstRankedPage) {
+    hiddenEarly = await fetchHiddenAuthors(query.userId);
+    const visibleRankedCount = rows.filter((r) => !shouldHideAuthor(r.author_id, hiddenEarly!)).length;
+
+    if (needsFeedBackfill(visibleRankedCount, feedPageSize())) {
+      const excludeIds = rows.map((r) => r.id);
+      const backfillResult = await runPostsSelect((select) => buildBackfillQuery(select, excludeIds));
+      const backfillRows = (
+        backfillResult.error || !backfillResult.data ? [] : backfillResult.data
+      ) as unknown as PostRow[];
+
+      if (backfillRows.length > 0) {
+        const backfillVisible = await filterPostsByAudience(
+          backfillRows.map((r) => ({
+            id: r.id,
+            authorId: r.author_id,
+            audience: r.audience ?? 'public',
+          })),
+          query.userId,
+        );
+        const backfillAllowed = new Set(backfillVisible.map((v) => v.id));
+        const existingIds = new Set(rows.map((r) => r.id));
+        const accepted = backfillRows.filter(
+          (r) =>
+            backfillAllowed.has(r.id) &&
+            !existingIds.has(r.id) &&
+            !shouldHideAuthor(r.author_id, hiddenEarly!),
+        );
+        backfillIds = new Set(accepted.map((r) => r.id));
+        rows = [...rows, ...accepted];
+      }
+    }
+  }
+
   const postIds = rows.map((r) => r.id);
   const authorIds = [...new Set(rows.map((r) => r.author_id))];
   const quotedIds = rows.map((r) => r.quoted_post_id).filter((id): id is string => !!id);
@@ -524,7 +606,7 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
     query.category === 'all' && !query.cursor && !query.refreshLight
       ? fetchUnifiedItems(query.regionId, 'all', query.district)
       : Promise.resolve([] as FeedItem[]),
-    fetchHiddenAuthors(query.userId),
+    hiddenEarly ? Promise.resolve(hiddenEarly) : fetchHiddenAuthors(query.userId),
     fetchTrustRecordsForPosts(postIds),
     fetchBoostedAuthorIds(authorIds),
   ]);
@@ -567,11 +649,13 @@ export async function fetchFeedPage(query: FeedQuery): Promise<{
     items = enrichWithDemoContent(items, query);
   }
 
-  const poolFull = useRanking && rows.length >= rankPoolSize;
+  const rankedRowCount = rows.filter((r) => !backfillIds.has(r.id)).length;
+  const poolFull = useRanking && rankedRowCount >= rankPoolSize;
   const { items: page, nextCursor } = mergeAndSort(items, query.cursor, boostedAuthors, {
     ranked: useRanking && !isChronoFeedCursor(query.cursor),
     poolFull,
     windowStart: rankWindowStart,
+    backfillIds: backfillIds.size > 0 ? backfillIds : undefined,
   });
   const enriched = await enrichFeedAuthorsInItems(page);
   const withFollowState = await applyBusinessFollowStateToFeedItems(enriched, query.userId);

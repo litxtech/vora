@@ -4,10 +4,15 @@ import { regionMapBbox, regionMapCenter } from '@/features/map/constants';
 import type { MapCoordinate } from '@/features/map/types';
 import type { MapLocationSuggestion } from '@/features/map/types';
 import type { RegionId } from '@/constants/regions';
-import { pickValidCoordinate } from '@/features/map/utils/geoBounds';
+import {
+  isValidWorldCoordinate,
+  pickValidCoordinate,
+  type LocationGeoScope,
+} from '@/features/map/utils/geoBounds';
 
 const SEARCH_BOX_LIMIT = 10;
 const NATIVE_PLACE_LIMIT = 5;
+const NEARBY_LIMIT = 8;
 const FETCH_TIMEOUT_MS = 12_000;
 
 type SearchBoxSuggestion = {
@@ -20,6 +25,14 @@ type SearchBoxSuggestion = {
   poi_category?: string[];
   poi_category_ids?: string[];
   distance?: number;
+};
+
+type GeocodingFeature = {
+  id: string;
+  text?: string;
+  place_name?: string;
+  properties?: { category?: string };
+  geometry?: { coordinates?: [number, number] };
 };
 
 const POI_CATEGORY_LABELS: Record<string, string> = {
@@ -75,6 +88,7 @@ function suggestionToResult(
     mapboxId: item.mapbox_id,
     sessionToken,
     geocodeHint: address,
+    distanceMeters: typeof item.distance === 'number' ? item.distance : undefined,
   };
 }
 
@@ -94,27 +108,42 @@ function dedupeSuggestions(items: MapLocationSuggestion[]): MapLocationSuggestio
 
 async function searchMapboxSearchBox(
   query: string,
-  regionId: RegionId,
-  proximity?: MapCoordinate,
-  sessionToken?: string,
+  options: {
+    regionId?: RegionId;
+    proximity?: MapCoordinate;
+    sessionToken?: string;
+    scope?: LocationGeoScope;
+  },
 ): Promise<MapLocationSuggestion[]> {
   const token = env.mapbox.accessToken;
   if (!token) return [];
 
-  const tokenSession = sessionToken ?? createSessionToken();
-  const center = proximity ?? regionMapCenter(regionId);
+  const scope = options.scope ?? 'region';
+  const tokenSession = options.sessionToken ?? createSessionToken();
+  const center =
+    options.proximity ??
+    (options.regionId ? regionMapCenter(options.regionId) : undefined);
 
   const params = new URLSearchParams({
     q: query,
     access_token: token,
     session_token: tokenSession,
     language: 'tr',
-    country: 'TR',
     limit: String(SEARCH_BOX_LIMIT),
-    types: 'poi,address,place,street,locality,neighborhood,region',
-    proximity: `${center.longitude},${center.latitude}`,
-    bbox: regionMapBbox(regionId),
+    types: 'poi,address,place,street,locality,neighborhood,region,country',
   });
+
+  if (center) {
+    params.set('proximity', `${center.longitude},${center.latitude}`);
+  }
+
+  // Bölge modu: Türkiye + il bbox. Dünya modu: kısıt yok, proximity yakın sonuçları öne alır.
+  if (scope === 'region') {
+    params.set('country', 'TR');
+    if (options.regionId) {
+      params.set('bbox', regionMapBbox(options.regionId));
+    }
+  }
 
   const url = `https://api.mapbox.com/search/searchbox/v1/suggest?${params}`;
   const controller = new AbortController();
@@ -167,16 +196,80 @@ export async function retrieveMapboxPlace(
   }
 }
 
+/** Kullanıcı konumuna yakın yer önerileri (ters geocode). */
+export async function fetchNearbyPlaces(
+  proximity: MapCoordinate,
+): Promise<MapLocationSuggestion[]> {
+  const token = env.mapbox.accessToken;
+  if (!token) return [];
+
+  const params = new URLSearchParams({
+    access_token: token,
+    language: 'tr',
+    limit: String(NEARBY_LIMIT),
+    types: 'poi,address,neighborhood,locality,place',
+  });
+
+  const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${proximity.longitude},${proximity.latitude}.json?${params}`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return [];
+
+    const json = (await res.json()) as { features?: GeocodingFeature[] };
+    const features = json.features ?? [];
+
+    return features
+      .map((feature, index): MapLocationSuggestion | null => {
+        const coords = feature.geometry?.coordinates;
+        if (!coords) return null;
+        const latitude = coords[1];
+        const longitude = coords[0];
+        if (!isValidWorldCoordinate(latitude, longitude)) return null;
+
+        const label = feature.text?.trim() || feature.place_name?.split(',')[0]?.trim();
+        if (!label) return null;
+
+        return {
+          id: `nearby-${feature.id || index}`,
+          label,
+          subtitle: ['Yakınında', feature.place_name].filter(Boolean).join(' · '),
+          latitude,
+          longitude,
+          source: 'place',
+          geocodeHint: feature.place_name,
+        };
+      })
+      .filter((item): item is MapLocationSuggestion => item != null);
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function searchNativePlaces(
   query: string,
-  regionName: string,
-  regionId: RegionId,
+  options: {
+    regionName?: string;
+    regionId?: RegionId;
+    scope?: LocationGeoScope;
+  },
 ): Promise<MapLocationSuggestion[]> {
-  const queries = [
-    `${query}, ${regionName}, Türkiye`,
-    `${query}, Karadeniz, Türkiye`,
-    `${query}, ${regionName}`,
-  ];
+  const scope = options.scope ?? 'region';
+  const regionName = options.regionName;
+  const regionId = options.regionId ?? 'trabzon';
+
+  const queries =
+    scope === 'world'
+      ? [query, regionName ? `${query}, ${regionName}` : null].filter((q): q is string => Boolean(q))
+      : [
+          regionName ? `${query}, ${regionName}, Türkiye` : null,
+          `${query}, Karadeniz, Türkiye`,
+          regionName ? `${query}, ${regionName}` : null,
+        ].filter((q): q is string => Boolean(q));
 
   for (const text of queries) {
     try {
@@ -188,6 +281,7 @@ async function searchNativePlaces(
             : null,
         ),
         regionId,
+        scope,
       );
       if (!valid) continue;
 
@@ -195,12 +289,12 @@ async function searchNativePlaces(
         {
           id: `native-${text}`,
           label: query,
-          subtitle: `Adres · ${regionName}`,
+          subtitle: scope === 'world' ? 'Adres' : `Adres · ${regionName ?? regionId}`,
           latitude: valid.latitude,
           longitude: valid.longitude,
           source: 'place',
           geocodeHint: regionName,
-          regionId,
+          regionId: scope === 'region' ? regionId : undefined,
         },
       ];
     } catch {
@@ -213,15 +307,31 @@ async function searchNativePlaces(
 
 export async function searchExternalPlaces(
   query: string,
-  options?: { proximity?: MapCoordinate; regionId?: RegionId; regionName?: string; sessionToken?: string },
+  options?: {
+    proximity?: MapCoordinate;
+    regionId?: RegionId;
+    regionName?: string;
+    sessionToken?: string;
+    scope?: LocationGeoScope;
+  },
 ): Promise<MapLocationSuggestion[]> {
   const q = query.trim();
   if (q.length < 2) return [];
 
+  const scope = options?.scope ?? 'region';
   const regionId = options?.regionId ?? 'trabzon';
   const [mapbox, native] = await Promise.all([
-    searchMapboxSearchBox(q, regionId, options?.proximity, options?.sessionToken),
-    options?.regionName ? searchNativePlaces(q, options.regionName, regionId) : Promise.resolve([]),
+    searchMapboxSearchBox(q, {
+      regionId,
+      proximity: options?.proximity,
+      sessionToken: options?.sessionToken,
+      scope,
+    }),
+    searchNativePlaces(q, {
+      regionName: options?.regionName,
+      regionId,
+      scope,
+    }),
   ]);
 
   return dedupeSuggestions([...mapbox, ...native]).slice(0, SEARCH_BOX_LIMIT + NATIVE_PLACE_LIMIT);

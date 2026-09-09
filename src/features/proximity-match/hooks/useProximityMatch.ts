@@ -22,6 +22,7 @@ import {
 } from '@/features/proximity-match/services/proximityBackgroundTask';
 import {
   findNearbyProximityCandidate,
+  markProximityCandidateOffered as markOfferedOnServer,
   submitProximityMatchDecision,
 } from '@/features/proximity-match/services/proximityMatch';
 import {
@@ -29,6 +30,12 @@ import {
   resolveProximityMatchEligibility,
   type ProximityMatchIneligibilityReason,
 } from '@/features/proximity-match/services/proximityMatchEligibility';
+import {
+  clearProximityOfferedMemory,
+  hydrateProximityOfferedCandidates,
+  markProximityCandidateOffered,
+  wasProximityCandidateOffered,
+} from '@/features/proximity-match/services/proximityCandidateSession';
 import {
   clearProximityPresence,
   upsertProximityPresence,
@@ -80,12 +87,13 @@ export function useProximityMatch() {
   const lastCandidatePollAtRef = useRef(0);
   const realtimePollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [appActive, setAppActive] = useState(() => AppState.currentState === 'active');
-  const dismissedRef = useRef<Set<string>>(new Set());
+  const candidateRef = useRef<ProximityMatchCandidate | null>(null);
   const publishingRef = useRef(false);
   const watcherOpRef = useRef(0);
   const ineligibilityWarnedRef = useRef(false);
 
   const safeSetCandidate = useCallback((next: ProximityMatchCandidate | null) => {
+    candidateRef.current = next;
     if (mountedRef.current) setCandidate(next);
   }, []);
 
@@ -157,15 +165,23 @@ export function useProximityMatch() {
   const pollCandidate = useCallback(async () => {
     if (!enabled || !user?.id || !eligibility.eligible || submitting) return;
 
+    // Aktif kart varken yeni kişi arama — aynı eşleşme kartı yalnızca 1 kez.
+    if (candidateRef.current) return;
+
     const coords = coordsRef.current;
     if (!coords) return;
 
     lastCandidatePollAtRef.current = Date.now();
 
     try {
+      await hydrateProximityOfferedCandidates(user.id);
       const next = await findNearbyProximityCandidate(coords.lat, coords.lng);
-      if (!mountedRef.current) return;
-      if (!next || dismissedRef.current.has(next.userId)) return;
+      if (!mountedRef.current || !next) return;
+      if (await wasProximityCandidateOffered(user.id, next.userId)) return;
+
+      await markProximityCandidateOffered(user.id, next.userId);
+      void markOfferedOnServer(next.userId);
+      if (!mountedRef.current || candidateRef.current) return;
       safeSetCandidate(next);
     } catch (err) {
       console.warn('[proximity-match] candidate poll failed:', err);
@@ -237,7 +253,8 @@ export function useProximityMatch() {
       if (!candidate || submitting) return;
 
       const target = candidate;
-      dismissedRef.current.add(target.userId);
+      if (user?.id) void markProximityCandidateOffered(user.id, target.userId);
+      void markOfferedOnServer(target.userId);
       safeSetCandidate(null);
       setSubmitting(true);
 
@@ -254,11 +271,13 @@ export function useProximityMatch() {
           'İşlem başarısız',
           toUserFacingError(err instanceof Error ? err.message : null, { fallback: 'Tekrar deneyin.' }),
         );
+        // Karar başarısızsa aynı kartı geri getir (offered zaten işaretli — yeni kart değil).
+        if (mountedRef.current) safeSetCandidate(target);
       } finally {
         if (mountedRef.current) setSubmitting(false);
       }
     },
-    [candidate, safeSetCandidate, submitting],
+    [candidate, safeSetCandidate, submitting, user?.id],
   );
 
   const surfaceActive = useProximityTrackingSurfaceActive();
@@ -286,6 +305,11 @@ export function useProximityMatch() {
   }, []);
 
   useEffect(() => {
+    if (user?.id) void hydrateProximityOfferedCandidates(user.id);
+    else clearProximityOfferedMemory();
+  }, [user?.id]);
+
+  useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
       setAppActive(state === 'active');
     });
@@ -301,7 +325,14 @@ export function useProximityMatch() {
   useEffect(() => {
     if (!canRunMatching) {
       void clearPresenceAndCoords();
-      safeSetCandidate(null);
+      // Sekme/scroll değişiminde kartı kapatma — yalnızca eşleşme tamamen durunca.
+      // Aktif kartı koru; logout’ta temizle.
+      if (!user?.id) {
+        safeSetCandidate(null);
+        clearProximityOfferedMemory();
+      } else if (!enabled || !eligibility.eligible) {
+        safeSetCandidate(null);
+      }
       if (!eligibility.eligible && eligibility.reason) {
         safeSetIneligibilityReason(eligibility.reason);
       }
@@ -324,10 +355,12 @@ export function useProximityMatch() {
     clearPresenceAndCoords,
     eligibility.eligible,
     eligibility.reason,
+    enabled,
     prefVersion,
     safeSetCandidate,
     safeSetIneligibilityReason,
     stopForegroundWatcher,
+    user?.id,
   ]);
 
   useEffect(() => {

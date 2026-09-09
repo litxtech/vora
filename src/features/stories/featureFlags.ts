@@ -13,6 +13,7 @@ export const STORIES_FEATURE = {
   ringBar: featureControlId(PARENT, 'ring-bar'),
   ringBootstrap: featureControlId(PARENT, 'ring-bootstrap'),
   ringBundlePrefetch: featureControlId(PARENT, 'ring-bundle-prefetch'),
+  archive: featureControlId(PARENT, 'archive'),
 } as const;
 
 export const STORIES_SUB_FEATURES: AppFeatureDef[] = [
@@ -36,6 +37,13 @@ export const STORIES_SUB_FEATURES: AppFeatureDef[] = [
     'ring-bundle-prefetch',
     'Dokununca ön yükleme',
     'Halkaya dokunulunca hikâye içeriğini önceden yükler',
+  ),
+  buildControlSubFeature(
+    PARENT,
+    GROUP,
+    'archive',
+    'Hikâye arşivi',
+    'Ayarlar üzerinden geçmiş hikâyeleri görüntüleme, indirme ve yeniden paylaşma',
   ),
 ];
 

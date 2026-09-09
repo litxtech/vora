@@ -7,9 +7,16 @@ import {
   LOCATION_SEARCH_PER_SOURCE_LIMIT,
   regionMapCenter,
 } from '@/features/map/constants';
-import { searchExternalPlaces } from '@/features/map/services/searchExternalPlaces';
+import {
+  fetchNearbyPlaces,
+  searchExternalPlaces,
+} from '@/features/map/services/searchExternalPlaces';
 import type { MapCoordinate, MapLocationSource, MapLocationSuggestion } from '@/features/map/types';
-import { isValidPostCoordinate } from '@/features/map/utils/geoBounds';
+import {
+  approximateDistanceMeters,
+  isValidPostCoordinate,
+  type LocationGeoScope,
+} from '@/features/map/utils/geoBounds';
 import { mpSupabase } from '@/features/marketplace/services/mpSupabase';
 import { CATEGORY_DEFS } from '@/features/marketplace/constants';
 import { TOURISM_CATEGORIES } from '@/features/tourism/constants';
@@ -76,11 +83,12 @@ function resolveStoredCoords(
   latitude: number | null,
   longitude: number | null,
   regionId: RegionId,
+  scope: LocationGeoScope = 'region',
 ): { latitude: number | null; longitude: number | null } {
   if (latitude == null || longitude == null) {
     return { latitude: null, longitude: null };
   }
-  if (!isValidPostCoordinate(latitude, longitude, regionId)) {
+  if (!isValidPostCoordinate(latitude, longitude, regionId, scope)) {
     return { latitude: null, longitude: null };
   }
   return { latitude, longitude };
@@ -109,20 +117,31 @@ export function locationSourceLabel(source: MapLocationSource): string {
   return SOURCE_LABELS[source];
 }
 
+export async function fetchNearbyMapLocations(
+  proximity: MapCoordinate,
+): Promise<MapLocationSuggestion[]> {
+  return fetchNearbyPlaces(proximity);
+}
+
 export async function searchMapLocations(
   query: string,
   regionId: RegionId,
-  options?: { proximity?: MapCoordinate; sessionToken?: string },
+  options?: {
+    proximity?: MapCoordinate;
+    sessionToken?: string;
+    scope?: LocationGeoScope;
+  },
 ): Promise<MapLocationSuggestion[]> {
   const q = sanitizeQuery(query);
   if (q.length < LOCATION_SEARCH_MIN_CHARS) return [];
 
+  const scope = options?.scope ?? 'region';
   const pattern = ilikePattern(query);
   const orFilter = ilikeOrFilter;
   const results: MapLocationSuggestion[] = [];
   const seen = new Set<string>();
   const regionName = regionNameById(regionId);
-  const proximity = options?.proximity ?? regionMapCenter(regionId);
+  const proximity = options?.proximity ?? (scope === 'region' ? regionMapCenter(regionId) : undefined);
 
   const [businesses, events, tourism, marketplace, postLabels, external] = await Promise.all([
     supabase
@@ -185,6 +204,7 @@ export async function searchMapLocations(
       regionId,
       regionName,
       sessionToken: options?.sessionToken,
+      scope,
     }),
   ]);
 
@@ -203,7 +223,7 @@ export async function searchMapLocations(
   for (const row of (businesses.data ?? []) as BusinessRow[]) {
     const rowRegionName = regionNameById(row.region_id) ?? row.region_id;
     const geocodeHint = businessGeocodeHint(row, rowRegionName);
-    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id);
+    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id, scope);
 
     pushSuggestion(results, seen, {
       id: `business-${row.id}`,
@@ -231,7 +251,7 @@ export async function searchMapLocations(
 
   for (const row of (tourism.data ?? []) as TourismRow[]) {
     const rowRegionName = regionNameById(row.region_id) ?? row.region_id;
-    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id);
+    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id, scope);
 
     pushSuggestion(results, seen, {
       id: `tourism-${row.id}`,
@@ -256,7 +276,7 @@ export async function searchMapLocations(
   };
 
   for (const row of (marketplace.data ?? []) as MarketplaceRow[]) {
-    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id);
+    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id, scope);
     pushSuggestion(results, seen, {
       id: `marketplace-${row.id}`,
       label: row.title,
@@ -278,7 +298,7 @@ export async function searchMapLocations(
   };
 
   for (const row of (events.data ?? []) as EventRow[]) {
-    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id);
+    const coords = resolveStoredCoords(row.latitude, row.longitude, row.region_id, scope);
     pushSuggestion(results, seen, {
       id: `event-${row.id}`,
       label: row.location_name ?? row.title,
@@ -303,7 +323,7 @@ export async function searchMapLocations(
 
   for (const [label, meta] of [...labelCounts.entries()].sort((a, b) => b[1].count - a[1].count).slice(0, LOCATION_SEARCH_PER_SOURCE_LIMIT)) {
     const coords = meta.regionId
-      ? resolveStoredCoords(meta.latitude, meta.longitude, meta.regionId)
+      ? resolveStoredCoords(meta.latitude, meta.longitude, meta.regionId, scope)
       : { latitude: meta.latitude, longitude: meta.longitude };
 
     pushSuggestion(results, seen, {
@@ -345,9 +365,31 @@ export async function searchMapLocations(
     const bStarts = b.label.toLowerCase().startsWith(qLower) ? 0 : 1;
     if (aStarts !== bStarts) return aStarts - bStarts;
 
-    const aRegion = a.regionId === regionId ? 0 : 1;
-    const bRegion = b.regionId === regionId ? 0 : 1;
-    if (aRegion !== bRegion) return aRegion - bRegion;
+    // Kullanıcıya yakın sonuçlar önce (Mapbox distance veya koordinat)
+    if (proximity) {
+      const aDist =
+        a.distanceMeters ??
+        (a.latitude != null && a.longitude != null
+          ? approximateDistanceMeters(proximity, a.latitude, a.longitude)
+          : Number.POSITIVE_INFINITY);
+      const bDist =
+        b.distanceMeters ??
+        (b.latitude != null && b.longitude != null
+          ? approximateDistanceMeters(proximity, b.latitude, b.longitude)
+          : Number.POSITIVE_INFINITY);
+      if (aDist !== bDist) return aDist - bDist;
+    }
+
+    if (scope === 'region') {
+      const aRegion = a.regionId === regionId ? 0 : 1;
+      const bRegion = b.regionId === regionId ? 0 : 1;
+      if (aRegion !== bRegion) return aRegion - bRegion;
+    } else {
+      // Dünya aramasında harita sonuçları yerel katalogdan önce
+      const aPlace = a.source === 'place' ? 0 : 1;
+      const bPlace = b.source === 'place' ? 0 : 1;
+      if (aPlace !== bPlace) return aPlace - bPlace;
+    }
 
     const aRank = SOURCE_RANK[a.source];
     const bRank = SOURCE_RANK[b.source];

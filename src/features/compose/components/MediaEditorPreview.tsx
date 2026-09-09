@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import { CapturedVideoPreview } from '@/components/media/CapturedVideoPreview';
+import { SyncedVideoPreview } from '@/features/vora-studio/components/SyncedVideoPreview';
 import { MediaEditorLocalImage } from '@/features/compose/components/MediaEditorLocalImage';
 import { DraggableLocationPin } from '@/features/compose/components/DraggableLocationPin';
 import { MediaEditorZoomableLayer } from '@/features/compose/components/MediaEditorZoomableLayer';
@@ -45,20 +45,26 @@ type Props = {
 function EditorVideoLayer({
   uri,
   music,
-  videoMuted,
+  muted,
+  editManifest,
   onPlayhead,
 }: {
   uri: string;
   music: MusicSelection | null;
-  videoMuted: boolean;
+  muted: boolean;
+  editManifest: PublishedEditManifest | null;
   onPlayhead: (sec: number) => void;
 }) {
   return (
-    <CapturedVideoPreview
+    <SyncedVideoPreview
+      key={uri}
       uri={uri}
       music={music}
-      videoMuted={videoMuted}
+      muted={muted}
+      editManifest={editManifest}
+      autoPlay
       onPlayhead={onPlayhead}
+      style={StyleSheet.absoluteFill}
     />
   );
 }
@@ -135,6 +141,7 @@ export function MediaEditorPreview({
         mediaClip: {
           flex: 1,
           overflow: 'hidden',
+          position: 'relative',
         },
       }),
     [],
@@ -177,7 +184,8 @@ export function MediaEditorPreview({
               <EditorVideoLayer
                 uri={slide.uri}
                 music={music}
-                videoMuted={videoMuted}
+                muted={videoMuted}
+                editManifest={editManifest}
                 onPlayhead={setPlayheadSec}
               />
               <FilterOverlay filterId={slide.filterId} />

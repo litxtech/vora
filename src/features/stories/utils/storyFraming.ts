@@ -1,5 +1,6 @@
 import { Image } from 'react-native';
 import { getVideoMetaData } from 'react-native-compressor';
+import { normalizeLocalFileUri } from '@/lib/files/readLocalFile';
 
 const PROBE_TIMEOUT_MS = 4000;
 
@@ -16,6 +17,12 @@ export type StoryFraming = {
 /** Otomatik çerçeveleme: kartı tam doldur (cover). */
 export const STORY_AUTO_FRAME_ZOOM = 1;
 
+/** İki parmakla kadraj — minimum küçültme (cover altına inebilir) */
+export const STORY_FRAMING_MIN_ZOOM = 0.15;
+
+/** İki parmakla kadraj — maksimum yakınlaştırma */
+export const STORY_FRAMING_MAX_ZOOM = 8;
+
 export const DEFAULT_STORY_FRAMING: StoryFraming = {
   zoom: STORY_AUTO_FRAME_ZOOM,
   translateXNorm: 0,
@@ -28,40 +35,6 @@ export const DEFAULT_STORY_FRAMING: StoryFraming = {
 /** Tipik story kart en-boy oranı (dikey telefon önizlemesi) */
 export const STORY_CARD_MEDIA_ASPECT = 9 / 16;
 
-export const STORY_FRAMING_BACKGROUNDS = [
-  '#000000',
-  '#0a0a0a',
-  '#1c1c1e',
-  '#2c2c2e',
-  '#3a3a3c',
-  '#636366',
-  '#ffffff',
-  '#f2f2f7',
-  '#e5e5ea',
-  '#ff3b30',
-  '#ff2d55',
-  '#ff6b35',
-  '#ff9500',
-  '#ffcc00',
-  '#ffd60a',
-  '#34c759',
-  '#30d158',
-  '#00c7be',
-  '#5ac8fa',
-  '#007aff',
-  '#5856d6',
-  '#7c3aed',
-  '#af52de',
-  '#ff6b9d',
-  '#e91e8c',
-  '#8e6f53',
-  '#a2845e',
-  '#1a2e1a',
-  '#1a1a2e',
-  '#2e1a1a',
-  '#1a2e2e',
-] as const;
-
 export function computeStoryFramingMetrics(
   mediaW: number,
   mediaH: number,
@@ -72,8 +45,8 @@ export function computeStoryFramingMetrics(
     return {
       baseWidth: containerW,
       baseHeight: containerH,
-      minZoom: 1,
-      maxZoom: 4,
+      minZoom: STORY_FRAMING_MIN_ZOOM,
+      maxZoom: STORY_FRAMING_MAX_ZOOM,
     };
   }
 
@@ -81,13 +54,13 @@ export function computeStoryFramingMetrics(
   const containScale = Math.min(containerW / mediaW, containerH / mediaH);
   const baseWidth = mediaW * coverScale;
   const baseHeight = mediaH * coverScale;
-  const minZoom = containScale / coverScale;
+  const fitMinZoom = containScale / coverScale;
 
   return {
     baseWidth,
     baseHeight,
-    minZoom: Math.min(1, minZoom),
-    maxZoom: 4,
+    minZoom: Math.min(STORY_FRAMING_MIN_ZOOM, fitMinZoom),
+    maxZoom: STORY_FRAMING_MAX_ZOOM,
   };
 }
 
@@ -178,6 +151,8 @@ export function serializeStoryFraming(framing: StoryFraming): Record<string, unk
 }
 
 export function probeImageSize(uri: string): Promise<{ width: number; height: number }> {
+  const normalized = normalizeLocalFileUri(uri);
+
   return new Promise((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -187,7 +162,7 @@ export function probeImageSize(uri: string): Promise<{ width: number; height: nu
     }, PROBE_TIMEOUT_MS);
 
     Image.getSize(
-      uri,
+      normalized,
       (width, height) => {
         if (settled) return;
         settled = true;

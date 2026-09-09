@@ -10,7 +10,8 @@ import {
 } from 'react';
 import { AppState } from 'react-native';
 import { fetchFeatureVisibility } from '@/features/feature-flags/services/featureFlags';
-import { isEffectivelyVisible } from '@/features/feature-flags/services/featureTree';
+import { isFeatureForcedHidden } from '@/features/feature-flags/services/featureFlagsCore';
+import { getFeatureAncestors, isEffectivelyVisible } from '@/features/feature-flags/services/featureTree';
 import type { FeatureId, FeatureVisibilityMap } from '@/features/feature-flags/types';
 import { getHeavyFeatureBootDelayMs } from '@/lib/boot/heavyFeatureDelay';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
@@ -24,10 +25,15 @@ type FeatureFlagsContextValue = {
   refresh: () => Promise<void>;
 };
 
+function isForcedOff(featureId: string): boolean {
+  if (isFeatureForcedHidden(featureId)) return true;
+  return getFeatureAncestors(featureId).some((id) => isFeatureForcedHidden(id));
+}
+
 const FEATURE_FLAGS_FALLBACK: FeatureFlagsContextValue = {
   isReady: false,
   visibility: {},
-  isVisible: () => true,
+  isVisible: (featureId) => !featureId || !isForcedOff(featureId),
   refresh: async () => undefined,
 };
 
@@ -118,6 +124,7 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
   const isVisible = useCallback(
     (featureId: FeatureId) => {
       if (!featureId) return true;
+      if (isForcedOff(featureId)) return false;
       if (!isReady) return true;
       return isEffectivelyVisible(featureId, visibility);
     },

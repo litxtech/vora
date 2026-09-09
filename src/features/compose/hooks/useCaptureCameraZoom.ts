@@ -25,6 +25,7 @@ type UseCaptureCameraZoomOptions = {
   enabled: boolean;
   /** Video kaydı sırasında yalnızca pinch — preset / rail gizlenir */
   recording?: boolean;
+  facing?: 'front' | 'back';
   resetKey: string;
   onFlipCamera: () => void;
 };
@@ -78,9 +79,12 @@ function resolveIosPresets(lenses: string[]): ZoomPreset[] {
   return presets;
 }
 
+const PINCH_FLIP_COOLDOWN_MS = 320;
+
 export function useCaptureCameraZoom({
   enabled,
   recording = false,
+  facing = 'back',
   resetKey,
   onFlipCamera,
 }: UseCaptureCameraZoomOptions) {
@@ -98,6 +102,7 @@ export function useCaptureCameraZoom({
   const selectedLensRef = useRef<string | undefined>(undefined);
   const recordingLensRef = useRef<string | undefined>(undefined);
   const isPinchingRef = useRef(false);
+  const pinchEndedAtRef = useRef(0);
   const pinchThrottleRef = useRef(0);
 
   selectedLensRef.current = selectedLens;
@@ -194,12 +199,29 @@ export function useCaptureCameraZoom({
             });
 
       if (recording) {
+        // Kayıt sırasında lens değiştirme — CameraView oturumu düşmesin
         const display = clampDisplayZoom(nextDisplay);
+        const lockedLens = recordingLensRef.current ?? selectedLensRef.current;
         resolved = {
           displayZoom: display,
-          lens: recordingLensRef.current ?? selectedLensRef.current,
+          lens: lockedLens,
           linearZoom: displayZoomToLinear(display),
         };
+        linearZoomRef.current = resolved.linearZoom;
+        displayZoomRef.current = resolved.displayZoom;
+        setLinearZoom(resolved.linearZoom);
+        setDisplayZoom(resolved.displayZoom);
+        // selectedLens'i güncelleme — kayıt oturumunu koru
+        syncPresetFromZoom(resolved.displayZoom, lockedLens);
+        const crossedInteger =
+          Math.floor(resolved.displayZoom) !== Math.floor(lastHapticDisplayRef.current) &&
+          resolved.displayZoom >= 1.8;
+        if (options?.haptic || crossedInteger) {
+          void Haptics.selectionAsync();
+        }
+        lastHapticDisplayRef.current = resolved.displayZoom;
+        showIndicator();
+        return;
       }
 
       linearZoomRef.current = resolved.linearZoom;
@@ -250,6 +272,8 @@ export function useCaptureCameraZoom({
   }, [clearHideIndicatorTimer]);
 
   const handleFlipCamera = useCallback(() => {
+    if (isPinchingRef.current) return;
+    if (Date.now() - pinchEndedAtRef.current < PINCH_FLIP_COOLDOWN_MS) return;
     resetZoom();
     onFlipCamera();
   }, [onFlipCamera, resetZoom]);
@@ -303,12 +327,21 @@ export function useCaptureCameraZoom({
       const now = Date.now();
       if (recording && now - pinchThrottleRef.current < 48) return;
       pinchThrottleRef.current = now;
-      commitDisplayZoom(nextDisplay);
+
+      const minDisplay = facing === 'front' ? 1 : CAPTURE_MIN_DISPLAY_ZOOM;
+      const display = Math.max(minDisplay, clampDisplayZoom(nextDisplay));
+
+      // Pinch sırasında lens değiştirme — yalnızca mevcut lens üzerinde dijital zoom.
+      commitDisplayZoom(display, {
+        lens: selectedLensRef.current,
+        linearZoom: displayZoomToLinear(display),
+      });
     },
-    [commitDisplayZoom, recording],
+    [commitDisplayZoom, facing, recording],
   );
 
   const finishPinch = useCallback(() => {
+    pinchEndedAtRef.current = Date.now();
     scheduleHideIndicator();
   }, [scheduleHideIndicator]);
 
@@ -366,6 +399,8 @@ export function useCaptureCameraZoom({
   const pinchEnabled = enabled;
   const flipOnDoubleTap = enabled && !recording;
 
+  const minPinchDisplay = facing === 'front' ? 1 : CAPTURE_MIN_DISPLAY_ZOOM;
+
   const previewGesture = useMemo(() => {
     const doubleTap = Gesture.Tap()
       .enabled(flipOnDoubleTap)
@@ -387,10 +422,7 @@ export function useCaptureCameraZoom({
       .onUpdate((event) => {
         'worklet';
         const raw = savedDisplay.value * event.scale ** CAPTURE_PINCH_SENSITIVITY;
-        const next = Math.min(
-          CAPTURE_MAX_DISPLAY_ZOOM,
-          Math.max(CAPTURE_MIN_DISPLAY_ZOOM, raw),
-        );
+        const next = Math.min(CAPTURE_MAX_DISPLAY_ZOOM, Math.max(minPinchDisplay, raw));
         runOnJS(invokeUpdatePinchDisplay)(next);
       })
       .onEnd(() => {
@@ -403,7 +435,7 @@ export function useCaptureCameraZoom({
         runOnJS(invokeSetPinching)(false);
       });
 
-    return Gesture.Simultaneous(pinch, doubleTap);
+    return Gesture.Exclusive(pinch, doubleTap);
   }, [
     flipOnDoubleTap,
     invokeFinishPinch,
@@ -412,6 +444,7 @@ export function useCaptureCameraZoom({
     invokeShowIndicator,
     invokeUpdatePinchDisplay,
     isPinching,
+    minPinchDisplay,
     pinchEnabled,
     savedDisplay,
   ]);

@@ -6,7 +6,8 @@ export { captureThumbnail } from '@/features/vora-studio/services/videoThumbnail
 import type { StudioExportResult } from '@/features/vora-studio/types';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
 import { VIDEO_PROGRESS } from '@/services/video/progressMessages';
-import { compressVideoForUpload } from '@/lib/video/compress';
+import { compressVideoForUpload, shouldSkipVideoCompression } from '@/lib/video/compress';
+import { getLocalFileSize } from '@/lib/files/readLocalFile';
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { supabase } from '@/lib/supabase/client';
 
@@ -70,18 +71,25 @@ export async function exportStudioVideo(
   const manifest = buildEditManifest(state, username);
   if (!manifest) throw new Error('Manifest oluşturulamadı.');
 
-  onProgress?.(VIDEO_PROGRESS.compressing);
-  const compressedUri = await compressVideoForUpload(state.sourceUri, { profile: 'fast' });
+  onProgress?.(VIDEO_PROGRESS.preparing);
+  const preparedUri = await prepareLocalVideoUri(state.sourceUri);
+  const fileSize = getLocalFileSize(preparedUri);
+
+  let outputUri = preparedUri;
+  if (!shouldSkipVideoCompression(fileSize, 'fast')) {
+    onProgress?.(VIDEO_PROGRESS.compressing);
+    outputUri = await compressVideoForUpload(preparedUri, { profile: 'fast' });
+  }
 
   onProgress?.(VIDEO_PROGRESS.thumbnail);
-  const thumbnailUri = await captureThumbnail(compressedUri, state.thumbnailTimeSec);
+  const thumbnailUri = await captureThumbnail(outputUri, state.thumbnailTimeSec);
 
   onProgress?.(VIDEO_PROGRESS.uploading);
 
   const { data, error } = await supabase.functions.invoke('vora-studio-render', {
     body: {
       userId,
-      sourceUri: compressedUri,
+      sourceUri: outputUri,
       manifest,
       thumbnailTimeSec: state.thumbnailTimeSec,
     },
@@ -92,7 +100,7 @@ export async function exportStudioVideo(
       console.warn('[vora-studio] render edge function unavailable, using local export', error.message);
     }
     return {
-      outputUri: compressedUri,
+      outputUri,
       manifest,
       jobId: null,
       thumbnailUri,
@@ -106,7 +114,7 @@ export async function exportStudioVideo(
   };
 
   return {
-    outputUri: result.outputUri ?? compressedUri,
+    outputUri: result.outputUri ?? outputUri,
     manifest,
     jobId: result.jobId ?? null,
     thumbnailUri: result.thumbnailUri ?? thumbnailUri,

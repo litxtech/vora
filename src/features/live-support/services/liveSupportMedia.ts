@@ -1,5 +1,5 @@
 import { getLocalFileSize, readLocalFileBytes } from '@/lib/files/readLocalFile';
-import { compressVideoForUpload } from '@/lib/video/compress';
+import { compressVideoForUpload, shouldSkipVideoCompression } from '@/lib/video/compress';
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage, toUserFacingError } from '@/lib/errors';
@@ -76,10 +76,12 @@ export async function uploadLiveSupportVideo(
     }
 
     let uploadUri = stableUri;
-    try {
-      uploadUri = await compressVideoForUpload(stableUri, { profile: 'messaging' });
-    } catch (err) {
-      if (__DEV__) console.warn('[live-support-video] compress skipped', err);
+    if (!shouldSkipVideoCompression(originalSize, 'messaging')) {
+      try {
+        uploadUri = await compressVideoForUpload(stableUri, { profile: 'messaging' });
+      } catch (err) {
+        if (__DEV__) console.warn('[live-support-video] compress skipped', err);
+      }
     }
 
     const uploadSize = getLocalFileSize(uploadUri);

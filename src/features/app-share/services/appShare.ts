@@ -5,6 +5,7 @@ import type { View } from 'react-native';
 import { saveUriToGallery } from '@/features/compose/services/saveMediaToGallery';
 import { toUserFacingError } from '@/lib/errors';
 import { openUrl } from '@/lib/linking/openUrl';
+import { APP_NAME } from '@/constants/branding';
 
 const CAPTURE_DELAY_MS = 120;
 
@@ -44,7 +45,7 @@ export async function shareAppShareCardImage(
         await Share.share(
           Platform.OS === 'ios'
             ? { url: uri, message }
-            : { message, url: uri, title: 'Vora X' },
+            : { message, url: uri, title: APP_NAME },
         );
         return { error: null };
       } catch {
@@ -60,7 +61,7 @@ export async function shareAppShareCardImage(
     await Sharing.shareAsync(uri, {
       mimeType: 'image/jpeg',
       UTI: 'public.jpeg',
-      dialogTitle: 'Vora X · Uygulama kartı',
+      dialogTitle: `${APP_NAME} · Uygulama kartı`,
     });
     return { error: null };
   } catch (error) {
@@ -88,7 +89,7 @@ export async function shareAppWhatsApp(message: string): Promise<{ error: string
       return { error: null };
     }
 
-    await Share.share(Platform.OS === 'android' ? { message, title: 'Vora X' } : { message });
+    await Share.share(Platform.OS === 'android' ? { message, title: APP_NAME } : { message });
     return { error: null };
   } catch (error) {
     return {

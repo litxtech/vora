@@ -13,6 +13,7 @@ export type ProfileBadgeKey =
   | 'platform_charm'
   | 'pioneer'
   | 'platform_supporter'
+  | 'city_leader'
   | 'admin'
   | 'moderator'
   | 'reporter'
@@ -125,6 +126,13 @@ export const PROFILE_BADGE_VISIBILITY_DEFS: ProfileBadgeVisibilityDef[] = [
     description: 'Platforma destek sağlayan üye rozeti',
     icon: 'heart-circle',
     color: '#10B981',
+  },
+  {
+    key: 'city_leader',
+    label: 'Şehir Lideri',
+    description: 'Seçilmiş şehir lideri rozeti',
+    icon: 'ribbon',
+    color: '#F59E0B',
   },
 ];
 

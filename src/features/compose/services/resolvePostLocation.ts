@@ -27,5 +27,6 @@ export async function resolvePostLocationCoords(
     mapboxId: input.mapboxId,
     sessionToken: input.sessionToken,
     source: input.source,
+    scope: 'world',
   });
 }

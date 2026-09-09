@@ -12,57 +12,79 @@ export type VideoCompressionOptions = {
   signal?: AbortSignal;
 };
 
-const PROFILES: Record<
-  VideoCompressionProfile,
-  { maxSize: number; minimumFileSizeForCompress: number; bitrate?: number }
-> = {
+type ProfilePreset = {
+  maxSize: number;
+  /** Bayt: bu boyutun altında sıkıştırma atlanır. */
+  skipBelowBytes: number;
   /**
-   * Gönderi paylaşımı: 1080p hedef, yalnızca çok büyük dosyalarda donanım sıkıştırma.
-   * Anında paylaşım akışında çoğu video Mux'a doğrudan gider; Mux 1080p transcode yapar.
+   * react-native-compressor native eşiği — birimi MB (bayt değil).
+   * Dosya bu MB değerinden büyükse sıkıştırılır.
+   */
+  minimumFileSizeForCompressMb: number;
+  bitrate?: number;
+  compressionMethod: 'auto' | 'manual';
+};
+
+const PROFILES: Record<VideoCompressionProfile, ProfilePreset> = {
+  /**
+   * Gönderi: feed kaydı hemen açılır; video arka planda hızlı 720p olarak küçültülür.
    */
   post: {
-    maxSize: 1080,
-    minimumFileSizeForCompress: 80 * 1024 * 1024,
-    bitrate: 2_500_000,
+    maxSize: 720,
+    skipBelowBytes: 0,
+    minimumFileSizeForCompressMb: 0,
+    bitrate: 1_800_000,
+    compressionMethod: 'manual',
   },
-  /** Hızlı paylaşım / studio: 720p, orta dosyalarda sıkıştırma atlanır */
+  /** Reels / studio: hızlı paylaşım için 720p sıkıştırma. */
   fast: {
     maxSize: 720,
-    minimumFileSizeForCompress: 32 * 1024 * 1024,
+    skipBelowBytes: 0,
+    minimumFileSizeForCompressMb: 0,
+    bitrate: 1_600_000,
+    compressionMethod: 'manual',
   },
-  /**
-   * Hikâye: kısa klip, düşük bant genişliğinde hızlı yükleme.
-   * 720p + ~1.1 Mbps; 4 MB üzeri dosyalarda sıkıştırılır.
-   */
+  /** Hikâye: kısa kliplerde hızlı 720p sıkıştırma. */
   story: {
     maxSize: 720,
-    minimumFileSizeForCompress: 4 * 1024 * 1024,
-    bitrate: 1_100_000,
+    skipBelowBytes: 0,
+    minimumFileSizeForCompressMb: 0,
+    bitrate: 1_400_000,
+    compressionMethod: 'manual',
   },
-  /** Sohbet: kısa videolarda sıkıştırma atlanır */
-  messaging: {
-    maxSize: 720,
-    minimumFileSizeForCompress: 10 * 1024 * 1024,
-  },
-  /** Reels / yüksek kalite */
+  /** Yüksek kalite isteyen eski çağrılar: 1080p ama yine hızlı manual profil. */
   quality: {
     maxSize: 1080,
-    minimumFileSizeForCompress: 0,
+    skipBelowBytes: 0,
+    minimumFileSizeForCompressMb: 0,
+    bitrate: 2_500_000,
+    compressionMethod: 'manual',
+  },
+  /**
+   * Sohbet / destek: boyut limiti var — yalnızca büyük dosyalarda hızlı 720p sıkıştırma.
+   * manual + sabit bitrate donanım kodlayıcıda auto'dan daha öngörülebilir süre verir.
+   */
+  messaging: {
+    maxSize: 720,
+    skipBelowBytes: 14 * 1024 * 1024,
+    minimumFileSizeForCompressMb: 14,
+    bitrate: 1_400_000,
+    compressionMethod: 'manual',
   },
 };
 
-/** Dosya boyutu eşiğin altındaysa sıkıştırma atlanır (react-native-compressor minimumFileSizeForCompress). */
+/** Dosya boyutu eşiğin altındaysa sıkıştırma atlanır. */
 export function shouldSkipVideoCompression(
   fileSizeBytes: number,
-  profile: VideoCompressionProfile = 'fast',
+  profile: VideoCompressionProfile = 'post',
 ): boolean {
   if (fileSizeBytes <= 0) return false;
-  return fileSizeBytes <= PROFILES[profile].minimumFileSizeForCompress;
+  return fileSizeBytes <= PROFILES[profile].skipBelowBytes;
 }
 
 /**
  * Videoyu yükleme için sıkıştırır.
- * `fast` profili büyük/uzun videolarda paylaşım süresini kısaltır.
+ * `post` profili feed kaydından sonra arka planda çalışacak şekilde hızlı tutulur.
  */
 export async function compressVideoForUpload(
   uri: string,
@@ -70,7 +92,7 @@ export async function compressVideoForUpload(
 ): Promise<string> {
   throwIfAborted(options.signal);
 
-  const profile = options.profile ?? 'quality';
+  const profile = options.profile ?? 'post';
   const preset = PROFILES[profile];
   let cancelId: string | undefined;
 
@@ -83,16 +105,21 @@ export async function compressVideoForUpload(
   }
 
   try {
+    const maxSize = Math.max(options.maxWidth ?? preset.maxSize, options.maxHeight ?? preset.maxSize);
+    const bitrate = options.bitrate ?? preset.bitrate;
+
     const compressOptions: Parameters<typeof Video.compress>[1] = {
-      compressionMethod: 'auto',
-      maxSize: Math.max(options.maxWidth ?? preset.maxSize, options.maxHeight ?? preset.maxSize),
-      minimumFileSizeForCompress: preset.minimumFileSizeForCompress,
+      compressionMethod: preset.compressionMethod,
+      maxSize,
+      minimumFileSizeForCompress: preset.minimumFileSizeForCompressMb,
+      progressDivider: 10,
       getCancellationId: (id) => {
         cancelId = id;
       },
     };
-    if (preset.bitrate != null) {
-      compressOptions.bitrate = preset.bitrate;
+
+    if (preset.compressionMethod === 'manual' && bitrate != null) {
+      compressOptions.bitrate = bitrate;
     }
 
     return await Video.compress(

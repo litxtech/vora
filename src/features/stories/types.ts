@@ -99,3 +99,16 @@ export type StoryViewerSession = {
   startUserId: string;
   startItemIndex?: number;
 };
+
+export type StoryArchiveItem = {
+  id: string;
+  storyId: string;
+  mediaType: 'image' | 'video';
+  mediaUrl: string;
+  thumbUrl: string | null;
+  durationSec: number | null;
+  createdAt: string;
+  expiresAt: string;
+  isActive: boolean;
+  viewCount: number;
+};

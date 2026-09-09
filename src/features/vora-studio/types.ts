@@ -12,6 +12,18 @@ export type StudioExportMode = 'reel' | 'post' | 'standalone' | 'live-support' |
 
 export type TextAnimation = 'none' | 'fade' | 'slide' | 'pop';
 
+export type StoryTextStyleId =
+  | 'modern'
+  | 'classic'
+  | 'neon'
+  | 'typewriter'
+  | 'strong'
+  | 'script';
+
+export type StoryTextBackground = 'none' | 'semi' | 'solid';
+
+export type StoryTextAlign = 'left' | 'center' | 'right';
+
 export type StudioClip = {
   id: string;
   startSec: number;
@@ -30,6 +42,18 @@ export type StudioTextOverlay = {
   startSec: number;
   endSec: number;
   animation: TextAnimation;
+  /** Story: x,y merkez noktası olarak yorumlanır */
+  anchor?: 'topLeft' | 'center';
+  /** Story: Instagram tarzı yazı stili */
+  textStyle?: StoryTextStyleId;
+  /** Story: metin arka planı */
+  background?: StoryTextBackground;
+  /** Story: hizalama */
+  textAlign?: StoryTextAlign;
+  /** Story: pinch ölçeği (1 = varsayılan) */
+  scale?: number;
+  /** Story: derece cinsinden dönüş */
+  rotationDeg?: number;
 };
 
 export type StudioSubtitleCue = {

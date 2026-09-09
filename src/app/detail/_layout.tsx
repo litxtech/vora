@@ -1,9 +1,16 @@
 import { Stack } from 'expo-router';
 import { getDefaultStackScreenOptions } from '@/constants/navigation';
+import { useTheme } from '@/providers/ThemeProvider';
 
 export default function DetailLayout() {
+  const { colors } = useTheme();
+
   return (
-    <Stack screenOptions={getDefaultStackScreenOptions()}>
+    <Stack
+      screenOptions={getDefaultStackScreenOptions({
+        contentStyle: { backgroundColor: colors.background },
+      })}
+    >
       <Stack.Screen name="incidents/[id]" />
       <Stack.Screen name="posts/[id]" />
       <Stack.Screen name="businesses/[id]" />

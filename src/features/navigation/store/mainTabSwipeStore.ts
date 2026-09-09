@@ -2,32 +2,27 @@ import { makeMutable, type SharedValue } from 'react-native-reanimated';
 import { create } from 'zustand';
 import type { MainTabRoute } from '@/features/navigation/constants';
 
-export type MainTabSwipePartnerSide = 'left' | 'right';
+export type MainTabSwipeNeighborSide = 'left' | 'right';
 
 export const mainTabSwipeProgress: SharedValue<number> = makeMutable(0);
 export const mainTabSwipeAnimating: SharedValue<boolean> = makeMutable(false);
+/** jumpTo sonrası hedef sekme — progress sıfırlanana kadar translateX=0 kilidi. */
+export const mainTabSwipeLandingRoute: SharedValue<string | null> = makeMutable(null);
 
 type MainTabSwipeStore = {
-  partnerRoute: MainTabRoute | null;
-  partnerSide: MainTabSwipePartnerSide | null;
+  /** Odaktaki kaydırılabilir sekme — komşular buna göre önceden konumlanır. */
+  activeRoute: MainTabRoute | null;
   warmRoutes: MainTabRoute[];
-  setPartner: (route: MainTabRoute | null, side: MainTabSwipePartnerSide | null) => void;
-  clearPartner: () => void;
+  setActiveRoute: (route: MainTabRoute | null) => void;
   setWarmRoutes: (routes: MainTabRoute[]) => void;
 };
 
 export const useMainTabSwipeStore = create<MainTabSwipeStore>((set, get) => ({
-  partnerRoute: null,
-  partnerSide: null,
+  activeRoute: null,
   warmRoutes: [],
-  setPartner: (partnerRoute, partnerSide) => {
-    const current = get();
-    if (current.partnerRoute === partnerRoute && current.partnerSide === partnerSide) return;
-    set({ partnerRoute, partnerSide });
-  },
-  clearPartner: () => {
-    if (!get().partnerRoute && !get().partnerSide) return;
-    set({ partnerRoute: null, partnerSide: null });
+  setActiveRoute: (activeRoute) => {
+    if (get().activeRoute === activeRoute) return;
+    set({ activeRoute });
   },
   setWarmRoutes: (warmRoutes) => {
     const prev = get().warmRoutes;

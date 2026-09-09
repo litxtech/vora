@@ -72,6 +72,12 @@ export const BADGE_CONFIG: Record<
     icon: 'compass',
     description: 'Topluluğu yönlendiren ve platformda gerekli bilgileri paylaşan üye',
   },
+  city_leader: {
+    label: 'Şehir Lideri',
+    color: '#F59E0B',
+    icon: 'ribbon',
+    description: 'Şehir topluluğunun seçilmiş lideri',
+  },
 };
 
 export const ACHIEVEMENT_CONFIG: Record<string, { label: string; icon: string; description: string }> = {

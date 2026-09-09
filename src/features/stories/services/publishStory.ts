@@ -7,6 +7,7 @@ import {
   type StoryLocationManifest,
   type StoryMusicManifest,
 } from '@/features/stories/utils/storyManifest';
+import { selectedLocationToManifest } from '@/features/stories/utils/storyLocation';
 import type { StoryLinkManifest } from '@/features/stories/utils/storyLinks';
 import {
   prepareStoryVideoUpload,
@@ -21,6 +22,7 @@ import type { MusicSelection } from '@/features/music/types';
 import type { StudioTextOverlay } from '@/features/vora-studio/types';
 import { recordAudioUsage } from '@/features/sounds/services/recordSoundUsage';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
+import type { StoryLocationPosition } from '@/features/stories/utils/storyLocation';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
 import { isUploadCancelledError, throwIfAborted } from '@/services/video/uploadCancelled';
 
@@ -34,6 +36,7 @@ export type PublishStoryInput = {
   framing?: StoryFraming | null;
   music?: MusicSelection | null;
   location?: SelectedLocation | null;
+  locationPosition?: StoryLocationPosition;
   links?: StoryLinkManifest[];
   textOverlays?: StudioTextOverlay[];
   /** Studio'da kırpıldıysa dosya süresi yerine bu değer kullanılır. */
@@ -110,6 +113,7 @@ type InsertStoryItemInput = {
   framing?: StoryFraming | null;
   music?: MusicSelection | null;
   location?: SelectedLocation | null;
+  locationPosition?: StoryLocationPosition;
   links?: StoryLinkManifest[];
   textOverlays?: StudioTextOverlay[];
   regionId?: string | null;
@@ -132,9 +136,10 @@ async function insertStoryItemRecord(
   const nextOrder = Number(orderRow?.sort_order ?? -1) + 1;
 
   const musicManifest: StoryMusicManifest | null = musicSelectionToManifest(input.music ?? null);
-  const locationManifest: StoryLocationManifest | null = input.location?.label?.trim()
-    ? { label: input.location.label.trim() }
-    : null;
+  const locationManifest: StoryLocationManifest | null = selectedLocationToManifest(
+    input.location,
+    input.locationPosition,
+  );
 
   const stickersJson = serializeStoryManifest({
     framing: input.framing ?? null,
@@ -283,6 +288,7 @@ async function publishStoryInner(
       framing: input.framing,
       music: input.music,
       location: input.location,
+      locationPosition: input.locationPosition,
       links: input.links,
       textOverlays: input.textOverlays,
       regionId: input.regionId,
@@ -340,6 +346,7 @@ async function publishStoryInner(
     framing: input.framing,
     music: input.music,
     location: input.location,
+    locationPosition: input.locationPosition,
     links: input.links,
     textOverlays: input.textOverlays,
     regionId: input.regionId,

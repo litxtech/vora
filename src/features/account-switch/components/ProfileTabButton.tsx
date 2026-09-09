@@ -1,14 +1,14 @@
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
-import { Pressable, Text, type StyleProp, type ViewStyle } from 'react-native';
+import { Text, type StyleProp, type ViewStyle } from 'react-native';
+import { HoldToSwitchTabButton } from '@/features/navigation/components/HoldToSwitchTabButton';
 import { ProfileTabBarIcon } from '@/features/profile/components/ProfileTabBarIcon';
 import { useTheme } from '@/providers/ThemeProvider';
-import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
 
 /** Profil sekmesi — hesap geçişi profil ekranındaki AccountSwitchBar üzerinden yapılır. */
 export function ProfileTabButton({
   style,
   accessibilityState,
-  onPress,
+  children: _children,
   ...rest
 }: BottomTabBarButtonProps) {
   const { tabBar } = useTheme();
@@ -16,14 +16,11 @@ export function ProfileTabButton({
   const color = focused ? tabBar.activeTint : tabBar.inactiveTint;
 
   return (
-    <Pressable
+    <HoldToSwitchTabButton
       {...rest}
-      accessibilityRole="button"
       accessibilityState={accessibilityState}
-      onPress={onPress}
       style={style as StyleProp<ViewStyle>}
       hitSlop={8}
-      {...getAndroidInstantPressableProps()}
     >
       <ProfileTabBarIcon color={color} focused={focused} />
       <Text
@@ -36,6 +33,6 @@ export function ProfileTabButton({
       >
         Profil
       </Text>
-    </Pressable>
+    </HoldToSwitchTabButton>
   );
 }

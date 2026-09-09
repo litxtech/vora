@@ -17,7 +17,7 @@ import { isMusicTrackPlayable } from '@/features/music/constants';
 import { MusicAddPromptCard } from '@/features/music/components/MusicAddPromptCard';
 import { MusicEditorPanel } from '@/features/music/components/MusicEditorPanel';
 import { MusicPickerSheet } from '@/features/music/components/MusicPickerSheet';
-import type { MusicTrack } from '@/features/music/types';
+import type { MusicSelection, MusicTrack } from '@/features/music/types';
 import { useStudioEditorStore } from '@/features/vora-studio/store/editorStore';
 import { toUserFacingError } from '@/lib/errors';
 import { formatStudioTime } from '@/features/vora-studio/utils/time';
@@ -146,11 +146,35 @@ function MusicPanel() {
 
   const clipDurationSec = Math.max(0.5, trimEndSec - trimStartSec);
 
-  const applyMusicSelection = (track: MusicTrack) => {
-    if (!isMusicTrackPlayable(track.audioUrl)) {
+  const applyMusicSelection = (selection: MusicSelection) => {
+    if (!isMusicTrackPlayable(selection.audioUrl)) {
       Alert.alert('Ses dosyası yok', 'Bu parçanın sesi henüz yüklenmemiş. Admin panelinden ses yükleyin.');
       return;
     }
+    const track: MusicTrack = {
+      id: selection.trackId,
+      title: selection.displayTitle,
+      displayTitle: selection.displayTitle,
+      artist: selection.artist,
+      album: null,
+      categoryId: null,
+      categorySlug: null,
+      categoryLabel: null,
+      coverUrl: null,
+      audioUrl: selection.audioUrl,
+      durationSec: selection.durationSec,
+      licenseStatus: 'licensed',
+      licenseInfo: null,
+      publicationStatus: 'active',
+      isTrending: false,
+      isFeatured: false,
+      isEditorPick: false,
+      sortOrder: 0,
+      usageCount: 0,
+      viewCount: 0,
+      lastUsedAt: null,
+      createdAt: new Date().toISOString(),
+    };
     setSelectedMusic(track);
     setSelectedTrack(track);
     setPickerOpen(false);

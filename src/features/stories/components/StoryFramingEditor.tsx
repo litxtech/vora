@@ -17,13 +17,13 @@ import {
 } from '@/features/stories/utils/storyFraming';
 
 type StoryFramingEditorProps = {
-  children: ReactNode;
+  children?: ReactNode;
   framing: StoryFraming;
   onFramingChange: (framing: StoryFraming) => void;
   mediaWidth: number;
   mediaHeight: number;
   enabled?: boolean;
-  /** Metin sürüklenirken / pinch yapılırken medya jestlerini kapat */
+  /** Medya jestlerini kapatmak için (ör. overlay düzenleme) */
   mediaGesturesEnabled?: boolean;
   /**
    * false = pinch/pan/double-tap kapalı.
@@ -163,14 +163,12 @@ export function StoryFramingEditor({
         .onUpdate((e) => {
           const next = savedScale.value * e.scale;
           scale.value = Math.min(metrics.maxZoom, Math.max(metrics.minZoom, next));
-          if (overlayOnly) {
-            runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
-          }
+          runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         })
         .onEnd(() => {
           runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         }),
-    [commitFraming, gesturesEnabled, metrics.maxZoom, metrics.minZoom, overlayOnly, savedScale, scale, translateX, translateY],
+    [commitFraming, gesturesEnabled, metrics.maxZoom, metrics.minZoom, savedScale, scale, translateX, translateY],
   );
 
   const pan = useMemo(
@@ -179,6 +177,8 @@ export function StoryFramingEditor({
         .enabled(gesturesEnabled)
         .minPointers(1)
         .maxPointers(1)
+        // Küçük kaydırmaları yok say — yanlışlıkla pan başlamasın.
+        .minDistance(8)
         .onStart(() => {
           savedTranslateX.value = translateX.value;
           savedTranslateY.value = translateY.value;
@@ -186,14 +186,12 @@ export function StoryFramingEditor({
         .onUpdate((e) => {
           translateX.value = savedTranslateX.value + e.translationX;
           translateY.value = savedTranslateY.value + e.translationY;
-          if (overlayOnly) {
-            runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
-          }
+          runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         })
         .onEnd(() => {
           runOnJS(commitFraming)(scale.value, translateX.value, translateY.value);
         }),
-    [commitFraming, gesturesEnabled, overlayOnly, savedTranslateX, savedTranslateY, scale, translateX, translateY],
+    [commitFraming, gesturesEnabled, savedTranslateX, savedTranslateY, scale, translateX, translateY],
   );
 
   const doubleTap = useMemo(
@@ -230,78 +228,92 @@ export function StoryFramingEditor({
   const hasLayout = layout.width > 0 && layout.height > 0;
 
   if (overlayOnly) {
-    return (
-      <GestureDetector gesture={composed}>
-        <View
-          style={[styles.root, styles.overlayRoot]}
-          onLayout={onLayout}
-          collapsable={false}
-        >
-          <View style={styles.gestureFill} pointerEvents="box-none">
-            {children}
-          </View>
+    const overlayBody = (
+      <View
+        style={[styles.root, styles.overlayRoot]}
+        onLayout={onLayout}
+        collapsable={false}
+        pointerEvents="box-none"
+      >
+        <View style={styles.gestureFill} pointerEvents="box-none">
+          {children}
         </View>
-      </GestureDetector>
+      </View>
     );
+
+    if (!gesturesEnabled) {
+      return overlayBody;
+    }
+
+    return <GestureDetector gesture={composed}>{overlayBody}</GestureDetector>;
   }
 
   // Tek stabil ağaç: medya transformu statik View ile (Animated yerine) — yerel görsel kaybını önler.
   const zoom = Math.max(0.05, pixels.zoom);
 
-  return (
-    <GestureDetector gesture={composed}>
-      <View
-        style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
-        onLayout={onLayout}
-        collapsable={false}
-      >
-        <View style={styles.stage} pointerEvents="box-none">
-          {hasLayout ? (
-            <View
-              style={{
-                width: metrics.baseWidth,
-                height: metrics.baseHeight,
-                transform: [
-                  { translateX: pixels.translateX },
-                  { translateY: pixels.translateY },
-                  { scale: zoom },
-                ],
-              }}
-              pointerEvents="none"
-            >
-              {children}
-            </View>
-          ) : (
-            <View style={styles.fallback} pointerEvents="none">
-              {children}
-            </View>
-          )}
-        </View>
+  const editorBody = (
+    <View
+      style={[styles.root, { backgroundColor: framing.backgroundColor ?? DEFAULT_STORY_FRAMING.backgroundColor }]}
+      onLayout={onLayout}
+      collapsable={false}
+      pointerEvents="box-none"
+    >
+      <View style={styles.stage} pointerEvents="box-none">
+        {hasLayout ? (
+          <View
+            style={{
+              width: metrics.baseWidth,
+              height: metrics.baseHeight,
+              overflow: 'hidden',
+              transform: [
+                { translateX: pixels.translateX },
+                { translateY: pixels.translateY },
+                { scale: zoom },
+              ],
+            }}
+            pointerEvents="none"
+          >
+            {children}
+          </View>
+        ) : (
+          <View style={styles.preLayoutFill} pointerEvents="none">
+            {children}
+          </View>
+        )}
       </View>
-    </GestureDetector>
+    </View>
   );
+
+  if (!gesturesEnabled) {
+    return editorBody;
+  }
+
+  return <GestureDetector gesture={composed}>{editorBody}</GestureDetector>;
 }
 
 const styles = StyleSheet.create({
   root: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     overflow: 'hidden',
   },
   overlayRoot: {
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'transparent',
   },
   gestureFill: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
   },
   fallback: {
-    flex: 1,
-    width: '100%',
+    ...StyleSheet.absoluteFillObject,
+  },
+  preLayoutFill: {
+    ...StyleSheet.absoluteFillObject,
   },
   mediaFill: {
     ...StyleSheet.absoluteFillObject,
   },
   stage: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     justifyContent: 'center',
   },

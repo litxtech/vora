@@ -50,6 +50,8 @@ const PREF_MAP: Record<string, string> = {
   izdivac_invite_accepted: 'system',
   security_alert: 'emergency',
   content_warning: 'system',
+  content_removed: 'system',
+  content_restored: 'system',
   business_post: 'businesses',
   business_campaign: 'businesses',
   business_event: 'businesses',
@@ -116,7 +118,13 @@ const QUIET_HOURS_BYPASS = new Set([
 ]);
 
 /** Kullanıcı tercihlerinden bağımsız — her zaman iletilir. */
-const ALWAYS_ON_EVENTS = new Set(['content_warning', 'emergency', 'security_alert']);
+const ALWAYS_ON_EVENTS = new Set([
+  'content_warning',
+  'content_removed',
+  'content_restored',
+  'emergency',
+  'security_alert',
+]);
 
 export function prefKeyForEvent(eventType: string): string | undefined {
   return PREF_MAP[eventType];

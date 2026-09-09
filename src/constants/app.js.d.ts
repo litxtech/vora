@@ -5,6 +5,7 @@ declare const appIdentity: {
   APP_DOMAIN: 'vora.app';
   APP_SHARE_BASE_URL: string;
   APP_BUNDLE_ID: 'com.karadeniz.dijitalagi';
+  APP_ANDROID_PACKAGE: 'com.litxtech.vora';
   APPLE_TEAM_ID: '9W6CR7KXM7';
   IAP_PREMIUM_PRODUCT_SUFFIX: {
     monthly: string;

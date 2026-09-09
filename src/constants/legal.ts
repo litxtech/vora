@@ -65,7 +65,7 @@ export const LEGAL_DOCUMENTS = {
     sections: [
       {
         heading: 'Hizmet Tanımı',
-        body: 'Vora; canlı haber paylaşımı, mesajlaşma, harita tabanlı içerikler, iş ilanları ve topluluk etkileşimi sunan bir dijital platformdur. Hizmet LitxTech tarafından işletilir.',
+        body: 'Vora; 18 yaş ve üzeri kullanıcılara yönelik bir sosyal platformdur. Canlı haber ve içerik paylaşımı, mesajlaşma, harita tabanlı içerikler, iş ilanları, Date ve İzdivaç gibi yetişkin sosyal özellikler, işletme reklamları ve topluluk etkileşimi sunar. Hizmet LitxTech tarafından işletilir. Platform çocuklara veya 18 yaş altına yönelik değildir.',
       },
       {
         heading: 'Yaş ve Kayıt Koşulları',
@@ -77,7 +77,7 @@ export const LEGAL_DOCUMENTS = {
       },
       {
         heading: 'İçerik Politikası',
-        body: 'Nefret söylemi, şiddet, taciz, dolandırıcılık, yanıltıcı haber, yasa dışı faaliyet teşviki, çocuklara yönelik zararlı içerik ve spam yasaktır. İhlal eden içerikler kaldırılabilir; tekrarlayan ihlallerde hesap kısıtlanabilir veya kalıcı olarak kapatılabilir.',
+        body: 'Nefret söylemi, şiddet, taciz, dolandırıcılık, yanıltıcı haber, yasa dışı faaliyet teşviki, çocuklara yönelik zararlı içerik, pornografi ve spam yasaktır. Date ve İzdivaç yalnızca 18+ üyeler içindir. İhlal eden içerikler kaldırılabilir; tekrarlayan ihlallerde hesap kısıtlanabilir veya kalıcı olarak kapatılabilir.',
       },
       {
         heading: 'Hesap Güvenliği',
@@ -92,8 +92,12 @@ export const LEGAL_DOCUMENTS = {
         body: 'Kurallara aykırı kullanım, güvenlik riski veya yasal zorunluluk hâlinde hesabınız geçici olarak dondurulabilir veya kalıcı olarak kapatılabilir. Hesabınızı dilediğiniz zaman uygulama ayarlarından silme talebinde bulunabilirsiniz.',
       },
       {
+        heading: 'Reklamlar',
+        body: 'Vora, Reklam Merkezi üzerinden işletmelerin oluşturduğu sponsorlu içerikler gösterebilir. Reklamlar yayından önce moderasyona tabidir; yetişkin içerik, şiddet, kumar ve yanıltıcı teklifler yasaktır. Reklam hedeflemesi yalnızca 18 yaş ve üzeri hesaplara yöneliktir. Google AdMob veya üçüncü taraf reklam ağı kullanılmaz.',
+      },
+      {
         heading: 'Vora Premium Abonelik Hizmeti',
-        body: 'Vora Premium; altın profil rozeti, gelişmiş istatistikler, profil öne çıkarma ve profil ziyaretçisi görüntüleme gibi ek özellikler sunan isteğe bağlı, ücretli bir abonelik hizmetidir. Premium satın alarak bu şartların abonelik hükümlerini de kabul etmiş olursunuz.',
+        body: 'Vora Premium; altın profil rozeti, gelişmiş istatistikler, profil öne çıkarma ve profil ziyaretçisi görüntüleme gibi ek özellikler sunan isteğe bağlı, ücretli bir abonelik hizmetidir. Android Google Play sürümünde uygulama içi abonelik satışı şu an kapalıdır; özellikler tüm üyelere açıktır. Premium satın alma sunulduğu platformlarda bu şartların abonelik hükümleri de geçerlidir.',
       },
       {
         heading: 'Abonelik Paketleri ve Fiyatlandırma',
@@ -149,7 +153,7 @@ export const LEGAL_DOCUMENTS = {
       },
       {
         heading: 'Toplanan Veriler',
-        body: 'Kayıt ve profil bilgileri (ad, kullanıcı adı, e-posta, doğum tarihi), profil fotoğrafı, konum verisi (izin verildiğinde), paylaşımlar, mesajlar, cihaz ve oturum bilgileri, bildirim tercihleri ve kullanım istatistikleri toplanabilir.',
+        body: 'Kayıt ve profil bilgileri (ad, kullanıcı adı, e-posta, doğum tarihi, cinsiyet), profil fotoğrafı, konum verisi (izin verildiğinde), paylaşımlar, mesajlar, Date ve İzdivaç profilleri, reklam gösterim/tıklama kayıtları, cihaz ve oturum bilgileri, bildirim tercihleri ve kullanım istatistikleri toplanabilir.',
       },
       {
         heading: 'Veri İşleme Amaçları',
@@ -184,8 +188,16 @@ export const LEGAL_DOCUMENTS = {
         body: 'Verilerinizi korumak için şifreleme, erişim kontrolü ve güvenlik denetimleri uygulanır. Veri ihlali şüphesi durumunda yasal süreler içinde gerekli bildirimler yapılır.',
       },
       {
+        heading: 'Reklamlar ve Hedefleme',
+        body: 'Reklam Merkezi kampanyaları yaş (en az 18), bölge ve ilgi alanına göre gösterilebilir. Reklam verenler işletme tanıtımı yapar; üçüncü taraf reklam ağı (AdMob vb.) kullanılmaz. Reklam içerikleri moderasyona tabidir.',
+      },
+      {
+        heading: 'Date ve İzdivaç',
+        body: 'Date ve İzdivaç yalnızca 18 yaşını doldurmuş, profili tamamlanmış üyeler içindir. Bu özelliklerde cinsiyet, doğum tarihi ve kullanıcıların paylaştığı profil/etkinlik bilgileri eşleşme ve katılım için işlenir.',
+      },
+      {
         heading: 'Abonelik ve Ödeme Verileri',
-        body: 'Premium abonelik satın alımlarında ödeme sağlayıcısı (Apple veya Stripe) aracılığıyla işlem kimliği, abonelik durumu, paket türü ve fatura dönemi bilgileri işlenebilir. Kredi kartı numarası gibi hassas ödeme bilgileri LitxTech sunucularında saklanmaz; bu veriler ilgili ödeme sağlayıcısı tarafından işlenir.',
+        body: 'Android Google Play sürümünde uygulama içi abonelik satışı yapılmaz. Abonelik sunulan platformlarda ödeme sağlayıcısı (Apple veya Stripe) aracılığıyla işlem kimliği, abonelik durumu, paket türü ve fatura dönemi bilgileri işlenebilir. Kredi kartı numarası gibi hassas ödeme bilgileri LitxTech sunucularında saklanmaz.',
       },
       {
         heading: 'İletişim',

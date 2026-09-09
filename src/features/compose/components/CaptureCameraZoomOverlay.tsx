@@ -122,7 +122,7 @@ export function CaptureCameraZoomOverlay({
             },
           ]}
           accessibilityLabel="Kamera önizlemesi"
-          accessibilityHint="İki parmakla 0.5x–8x arası yakınlaştırın; çift dokunarak kamerayı çevirin"
+          accessibilityHint="İki parmakla yakınlaştırın veya uzaklaştırın; tek parmakla çift dokunarak ön/arka kamerayı değiştirin"
         />
       </GestureDetector>
 

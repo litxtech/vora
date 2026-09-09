@@ -9,7 +9,7 @@ export const APP_SHARE_CARD_WIDTH = 360;
 export const DEFAULT_APP_STORE_LINKS: AppStoreLinksConfig = {
   ios_url: IOS_APP_STORE_URL,
   android_url: '',
-  title: "Vora X'i Keşfet",
+  title: "Vora'yı Keşfet",
   subtitle: "Karadeniz'in canlı dijital ağı",
   share_message:
     "Karadeniz'in dijital topluluğu Vora'ya katıl! Yerel haber, etkinlik ve topluluk tek uygulamada.",

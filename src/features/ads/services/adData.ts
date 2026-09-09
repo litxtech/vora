@@ -1,5 +1,6 @@
 import type { BusinessAd, CreateAdInput, RestartAdResult } from '@/features/ads/types';
 import type { RegionId } from '@/constants/regions';
+import { clampAdTargetAgeMin } from '@/features/ads/constants';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 
@@ -135,7 +136,7 @@ export async function createPremiumAd(
       target_region_id: primaryRegion,
       target_region_ids: input.targetRegionIds,
       target_district: input.targetDistrict,
-      target_age_min: input.targetAgeMin,
+      target_age_min: clampAdTargetAgeMin(input.targetAgeMin),
       target_age_max: input.targetAgeMax,
       target_interests: input.targetInterests,
       ends_at: input.endsAt,

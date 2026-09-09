@@ -19,8 +19,8 @@ type UploadOptions = {
 };
 
 function estimateEtaSec(fileSizeBytes: number, stage: MediaUploadStage, stageProgress: number): number {
-  const compressSec = Math.max(3, Math.ceil(fileSizeBytes / 2_000_000));
-  const uploadBytesPerSec = 750_000;
+  const compressSec = Math.max(2, Math.ceil(fileSizeBytes / 4_000_000));
+  const uploadBytesPerSec = 1_200_000;
   const sendBase = 1;
 
   if (stage === 'compressing') {

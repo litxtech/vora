@@ -5,6 +5,7 @@ import type { QuotedPostPreview } from '@/features/feed/types';
 import { businessCategoryLabel } from '@/features/businesses/constants';
 import { fetchBusinessIdentitiesByOwnerIds } from '@/features/profile/services/businessProfile';
 import { fetchIzdivacAppBadgesBatch } from '@/features/izdivac/services/adminIzdivac';
+import { fetchCityLeaderBadgesByUserIds } from '@/features/city-governance';
 
 /** Kurumsal doğrulanmış hesaplar — sarı tik */
 export const BUSINESS_VERIFIED_COLOR = '#FFB300';
@@ -136,30 +137,43 @@ export async function enrichFeedAuthorsInItems<T extends { author: FeedAuthor }>
     ),
   ];
 
-  const [identities, izdivacBadges] = await Promise.all([
+  const authorIds = [...new Set(items.map((item) => item.author.id))];
+
+  const [identities, izdivacBadges, cityLeaders] = await Promise.all([
     businessOwnerIds.length
       ? fetchBusinessIdentitiesByOwnerIds(businessOwnerIds)
       : Promise.resolve(new Map()),
     personalAuthorIds.length
       ? fetchIzdivacAppBadgesBatch(personalAuthorIds)
       : Promise.resolve(new Map<string, FeedAuthor['izdivacBadges']>()),
+    fetchCityLeaderBadgesByUserIds(authorIds),
   ]);
 
   return items.map((item) => {
-    if (item.author.accountType === 'business') {
-      const biz = identities.get(item.author.id);
-      if (!biz) return item;
-      return {
-        ...item,
-        author: enrichFeedAuthor(item.author, toBusinessIdentitySnapshot(biz)),
+    let author = item.author;
+
+    if (author.accountType === 'business') {
+      const biz = identities.get(author.id);
+      if (biz) {
+        author = enrichFeedAuthor(author, toBusinessIdentitySnapshot(biz));
+      }
+    } else {
+      const badges = izdivacBadges.get(author.id);
+      if (badges?.length) {
+        author = { ...author, izdivacBadges: badges };
+      }
+    }
+
+    const leader = cityLeaders.get(author.id);
+    if (leader) {
+      author = {
+        ...author,
+        cityLeaderRegionId: leader.regionId,
+        cityLeaderRegionName: leader.regionName,
       };
     }
 
-    const badges = izdivacBadges.get(item.author.id);
-    if (!badges || badges.length === 0) return item;
-    return {
-      ...item,
-      author: { ...item.author, izdivacBadges: badges },
-    };
+    if (author === item.author) return item;
+    return { ...item, author };
   });
 }

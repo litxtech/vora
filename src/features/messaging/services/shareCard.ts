@@ -1,4 +1,4 @@
-import { notifyShareTarget } from '@/lib/notifications/helpers';
+import { getProfileLabel, notifyShareTarget } from '@/lib/notifications/helpers';
 import { buildNotificationData } from '@/lib/notifications/notificationPayload';
 import { supabase } from '@/lib/supabase/client';
 import { sendMessage } from './messageData';
@@ -47,11 +47,12 @@ export async function sendSharedCard(
       .maybeSingle();
 
     if (content?.author_id && content.author_id !== senderId) {
+      const actor = await getProfileLabel(senderId);
       const label = meta.cardType === 'post' ? 'Gönderin paylaşıldı' : 'Reelin paylaşıldı';
       const body =
         meta.cardType === 'post'
-          ? meta.title?.trim() || meta.preview?.trim() || 'Gönderin biriyle paylaşıldı'
-          : meta.preview?.trim() || 'Reelin biriyle paylaşıldı';
+          ? `${actor} gönderini paylaştı`
+          : `${actor} reelini paylaştı`;
       await notifyShareTarget(
         content.author_id,
         senderId,
@@ -59,8 +60,8 @@ export async function sendSharedCard(
         body.slice(0, 120),
         buildNotificationData(
           meta.cardType === 'post'
-            ? { postId: meta.targetId }
-            : { reelId: meta.targetId },
+            ? { postId: meta.targetId, sender_name: actor }
+            : { reelId: meta.targetId, sender_name: actor },
         ),
       );
     }

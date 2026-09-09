@@ -36,7 +36,10 @@ export function SoundProfileStats({ userId }: SoundProfileStatsProps) {
       </Text>
       <View style={styles.grid}>
         {items.map((item) => (
-          <View key={item.label} style={[styles.item, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <View
+            key={item.label}
+            style={[styles.item, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          >
             <Ionicons name={item.icon} size={16} color={colors.accent} />
             <Text variant="title">{item.value.toLocaleString('tr-TR')}</Text>
             <Text secondary variant="caption">

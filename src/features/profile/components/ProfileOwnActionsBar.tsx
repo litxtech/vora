@@ -16,11 +16,14 @@ import { useAccountSwitch } from '@/features/account-switch/providers/AccountSwi
 import { ACCOUNT_SWITCH_ROUTES } from '@/features/account-switch/constants';
 import { VORA_HIZMETLER_ACCENT } from '@/features/vora-hizmetler/constants';
 import { useMyProviderProfile } from '@/features/vora-hizmetler/hooks/useProviderProfile';
+import { useUserSoundStats } from '@/features/sounds/hooks/useUserSoundStats';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type ProfileOwnActionsBarProps = {
   isPremium: boolean;
   onInsightsPress?: () => void;
+  onSoundStatsPress?: () => void;
+  soundStatsActive?: boolean;
 };
 
 type QuickAction = {
@@ -34,6 +37,8 @@ type QuickAction = {
 export function ProfileOwnActionsBar({
   isPremium,
   onInsightsPress,
+  onSoundStatsPress,
+  soundStatsActive = false,
 }: ProfileOwnActionsBarProps) {
   const { colors } = useTheme();
   const { profile, user } = useAuth();
@@ -54,6 +59,8 @@ export function ProfileOwnActionsBar({
   const showInsights = useFeatureVisible(PROFILE_FEATURE.insights);
   const showCloseFriends = useFeatureVisible(PROFILE_FEATURE.closeFriends);
   const showSoundCreate = useFeatureVisible('user-sounds');
+  const soundStats = useUserSoundStats(showSoundCreate ? user?.id : null);
+  const showSoundStats = showSoundCreate && (soundStats?.totalSounds ?? 0) > 0;
   const showBusinessApplicationFlag = useFeatureVisible(BUSINESS_FEATURE.section.application);
   const showBusinessHubFlag = useFeatureVisible(BUSINESS_FEATURE.section.accountHub);
   const isBusinessAccount = effectiveAccountType === 'business';
@@ -143,6 +150,13 @@ export function ProfileOwnActionsBar({
           },
         ]
       : []),
+    {
+      key: 'caps-library',
+      label: 'Caps Merkezi',
+      icon: 'happy-outline' as const,
+      tone: 'default' as const,
+      onPress: () => router.push('/caps' as Href),
+    },
     ...(showCloseFriends
       ? [
           {
@@ -151,6 +165,18 @@ export function ProfileOwnActionsBar({
             icon: 'heart-outline' as const,
             tone: 'default' as const,
             onPress: () => router.push('/profile/close-friends' as Href),
+          },
+        ]
+      : []),
+    ...(showSoundStats
+      ? [
+          {
+            key: 'sound-stats',
+            label: 'Ses İstatistikleri',
+            icon: 'musical-notes-outline' as const,
+            tone: 'default' as const,
+            onPress: () =>
+              onSoundStatsPress ? onSoundStatsPress() : router.push('/sounds' as Href),
           },
         ]
       : []),
@@ -206,6 +232,8 @@ export function ProfileOwnActionsBar({
         >
           {quickActions.map((action) => {
             const isProviderAction = action.key === 'provider-manage';
+            const isSoundStatsAction = action.key === 'sound-stats';
+            const isActiveChip = isSoundStatsAction && soundStatsActive;
             const accent =
               action.tone === 'premium'
                 ? '#FFB300'
@@ -213,6 +241,8 @@ export function ProfileOwnActionsBar({
                   ? colors.warning
                   : action.tone === 'admin'
                     ? colors.primary
+                    : isActiveChip
+                      ? colors.accent
                     : isProviderAction
                       ? VORA_HIZMETLER_ACCENT
                       : colors.textSecondary;
@@ -224,6 +254,8 @@ export function ProfileOwnActionsBar({
                   ? `${colors.primary}14`
                   : action.tone === 'premium'
                     ? 'rgba(255,179,0,0.12)'
+                    : isActiveChip
+                      ? `${colors.accent}18`
                     : isProviderAction
                       ? `${VORA_HIZMETLER_ACCENT}14`
                       : colors.surfaceElevated;
@@ -235,6 +267,8 @@ export function ProfileOwnActionsBar({
                   ? `${colors.primary}55`
                   : action.tone === 'premium'
                     ? 'rgba(255,179,0,0.35)'
+                    : isActiveChip
+                      ? `${colors.accent}55`
                     : isProviderAction
                       ? `${VORA_HIZMETLER_ACCENT}55`
                       : colors.border;
@@ -258,7 +292,10 @@ export function ProfileOwnActionsBar({
                   numberOfLines={1}
                   style={[
                     styles.chipLabel,
-                    (action.tone !== 'default' || isProviderAction) && { color: accent, fontWeight: '700' },
+                    (action.tone !== 'default' || isProviderAction || isActiveChip) && {
+                      color: accent,
+                      fontWeight: '700',
+                    },
                   ]}
                 >
                   {action.label}

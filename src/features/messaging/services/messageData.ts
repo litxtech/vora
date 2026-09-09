@@ -236,7 +236,7 @@ export async function fetchMessagesAfter(
     .select(MESSAGE_SELECT)
     .eq('conversation_id', conversationId)
     .eq('deleted_for_all', false)
-    .gt('created_at', afterCreatedAt)
+    .gte('created_at', afterCreatedAt)
     .order('created_at', { ascending: true })
     .limit(limit);
 

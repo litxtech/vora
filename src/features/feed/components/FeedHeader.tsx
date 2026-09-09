@@ -20,6 +20,8 @@ import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { FEED_FEATURE } from '@/features/feed/featureFlags';
+import { cityPath } from '@/features/city-governance/constants';
+import { CITY_SYSTEM_FEATURE } from '@/features/city-governance/featureFlags';
 
 export function FeedHeader() {
   const { colors } = useTheme();
@@ -34,6 +36,8 @@ export function FeedHeader() {
   const districts = getFeedDistrictOptions(regionId);
   const showRegionFilter = useFeatureVisible(FEED_FEATURE.regionFilter);
   const showDistrictFilter = useFeatureVisible(FEED_FEATURE.districtFilter);
+  const showCityChip = useFeatureVisible(CITY_SYSTEM_FEATURE.id);
+  const citySlug = regionId ?? 'trabzon';
 
   const regionOptions = useMemo(
     () =>
@@ -99,6 +103,18 @@ export function FeedHeader() {
               {district ?? FEED_ALL_DISTRICTS_LABEL}
             </Text>
             <Ionicons name="chevron-down" size={12} color={colors.textMuted} />
+          </InstantPressable>
+        ) : null}
+
+        {showCityChip ? (
+          <InstantPressable
+            style={[styles.chip, { borderColor: '#F59E0B55', backgroundColor: '#F59E0B14' }]}
+            onPress={() => router.push(cityPath(citySlug) as never)}
+          >
+            <Ionicons name="business-outline" size={13} color="#F59E0B" />
+            <Text variant="caption" style={{ fontWeight: '700', color: '#F59E0B' }} numberOfLines={1}>
+              Şehir
+            </Text>
           </InstantPressable>
         ) : null}
       </View>

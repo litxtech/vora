@@ -2,9 +2,14 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
+import { STORY_PUBLISH_RAIL_RIGHT } from '@/features/stories/constants';
 import { radius, spacing } from '@/constants/theme';
 
-export type StoryPublishToolId = 'music' | 'location' | 'link' | 'audio' | 'text';
+export type StoryPublishToolId =
+  | 'music'
+  | 'location'
+  | 'link'
+  | 'audio';
 
 type ToolDef = {
   id: StoryPublishToolId;
@@ -13,9 +18,7 @@ type ToolDef = {
   videoOnly?: boolean;
 };
 
-/** Instagram tarzı — fotoğraf ve videoda ortak + türe özel araçlar */
 const TOOLS: ToolDef[] = [
-  { id: 'text', icon: 'text-outline', label: 'Metin' },
   { id: 'audio', icon: 'volume-high-outline', label: 'Ses', videoOnly: true },
   { id: 'music', icon: 'musical-notes-outline', label: 'Müzik' },
   { id: 'link', icon: 'link-outline', label: 'Link' },
@@ -28,8 +31,9 @@ type StoryPublishRailProps = {
   hasMusic: boolean;
   hasLocation: boolean;
   hasLinks: boolean;
-  hasText: boolean;
   videoAudioMuted: boolean;
+  /** Başlık altından itibaren dikey ofset — kartın üstüne yapışmasın */
+  topOffset?: number;
   onPress: (tool: StoryPublishToolId) => void;
 };
 
@@ -39,17 +43,25 @@ export function StoryPublishRail({
   hasMusic,
   hasLocation,
   hasLinks,
-  hasText,
   videoAudioMuted,
+  topOffset,
   onPress,
 }: StoryPublishRailProps) {
   const insets = useSafeAreaInsets();
+  const railTop = topOffset ?? insets.top + 96;
 
   const tools = TOOLS.filter((tool) => !tool.videoOnly || isVideo);
 
   return (
     <View
-      style={[styles.railWrap, { top: insets.top + 52, bottom: insets.bottom + 120 }]}
+      style={[
+        styles.railWrap,
+        {
+          top: railTop,
+          bottom: insets.bottom + 120,
+          right: STORY_PUBLISH_RAIL_RIGHT,
+        },
+      ]}
       pointerEvents="box-none"
     >
       <ScrollView
@@ -66,7 +78,6 @@ export function StoryPublishRail({
             (tool.id === 'music' && hasMusic) ||
             (tool.id === 'link' && hasLinks) ||
             (tool.id === 'location' && hasLocation) ||
-            (tool.id === 'text' && hasText) ||
             (tool.id === 'audio' && videoAudioMuted);
 
           const iconName =
@@ -81,6 +92,9 @@ export function StoryPublishRail({
               ]}
               onPress={() => onPress(tool.id)}
               hitSlop={4}
+              accessibilityRole="button"
+              accessibilityLabel={`${tool.label}${badge ? ', eklendi' : ''}`}
+              accessibilityState={{ selected: active }}
             >
               <View
                 style={[
@@ -105,8 +119,7 @@ export function StoryPublishRail({
 const styles = StyleSheet.create({
   railWrap: {
     position: 'absolute',
-    right: 0,
-    width: 68,
+    width: 64,
     zIndex: 30,
   },
   scroll: {
@@ -114,29 +127,30 @@ const styles = StyleSheet.create({
   },
   rail: {
     alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
     paddingBottom: spacing.lg,
   },
   item: {
     alignItems: 'center',
     gap: 2,
-    width: 60,
+    width: 56,
+    minHeight: 48,
     paddingVertical: 2,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
   },
   itemActive: {
     backgroundColor: 'rgba(255,255,255,0.14)',
   },
   iconWrap: {
-    width: 40,
-    height: 40,
+    width: 42,
+    height: 42,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.48)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.15)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.22)',
   },
   iconWrapActive: {
     backgroundColor: 'rgba(255,255,255,0.24)',
@@ -158,7 +172,7 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '600',
     textAlign: 'center',
-    maxWidth: 58,
+    maxWidth: 54,
     textShadowColor: 'rgba(0,0,0,0.9)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,

@@ -20,8 +20,6 @@ import {
   fetchAdminPosts,
   fetchAdminReels,
   moderateContent,
-  updatePostStatus,
-  updateReelStatus,
   type AdminCommentRow,
   type AdminContentStatusFilter,
   type AdminContentTab,
@@ -112,23 +110,24 @@ export function AdminContentScreen() {
     };
   }, [tab, posts, reels, comments]);
 
-  const runModeration = (id: string, action: 'warn' | 'hide' | 'remove') => {
+  const runModeration = (id: string, action: 'warn' | 'hide' | 'remove' | 'restore' | 'delete_permanent') => {
     if (!user) return;
 
-    const labels = { warn: 'Uyarı gönder', hide: 'Gizle', remove: 'Kaldır' };
-    Alert.alert('İçerik moderasyonu', `${labels[action]} işlemi uygulansın mı?`, [
+    const labels = {
+      warn: 'Uyarı gönder',
+      hide: 'Gizle',
+      remove: 'Kaldır',
+      restore: 'Geri yükle',
+      delete_permanent: 'Kalıcı sil',
+    };
+    Alert.alert('İçerik moderasyonu', `${labels[action]} işlemi uygulansın mı? Sahibe bildirim gider.`, [
       { text: 'Vazgeç', style: 'cancel' },
       {
         text: 'Uygula',
-        style: action === 'warn' ? 'default' : 'destructive',
+        style: action === 'warn' || action === 'restore' ? 'default' : 'destructive',
         onPress: async () => {
           setBusyId(id);
           const targetType = tab === 'reels' ? 'reel' : tab === 'comments' ? 'comment' : 'post';
-          if (tab === 'posts' && action !== 'warn') {
-            await updatePostStatus(id, action === 'remove' ? 'removed' : 'hidden');
-          } else if (tab === 'reels' && action !== 'warn') {
-            await updateReelStatus(id, action === 'remove' ? 'removed' : 'hidden');
-          }
           const { error: modError, warning } = await moderateContent(
             user.id,
             targetType,
@@ -145,6 +144,8 @@ export function AdminContentScreen() {
                 'Uyarı gönderildi',
                 `Kullanıcıya bildirim iletildi (${warning.strike}/${warning.max_strikes}).`,
               );
+            } else if (action !== 'warn') {
+              Alert.alert('Tamam', 'İşlem uygulandı; sahibine bildirim gönderildi.');
             }
             void load(true);
           }
@@ -210,6 +211,8 @@ export function AdminContentScreen() {
                   onWarn={() => runModeration(item.id, 'warn')}
                   onHide={() => runModeration(item.id, 'hide')}
                   onRemove={() => runModeration(item.id, 'remove')}
+                  onRestore={() => runModeration(item.id, 'restore')}
+                  onDeletePermanent={() => runModeration(item.id, 'delete_permanent')}
                 />
               ))
             : null}
@@ -224,6 +227,8 @@ export function AdminContentScreen() {
                   onWarn={() => runModeration(item.id, 'warn')}
                   onHide={() => runModeration(item.id, 'hide')}
                   onRemove={() => runModeration(item.id, 'remove')}
+                  onRestore={() => runModeration(item.id, 'restore')}
+                  onDeletePermanent={() => runModeration(item.id, 'delete_permanent')}
                 />
               ))
             : null}

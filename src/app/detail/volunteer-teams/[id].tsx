@@ -1,5 +1,1 @@
-import { VolunteerTeamDetailScreen } from '@/features/volunteer/components/VolunteerTeamDetailScreen';
-
-export default function VolunteerTeamDetailPage() {
-  return <VolunteerTeamDetailScreen />;
-}
+export { VolunteerTeamDetailRouteScreen as default } from '@/lib/navigation/lazyRouteScreens';

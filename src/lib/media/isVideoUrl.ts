@@ -13,6 +13,7 @@ export function isVideoUrl(url: string): boolean {
   if (url.includes('/izdivac-media/') && (url.includes('_video.') || /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url))) {
     return true;
   }
+  if (url.includes('/caps/') && /\.(mp4|mov|m4v|webm)(\?|$)/i.test(url)) return true;
   return false;
 }
 

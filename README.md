@@ -3,7 +3,8 @@
 **Vora**, bölgesel sosyal ağ ve yaşam platformudur. Akış, keşfet, mesajlaşma, harita, merkezler (iş, turizm, ulaşım, etkinlik vb.), görüntülü/sesli arama, Vora AI ve daha fazlasını tek bir Expo uygulamasında birleştirir.
 
 - **Sürüm:** 2.4.0  
-- **Paket:** `com.karadeniz.dijitalagi`  
+- **Paket (iOS):** `com.karadeniz.dijitalagi`  
+- **Paket (Android / Play):** `com.litxtech.vora`  
 - **Web:** [vora.app](https://vora.app)  
 - **Geliştirici:** [LitxTech](https://github.com/litxtech)
 

@@ -44,7 +44,7 @@ export const AD_POLICY_SECTIONS: readonly AdPolicySection[] = [
   },
   {
     heading: '6. Hedefleme ve Veri Kullanımı',
-    body: 'Reklam veren; genel yayın (tüm bölgeler) veya bölgesel hedefleme (şehir, ilçe, yaş aralığı, ilgi alanı) seçeneklerini kullanabilir. Platform, hedefleme kriterlerini yalnızca reklamın ilgili kullanıcılara ulaştırılması amacıyla işler. Kişisel veriler, Gizlilik Politikamız ve KVKK kapsamında korunur.',
+    body: 'Reklam veren; genel yayın (tüm bölgeler) veya bölgesel hedefleme (şehir, ilçe, yaş aralığı, ilgi alanı) seçeneklerini kullanabilir. Yaş hedeflemesi en az 18’dir; platform yalnızca 18+ üyelere açıktır. Platform, hedefleme kriterlerini yalnızca reklamın ilgili kullanıcılara ulaştırılması amacıyla işler. Kişisel veriler, Gizlilik Politikamız ve KVKK kapsamında korunur.',
   },
   {
     heading: '7. Faturalama ve Ödeme',

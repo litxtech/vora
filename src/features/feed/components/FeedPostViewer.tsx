@@ -142,6 +142,7 @@ export function FeedPostViewer({
                 item={item}
                 preferDirectMediaPlayback={preferDirectMediaPlayback}
                 isScreenFocused={visible}
+                isRouteFocused={visible}
                 isRowVisible={index === activeIndex}
                 onUpdate={(patch) => handleUpdate(item.id, patch)}
                 onDeleted={onDeleted ? () => handleDeleted(item.id) : undefined}

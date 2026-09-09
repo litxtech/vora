@@ -5,7 +5,7 @@ import { AdminAdReviewSheet } from '@/features/admin/components/ads/AdminAdRevie
 import { AdminEmptyState } from '@/features/admin/components/shared/AdminEmptyState';
 import { AdminFilterChip } from '@/features/admin/components/shared/AdminFilterChip';
 import { AdminShell } from '@/features/admin/components/shared/AdminShell';
-import { fetchBusinessAds, reviewBusinessAd, type BusinessAdRow } from '@/features/admin/services/adsManagement';
+import { fetchBusinessAds, removeBusinessAdFromFeed, reviewBusinessAd, type BusinessAdRow } from '@/features/admin/services/adsManagement';
 
 const STATUS_FILTERS = [
   { id: 'pending' as const, label: 'Bekleyen' },
@@ -50,7 +50,7 @@ export function AdminAdsScreen() {
   const confirmReview = (item: BusinessAdRow, approve: boolean) => {
     Alert.alert(
       approve ? 'Reklamı onayla' : 'Reklamı reddet',
-      `"${item.title}" reklamını ${approve ? 'onaylayıp 24 saat yayına almak' : 'reddetmek'} istiyor musunuz?`,
+      `"${item.title}" reklamını ${approve ? 'onaylayıp 24 saat yayına almak' : 'reddetmek (sahibe bildirim gider)'} istiyor musunuz?`,
       [
         { text: 'Vazgeç', style: 'cancel' },
         {
@@ -60,6 +60,23 @@ export function AdminAdsScreen() {
         },
       ],
     );
+  };
+
+  const confirmRemoveActive = (item: BusinessAdRow) => {
+    Alert.alert('Reklamı kaldır', `"${item.title}" yayından kaldırılsın mı? İşletmeye bildirim gider.`, [
+      { text: 'Vazgeç', style: 'cancel' },
+      {
+        text: 'Kaldır',
+        style: 'destructive',
+        onPress: async () => {
+          setActingId(item.id);
+          const { error } = await removeBusinessAdFromFeed(item.id);
+          setActingId(null);
+          if (error) Alert.alert('Hata', error);
+          else await load(true);
+        },
+      },
+    ]);
   };
 
   return (
@@ -78,6 +95,7 @@ export function AdminAdsScreen() {
             showQuickActions={status === 'pending'}
             onQuickApprove={() => confirmReview(item, true)}
             onQuickReject={() => confirmReview(item, false)}
+            onQuickRemove={status === 'active' ? () => confirmRemoveActive(item) : undefined}
             actionLoading={actingId === item.id}
           />
         ))

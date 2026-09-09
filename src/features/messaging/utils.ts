@@ -136,6 +136,8 @@ export function formatReplyPreview(message: {
   switch (message.messageType) {
     case 'image':
       return 'Fotoğraf';
+    case 'cap':
+      return 'Caps';
     case 'video':
       return 'Video';
     case 'audio':

@@ -17,7 +17,8 @@ async function ensureRingtoneAudioMode(): Promise<void> {
   await setAudioModeAsync({
     playsInSilentMode: true,
     interruptionMode: 'mixWithOthers',
-    shouldPlayInBackground: true,
+    // FGS mediaPlayback yok; arama UI açıkken çalar (Play politikası).
+    shouldPlayInBackground: false,
   });
 }
 

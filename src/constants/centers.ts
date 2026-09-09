@@ -10,6 +10,8 @@ import { TIP_LINE_CENTER_DEF } from '@/features/tip-line/constants';
 import { VORA_NEEDS_CENTER_DEF } from '@/features/vora-needs/constants';
 import { VORA_HIZMETLER_CENTER_DEF } from '@/features/vora-hizmetler/constants';
 import { IZDIVAC_CENTER_DEF } from '@/features/izdivac/constants';
+import { DATE_CENTER_DEF } from '@/features/date/constants';
+import { CITY_CENTER_DEF } from '@/features/city-governance/constants';
 import type { CenterDef, CenterGroup, CenterId } from '@/features/centers/types';
 import { CENTER_GROUPS } from '@/features/centers/types';
 
@@ -17,6 +19,7 @@ export type { CenterDef, CenterGroup, CenterId };
 export { CENTER_GROUPS };
 
 export const CENTERS: CenterDef[] = [
+  CITY_CENTER_DEF,
   PERSONNEL_CENTER_DEF,
   EVENT_CENTER_DEF,
   LOST_CENTER_DEF,
@@ -29,6 +32,7 @@ export const CENTERS: CenterDef[] = [
   VORA_NEEDS_CENTER_DEF,
   VORA_HIZMETLER_CENTER_DEF,
   IZDIVAC_CENTER_DEF,
+  DATE_CENTER_DEF,
 ];
 
 export const CENTER_BY_ID = Object.fromEntries(CENTERS.map((c) => [c.id, c])) as Record<

@@ -16,6 +16,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Button } from '@/components/ui/Button';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { GradientBackground } from '@/components/ui/GradientBackground';
+import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -154,13 +155,7 @@ export function IncidentThreadScreen() {
   };
 
   if (loading) {
-    return (
-      <GradientBackground>
-        <View style={[styles.center, { paddingTop: insets.top }]}>
-          <ActivityIndicator color={colors.primary} size="large" />
-        </View>
-      </GradientBackground>
-    );
+    return <DetailLoadingShell gradient />;
   }
 
   if (!thread) {

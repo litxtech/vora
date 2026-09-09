@@ -39,5 +39,7 @@ export type ReelItem = {
   isDemo?: boolean;
   music?: MusicAttribution | null;
   musicPlayback?: MusicPlaybackConfig | null;
+  /** Paylaşımda "Ses" kapatıldı — videonun orijinal sesi hiç çalmaz */
+  videoOriginalMuted?: boolean;
   editManifest?: PublishedEditManifest | null;
 };

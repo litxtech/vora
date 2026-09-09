@@ -1,7 +1,16 @@
 import { Platform } from 'react-native';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import type { VideoCodec, VideoQuality, VideoStabilization } from 'expo-camera';
 
 export const CAPTURE_PHOTO_QUALITY = 0.92;
+
+/** Gönderi / Reels / Hikaye video kaydı — net 1080p. */
+export const CAPTURE_VIDEO_QUALITY: VideoQuality = '1080p';
+/** ~10 Mbps — bloklu / bulanık kayıtları azaltır. */
+export const CAPTURE_VIDEO_BITRATE = 10_000_000;
+export const CAPTURE_VIDEO_STABILIZATION: VideoStabilization = 'auto';
+/** iOS bitrate için codec gerekli; hvc1 yoksa avc1. */
+export const CAPTURE_VIDEO_CODEC: VideoCodec = 'avc1';
 
 export type FinalizedPhoto = {
   uri: string;
@@ -37,5 +46,27 @@ export function capturePictureOptions(): {
     quality: CAPTURE_PHOTO_QUALITY,
     // Android: önizleme kırpmasını atla; oryantasyonu finalizeCapturedPhoto düzeltir.
     ...(Platform.OS === 'android' ? { skipProcessing: true } : {}),
+  };
+}
+
+/** CameraView video kalite prop'ları. */
+export function captureVideoViewProps(cameraMode: 'picture' | 'video') {
+  return {
+    videoQuality: CAPTURE_VIDEO_QUALITY,
+    videoBitrate: CAPTURE_VIDEO_BITRATE,
+    videoStabilizationMode: CAPTURE_VIDEO_STABILIZATION,
+    // Video: 16:9 — 4:3 tam ekranda yamulur / düşük çözünürlüğe düşer.
+    // Foto: 4:3 sensör oranı daha temiz.
+    ...(Platform.OS === 'android'
+      ? { ratio: (cameraMode === 'video' ? '16:9' : '4:3') as '16:9' | '4:3' }
+      : {}),
+  };
+}
+
+/** recordAsync seçenekleri — iOS'ta codec + bitrate birlikte. */
+export function captureRecordOptions(maxDuration: number) {
+  return {
+    maxDuration,
+    ...(Platform.OS === 'ios' ? { codec: CAPTURE_VIDEO_CODEC } : {}),
   };
 }

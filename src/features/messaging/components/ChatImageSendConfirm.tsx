@@ -17,12 +17,16 @@ import { radius, spacing } from '@/constants/theme';
 import { resolveModalAnimationType } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 import { CHAT_EPHEMERAL_DEFAULT_DURATION_SEC } from '../constants';
+import { ChatVideoPlayer } from './ChatVideoPlayer';
+import { formatVideoTime } from '../utils/formatVideoTime';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export type ChatImageSendConfirmProps = {
   visible: boolean;
+  mediaType?: 'image' | 'video';
   uris: string[];
+  durationSec?: number;
   ephemeral: boolean;
   onEphemeralChange: (ephemeral: boolean) => void;
   onCancel: () => void;
@@ -32,7 +36,9 @@ export type ChatImageSendConfirmProps = {
 
 export function ChatImageSendConfirm({
   visible,
+  mediaType = 'image',
   uris,
+  durationSec,
   ephemeral,
   onEphemeralChange,
   onCancel,
@@ -42,6 +48,7 @@ export function ChatImageSendConfirm({
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
   const [previewIndex, setPreviewIndex] = useState(0);
+  const isVideo = mediaType === 'video';
 
   if (!visible || uris.length === 0) return null;
 
@@ -64,13 +71,24 @@ export function ChatImageSendConfirm({
             <Ionicons name="close" size={26} color="#fff" />
           </Pressable>
           <Text variant="body" style={styles.title}>
-            Fotoğraf gönder
+            {isVideo ? 'Video gönder' : 'Fotoğraf gönder'}
           </Text>
           <View style={styles.topBtn} />
         </View>
 
         <View style={styles.previewStage}>
-          {uris.length > 1 ? (
+          {isVideo ? (
+            <View style={styles.videoPreviewWrap} collapsable={false}>
+              <ChatVideoPlayer key={previewUri} uri={previewUri} autoPlay variant="capture" />
+              {durationSec ? (
+                <View style={styles.durationPill}>
+                  <Text variant="caption" style={styles.counterText}>
+                    {formatVideoTime(durationSec)}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          ) : uris.length > 1 ? (
             <>
               <ScrollView
                 horizontal
@@ -197,6 +215,10 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
+  videoPreviewWrap: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#000',
+  },
   counterPill: {
     position: 'absolute',
     top: spacing.sm,
@@ -209,6 +231,15 @@ const styles = StyleSheet.create({
   counterText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  durationPill: {
+    position: 'absolute',
+    top: spacing.sm,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radius.full,
   },
   footer: {
     position: 'absolute',

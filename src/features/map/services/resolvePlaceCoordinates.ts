@@ -2,7 +2,11 @@ import * as Location from 'expo-location';
 import { regionNameById, type RegionId } from '@/constants/regions';
 import { retrieveMapboxPlace, searchExternalPlaces } from '@/features/map/services/searchExternalPlaces';
 import type { MapCoordinate, MapLocationSource } from '@/features/map/types';
-import { isValidPostCoordinate, pickValidCoordinate } from '@/features/map/utils/geoBounds';
+import {
+  isValidPostCoordinate,
+  pickValidCoordinate,
+  type LocationGeoScope,
+} from '@/features/map/utils/geoBounds';
 import { supabase } from '@/lib/supabase/client';
 
 export type ResolvePlaceInput = {
@@ -16,6 +20,7 @@ export type ResolvePlaceInput = {
   sessionToken?: string | null;
   source?: MapLocationSource;
   proximity?: MapCoordinate;
+  scope?: LocationGeoScope;
 };
 
 function validationRegion(input: ResolvePlaceInput): RegionId {
@@ -25,6 +30,7 @@ function validationRegion(input: ResolvePlaceInput): RegionId {
 async function geocodeWithValidation(
   queries: string[],
   regionId: RegionId,
+  scope: LocationGeoScope,
 ): Promise<MapCoordinate | null> {
   for (const query of queries) {
     try {
@@ -36,6 +42,7 @@ async function geocodeWithValidation(
             : null,
         ),
         regionId,
+        scope,
       );
       if (valid) return valid;
     } catch {
@@ -49,75 +56,93 @@ async function mapboxWithValidation(
   mapboxId: string,
   sessionToken: string,
   regionId: RegionId,
+  scope: LocationGeoScope,
 ): Promise<MapCoordinate | null> {
   const coords = await retrieveMapboxPlace(mapboxId, sessionToken);
   if (!coords) return null;
-  return isValidPostCoordinate(coords.latitude, coords.longitude, regionId) ? coords : null;
+  return isValidPostCoordinate(coords.latitude, coords.longitude, regionId, scope) ? coords : null;
 }
 
 export async function resolvePlaceCoordinates(input: ResolvePlaceInput): Promise<MapCoordinate | null> {
   const label = input.label.trim();
   if (!label) return null;
 
+  const scope = input.scope ?? 'region';
   const regionId = validationRegion(input);
   const regionName = regionNameById(regionId) ?? regionId;
 
   if (input.latitude != null && input.longitude != null) {
-    if (isValidPostCoordinate(input.latitude, input.longitude, regionId)) {
+    if (isValidPostCoordinate(input.latitude, input.longitude, regionId, scope)) {
       return { latitude: input.latitude, longitude: input.longitude };
     }
   }
 
   if (input.mapboxId && input.sessionToken) {
-    const mapbox = await mapboxWithValidation(input.mapboxId, input.sessionToken, regionId);
+    const mapbox = await mapboxWithValidation(input.mapboxId, input.sessionToken, regionId, scope);
     if (mapbox) return mapbox;
   }
 
-  const { data: existing } = await supabase
+  let existingQuery = supabase
     .from('posts')
     .select('latitude, longitude')
-    .eq('region_id', regionId)
     .eq('location_label', label)
     .not('latitude', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  if (scope === 'region') {
+    existingQuery = existingQuery.eq('region_id', regionId);
+  }
+
+  const { data: existing } = await existingQuery.maybeSingle();
 
   if (
     existing?.latitude != null &&
     existing?.longitude != null &&
-    isValidPostCoordinate(existing.latitude, existing.longitude, regionId)
+    isValidPostCoordinate(existing.latitude, existing.longitude, regionId, scope)
   ) {
     return { latitude: existing.latitude, longitude: existing.longitude };
   }
 
   const hint = input.geocodeHint?.trim();
-  const geocodeQueries = [
-    hint ? `${label}, ${hint}, Türkiye` : null,
-    input.source === 'district'
-      ? [`${label}, ${regionName}, Türkiye`, `${label} ilçesi, ${regionName}, Türkiye`]
-      : null,
-    `${label}, ${regionName}, Türkiye`,
-    hint ? `${label}, ${hint}` : null,
-  ]
-    .flat()
-    .filter((q): q is string => Boolean(q));
+  const geocodeQueries =
+    scope === 'world'
+      ? [hint ? `${label}, ${hint}` : null, label].filter((q): q is string => Boolean(q))
+      : [
+          hint ? `${label}, ${hint}, Türkiye` : null,
+          input.source === 'district'
+            ? [`${label}, ${regionName}, Türkiye`, `${label} ilçesi, ${regionName}, Türkiye`]
+            : null,
+          `${label}, ${regionName}, Türkiye`,
+          hint ? `${label}, ${hint}` : null,
+        ]
+          .flat()
+          .filter((q): q is string => Boolean(q));
 
-  const geocoded = await geocodeWithValidation(geocodeQueries, regionId);
+  const geocoded = await geocodeWithValidation(geocodeQueries, regionId, scope);
   if (geocoded) return geocoded;
 
-  const mapboxQuery = hint ? `${label}, ${hint}, Türkiye` : `${label}, ${regionName}, Türkiye`;
+  const mapboxQuery =
+    scope === 'world'
+      ? hint
+        ? `${label}, ${hint}`
+        : label
+      : hint
+        ? `${label}, ${hint}, Türkiye`
+        : `${label}, ${regionName}, Türkiye`;
+
   try {
     const external = await searchExternalPlaces(mapboxQuery, {
       regionId,
       regionName,
       proximity: input.proximity,
       sessionToken: input.sessionToken ?? undefined,
+      scope,
     });
 
     for (const item of external) {
       if (!item.mapboxId || !item.sessionToken) continue;
-      const coords = await mapboxWithValidation(item.mapboxId, item.sessionToken, regionId);
+      const coords = await mapboxWithValidation(item.mapboxId, item.sessionToken, regionId, scope);
       if (coords) return coords;
     }
   } catch {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import { openChat as navigateToChat } from '../services/messagingNavigation';
 import { Text } from '@/components/ui/Text';
 import { CallAvatar } from '@/features/calls/components/CallAvatar';
@@ -58,7 +58,7 @@ export function FriendsList() {
   const keyExtractor = useCallback((item: CallParticipant) => item.id, []);
 
   if (loading) {
-    return <ActivityIndicator color={colors.primary} style={styles.loader} />;
+    return <View style={styles.loader} />;
   }
 
   if (friends.length === 0) {

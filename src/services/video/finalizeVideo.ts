@@ -5,6 +5,7 @@ import type { PublishedEditManifest } from '@/features/vora-studio/types';
 import { supabase } from '@/lib/supabase/client';
 import { emitMuxVideoReady } from '@/services/video/muxReadyEvents';
 import { pollMuxUntilReady } from '@/services/video/muxPoll';
+import { useLocalVideoPreviewStore } from '@/features/feed/store/localVideoPreviewStore';
 
 export type FinalizePublishedVideoInput = {
   postId: string;
@@ -80,6 +81,10 @@ export async function finalizePublishedVideo(input: FinalizePublishedVideoInput)
           postId: input.postId,
           caption: input.caption,
           music,
+          originalAudioMuted:
+            !music &&
+            post.original_audio_volume != null &&
+            Number(post.original_audio_volume) <= 0.001,
           editManifest,
         });
         if (reelResult.error) {
@@ -87,6 +92,7 @@ export async function finalizePublishedVideo(input: FinalizePublishedVideoInput)
         }
       }
 
+      useLocalVideoPreviewStore.getState().clearPreview(input.videoId);
       emitMuxVideoReady(input.videoId);
       return;
   }
