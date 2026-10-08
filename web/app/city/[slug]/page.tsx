@@ -72,7 +72,7 @@ export default async function CityPage({ params }: { params: Promise<Params> }) 
         </p>
       </div>
       <div className="wrap">
-        <h2>{city.name}’u keşfet</h2>
+        <h2>{`${city.name}’u keşfet`}</h2>
         {city.topics.length > 0 ? (
           <ul>
             {city.topics.map((topic) => (
@@ -84,7 +84,7 @@ export default async function CityPage({ params }: { params: Promise<Params> }) 
         ) : (
           <p className="muted">Bu il için ayrı konu sayfası, özgün metin yazılmadan açılmadı.</p>
         )}
-        <h2>{city.name}’daki Vora kullanıcıları</h2>
+        <h2>{`${city.name}’daki Vora kullanıcıları`}</h2>
         {locals.length === 0 ? (
           <p className="empty">Bu ile bağlı herkese açık profil şu an listelenmiyor.</p>
         ) : (
@@ -97,7 +97,7 @@ export default async function CityPage({ params }: { params: Promise<Params> }) 
             ))}
           </div>
         )}
-        <h2>{city.name}’dan son paylaşımlar</h2>
+        <h2>{`${city.name}’dan son paylaşımlar`}</h2>
         {posts.length === 0 ? (
           <p className="empty">Bu ilde koşulları sağlayan herkese açık paylaşım yok.</p>
         ) : (
@@ -109,7 +109,7 @@ export default async function CityPage({ params }: { params: Promise<Params> }) 
             ))}
           </div>
         )}
-        <h2>{city.name}’daki etkinlikler</h2>
+        <h2>{`${city.name}’daki etkinlikler`}</h2>
         {events.length === 0 ? (
           <p className="empty">Yayında etkinlik yok.</p>
         ) : (
@@ -121,7 +121,7 @@ export default async function CityPage({ params }: { params: Promise<Params> }) 
             ))}
           </ul>
         )}
-        <h2>{city.name} rehberleri</h2>
+        <h2>{`${city.name} rehberleri`}</h2>
         {blogs.length === 0 ? (
           <p className="empty">Bu şehre bağlı yayımlanmış blog yazısı yok.</p>
         ) : (
