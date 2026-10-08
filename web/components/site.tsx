@@ -3,6 +3,7 @@ import { CopyLink } from '@/components/copy-link';
 import { CITIES } from '@/lib/cities';
 import { FEATURES } from '@/lib/features';
 import type { BreadcrumbItem } from '@/lib/seo/engine';
+import { logoutAction } from '@/lib/auth-actions';
 import { currentProfile } from '@/lib/session';
 import { StoreBadges } from '@/components/store-badges';
 
@@ -29,9 +30,16 @@ export async function SiteHeader() {
           <Link href="/events">Etkinlikler</Link>
           <Link href="/blog">Blog</Link>
           {session ? (
-            <Link className="btn" href="/app">
-              {label}
-            </Link>
+            <>
+              <Link className="btn" href="/app">
+                {label}
+              </Link>
+              <form action={logoutAction}>
+                <button className="btn ghost" type="submit">
+                  Çıkış yap
+                </button>
+              </form>
+            </>
           ) : (
             <>
               <Link href="/login">Giriş yap</Link>

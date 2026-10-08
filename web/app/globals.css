@@ -195,6 +195,9 @@ th, td { text-align: left; padding: 0.55rem; border-bottom: 1px solid var(--line
   }
   .nav-toggle:checked ~ .nav-links { display: flex; }
   .nav-toggle:focus-visible ~ .nav-burger { outline: 3px solid #90caf9; }
+  .nav-links form, .nav-links .btn { width: 100%; }
+  .hero { padding: 2.4rem 0 2rem; }
+  .home-cta { align-items: flex-start; }
 }
 
 .auth-wrap { display: grid; justify-items: center; }
@@ -244,17 +247,21 @@ body:has(.phone-app) main { min-height: 100dvh; }
   position: sticky;
   top: 0;
   z-index: 5;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  gap: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
   align-items: center;
+  justify-content: space-between;
   padding: 0.85rem 1rem 0.7rem;
-  background: rgba(10, 14, 20, 0.82);
+  background: rgba(10, 14, 20, 0.92);
   backdrop-filter: blur(16px);
 }
+.phone-who { min-width: 0; flex: 1; }
 .phone-brand { color: #f4f7fb; text-decoration: none; font-weight: 800; font-size: 1.25rem; letter-spacing: -0.03em; }
 .phone-hello { margin: 0; color: #9aa8bc; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.phone-tools { display: flex; gap: 0.45rem; }
+.phone-tools { display: flex; flex-wrap: wrap; gap: 0.45rem; }
+.phone-top form { margin: 0; }
+.phone-top .btn { white-space: nowrap; }
 .phone-tools a {
   color: #f4f7fb;
   text-decoration: none;
@@ -351,6 +358,53 @@ body:has(.phone-app) main { min-height: 100dvh; }
 }
 .stack { display: grid; gap: 0.75rem; }
 
+@media (min-width: 960px) {
+  .life-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .phone-frame {
+    width: min(1180px, calc(100% - 2rem));
+    margin: 1rem auto 1.4rem;
+    min-height: calc(100dvh - 2rem);
+    display: grid;
+    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    border: 1px solid #2a3444;
+    border-radius: 28px;
+    overflow: hidden;
+  }
+  .phone-tabs {
+    position: static;
+    transform: none;
+    left: auto;
+    bottom: auto;
+    width: auto;
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    height: auto;
+    border-radius: 0;
+    padding: 1rem 0.7rem;
+    box-shadow: none;
+  }
+  .phone-tabs a {
+    text-align: left;
+    font-size: 0.95rem;
+    padding: 0.75rem 0.85rem;
+  }
+  .phone-tabs a.create {
+    margin: 0.35rem 0;
+    width: auto;
+    height: auto;
+    border-radius: 14px;
+  }
+  .phone-top, .phone-body { grid-column: 2; }
+  .phone-body { padding-bottom: 2rem; }
+}
+@media (min-width: 1280px) {
+  .life-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 .home-kicker {
   display: inline-block;
   margin: 0 0 0.6rem;
@@ -374,7 +428,7 @@ body:has(.phone-app) main { min-height: 100dvh; }
 .home-stat strong { color: var(--primary-ink); }
 .section-head { max-width: 40rem; margin-bottom: 1.4rem; }
 .section-head p { color: var(--muted); }
-.life-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.life-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
 .life-card {
   display: flex;
   flex-direction: column;
