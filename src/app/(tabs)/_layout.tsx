@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
@@ -170,12 +170,18 @@ export default function TabsLayout() {
   return (
     <Tabs
       detachInactiveScreens={shouldDetachInactiveTabScreens()}
-      safeAreaInsets={{ bottom: tabBarReserve, top: 0, left: 0, right: 0 }}
+      safeAreaInsets={{
+        bottom: Platform.OS === 'web' ? 0 : tabBarReserve,
+        top: 0,
+        left: 0,
+        right: 0,
+      }}
       screenOptions={screenOptions}
       screenLayout={({ children, route, navigation }) => {
+        // Web: kaydırma kabuğu tıklamayı yutup sekmeyi akışa geri atıyor.
         // Tablet: jest yok. Android telefon: yalnızca Akış (menü + sekme kaydırma).
         // iOS: tüm ana sekmeler — en solda sağa çekince hamburger menü.
-        if (isAndroidTablet() || (isAndroid() && route.name !== 'index')) {
+        if (Platform.OS === 'web' || isAndroidTablet() || (isAndroid() && route.name !== 'index')) {
           return children;
         }
         return (

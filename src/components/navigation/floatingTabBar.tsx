@@ -23,12 +23,14 @@ type TabBarBackgroundProps = {
 
 /** Tab navigator tabBarBackground — hook kullanmaz (context dışı render güvenli). */
 export function TabBarBackgroundView({ variant = 'default', isDark, mode }: TabBarBackgroundProps) {
+  const clip = Platform.OS === 'web' ? styles.webClip : styles.backgroundClip;
+
   if (variant === 'reels') {
-    return <View style={[StyleSheet.absoluteFill, styles.backgroundClip, styles.reelsFill]} />;
+    return <View style={[StyleSheet.absoluteFill, clip, styles.reelsFill]} />;
   }
 
   if (!isDark) {
-    return <View style={[StyleSheet.absoluteFill, styles.backgroundClip, styles.lightFill]} />;
+    return <View style={[StyleSheet.absoluteFill, clip, styles.lightFill]} />;
   }
 
   const surface = glassSurface[mode];
@@ -38,7 +40,7 @@ export function TabBarBackgroundView({ variant = 'default', isDark, mode }: TabB
       <View
         style={[
           StyleSheet.absoluteFill,
-          styles.backgroundClip,
+          clip,
           { backgroundColor: surface.background },
         ]}
       />
@@ -46,7 +48,7 @@ export function TabBarBackgroundView({ variant = 'default', isDark, mode }: TabB
   }
 
   return (
-    <View style={[StyleSheet.absoluteFill, styles.backgroundClip]}>
+    <View style={[StyleSheet.absoluteFill, clip]}>
       <BlurView intensity={48} tint="dark" style={StyleSheet.absoluteFill} />
       <View style={[StyleSheet.absoluteFill, { backgroundColor: surface.background }]} />
     </View>
@@ -86,6 +88,27 @@ export function createFloatingTabBarStyle({
         ? 'rgba(255, 255, 255, 0.96)'
         : glassSurface[mode].background;
 
+  if (Platform.OS === 'web') {
+    return {
+      position: 'absolute' as const,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: TAB_BAR_CONTENT_HEIGHT,
+      borderRadius: 0,
+      overflow: 'hidden' as const,
+      backgroundColor: solidBackground,
+      borderTopWidth: 1,
+      borderWidth: 0,
+      borderColor: isReels
+        ? 'rgba(255, 255, 255, 0.14)'
+        : tabBar?.border ?? (isDark ? 'rgba(255, 255, 255, 0.12)' : colors.border),
+      paddingTop: 6,
+      paddingBottom: 6,
+      elevation: 0,
+    };
+  }
+
   return {
     position: 'absolute' as const,
     left: FLOATING_TAB_BAR_SIDE_MARGIN,
@@ -113,6 +136,9 @@ export function createFloatingTabBarStyle({
 const styles = StyleSheet.create({
   backgroundClip: {
     borderRadius: radius.full,
+    overflow: 'hidden',
+  },
+  webClip: {
     overflow: 'hidden',
   },
   lightFill: {

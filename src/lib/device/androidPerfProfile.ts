@@ -26,9 +26,9 @@ export function shouldSkipUiBlur(): boolean {
   return true;
 }
 
-/** freezeOnBlur + enableFreeze Android'de sekme tıklamasını geciktirir. */
+/** freezeOnBlur + enableFreeze Android ve web'de sekme tıklamasını bozar. */
 export function shouldUseScreenFreeze(): boolean {
-  return !isAndroid();
+  return Platform.OS === 'ios';
 }
 
 /** Üst carousel / öne çıkan profiller — tablette gecikmeli. */
@@ -302,8 +302,11 @@ export function getAndroidTabLazyOption(
 /** Pasif sekmeleri bellekten ayır.
  * Android'de true = her sekme tıklamasında remount → belirgin gecikme.
  * iOS swipe komşuları için zaten false.
+ * Webde false, react-native-screens'in absolute yerleşimi düşürmesine yol açar;
+ * sekmeler akışın altına dizilir ve tıklama görünürde akışta kalır.
  */
 export function shouldDetachInactiveTabScreens(): boolean {
+  if (Platform.OS === 'web') return true;
   if (isAndroid()) return false;
   if (shouldUseMainTabSwipeGesture()) return false;
   return true;
@@ -431,9 +434,9 @@ export function shouldBootOverlayBlockTouches(): boolean {
   return !isAndroid();
 }
 
-/** Ana sekme yatay kaydırma — Android'de Pan jesti tıklamaları geciktirir. */
+/** Ana sekme yatay kaydırma — Android ve web'de Pan jesti tıklamayı yutar. */
 export function shouldUseMainTabSwipeGesture(): boolean {
-  return !isAndroid();
+  return Platform.OS === 'ios';
 }
 
 /** Android: dokunma gecikmesi ve sistem sesi kapalı — anında tepki. */

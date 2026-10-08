@@ -3,6 +3,14 @@ const fs = require('fs');
 const path = require('path');
 const { FileStore } = require('metro-cache');
 
+// Web route context drops +native-intent, so tab links fall back to the feed.
+const webCtxPath = path.join(__dirname, 'node_modules/expo-router/_ctx.web.js');
+if (fs.existsSync(webCtxPath)) {
+  const webCtx = fs.readFileSync(webCtxPath, 'utf8');
+  const patched = webCtx.replace('(?:\\+(html|native-intent))', '(?:\\+html)');
+  if (patched !== webCtx) fs.writeFileSync(webCtxPath, patched);
+}
+
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 

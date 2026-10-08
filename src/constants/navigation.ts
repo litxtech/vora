@@ -1,4 +1,5 @@
 import type { NativeStackNavigationOptions } from '@react-navigation/native-stack';
+import { Platform } from 'react-native';
 import { isAndroid } from '@/lib/device/androidPerfProfile';
 
 /**
@@ -25,7 +26,7 @@ export function getDefaultStackScreenOptions(
           detachInactiveScreens: true,
         }
       : {
-          freezeOnBlur: true,
+          freezeOnBlur: Platform.OS === 'ios',
         }),
     ...overrides,
   };

@@ -118,6 +118,12 @@ function ReelPlayerVideo({
   height = SCREEN_HEIGHT,
   width = SCREEN_WIDTH,
 }: ReelPlayerVideoProps & { inHotWindow?: boolean }) {
+  const hasMusic = Boolean(item.musicPlayback?.audioUrl);
+  const hasTextOverlays = Boolean(item.editManifest?.textOverlays?.length);
+  const shouldMountVideo = Boolean(item.playbackId && (isActive || shouldPreload || inHotWindow));
+  // Müzikli reel: tek VideoView — çift yüzey video donmasına yol açar.
+  const shouldRenderVideoView = hasMusic ? isActive : isActive || shouldPreload;
+
   const [showPoster, setShowPoster] = useState(true);
   const [videoSurfaceKey, setVideoSurfaceKey] = useState(0);
   const [overlayPlayhead, setOverlayPlayhead] = useState(0);
@@ -129,12 +135,6 @@ function ReelPlayerVideo({
   const needsRestartRef = useRef(true);
   const mountedRef = useRef(true);
   const prevShouldRenderVideoViewRef = useRef(shouldRenderVideoView);
-
-  const hasMusic = Boolean(item.musicPlayback?.audioUrl);
-  const hasTextOverlays = Boolean(item.editManifest?.textOverlays?.length);
-  const shouldMountVideo = Boolean(item.playbackId && (isActive || shouldPreload || inHotWindow));
-  // Müzikli reel: tek VideoView — çift yüzey video donmasına yol açar.
-  const shouldRenderVideoView = hasMusic ? isActive : isActive || shouldPreload;
   const shouldPlay = isActive;
   const posterUrl = item.thumbnailUrl ?? getMuxThumbnailUrl(item.playbackId);
 

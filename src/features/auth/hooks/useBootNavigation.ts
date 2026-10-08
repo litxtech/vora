@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
+import { Platform } from 'react-native';
 import { router } from 'expo-router';
 import type { User } from '@supabase/supabase-js';
 import {
@@ -150,6 +151,14 @@ export function useBootNavigation(splashVisibleAt: RefObject<number | null>): bo
     const target = await resolveColdStartTarget(bootUser, profile);
 
     phase.current = 'done';
+    // Webde sekme veya derin link tam sayfa açılır. Kök dışındaki adresi akışa ezme.
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const path = window.location.pathname.replace(/\/$/, '') || '/';
+      if (path !== '/' && path !== '/vora-app.html' && path !== '/index.html') {
+        dismissBootOverlay(setIsBooting);
+        return;
+      }
+    }
     router.replace(target as never);
 
     if (shouldDismissBootOverlayImmediately()) {
