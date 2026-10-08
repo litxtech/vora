@@ -1,8 +1,17 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
-import { createSessionClient } from '@/lib/supabase';
 import { siteUrl } from '@/lib/site';
+import { createSessionClient } from '@/lib/supabase';
+
+async function callbackUrl(nextPath: string): Promise<string> {
+  const headerList = await headers();
+  const host = headerList.get('x-forwarded-host') || headerList.get('host');
+  const proto = headerList.get('x-forwarded-proto') || 'https';
+  const origin = host ? `${proto}://${host}` : siteUrl();
+  return `${origin}/auth/callback?next=${nextPath}`;
+}
 
 export type AuthState = { error: string | null; message: string | null };
 
@@ -76,7 +85,7 @@ export async function registerAction(_prev: AuthState, formData: FormData): Prom
     email,
     password,
     options: {
-      emailRedirectTo: `${siteUrl()}/auth/callback?next=/app`,
+      emailRedirectTo: await callbackUrl('/app'),
       data: {
         username,
         first_name: firstName,
@@ -116,7 +125,7 @@ export async function forgotPasswordAction(_prev: AuthState, formData: FormData)
   const supabase = await createSessionClient();
   if (!supabase) return { error: 'Bağlantı kurulamadı. Biraz sonra tekrar dene.', message: null };
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl()}/auth/callback?next=/reset-password`,
+    redirectTo: await callbackUrl('/reset-password'),
   });
   if (error) return { error: 'Sıfırlama e-postası gönderilemedi. Biraz sonra tekrar dene.', message: null };
   redirect(`/reset-password?email=${encodeURIComponent(email)}`);
@@ -161,7 +170,7 @@ export async function sendLoginCodeAction(_prev: AuthState, formData: FormData):
   if (!supabase) return { error: 'Bağlantı kurulamadı.', message: null };
   const { error } = await supabase.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: `${siteUrl()}/auth/callback?next=/app` },
+    options: { emailRedirectTo: await callbackUrl('/app') },
   });
   if (error) return { error: 'Kod gönderilemedi. Biraz sonra tekrar dene.', message: null };
   return { error: null, message: 'Kod e-postana gönderildi. Aşağıya yaz veya bağlantıya tıkla.' };
