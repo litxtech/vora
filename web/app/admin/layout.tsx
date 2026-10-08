@@ -11,6 +11,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     <div className="wrap admin block">
       <nav aria-label="Yönetim">
         <Link href="/admin">Özet</Link>
+        <Link href="/admin/studio">Blog Studio</Link>
         <Link href="/admin/blog">Blog</Link>
         <Link href="/admin/blog/new">Yeni yazı</Link>
         <Link href="/admin/media">Medya</Link>

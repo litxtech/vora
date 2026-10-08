@@ -75,6 +75,8 @@ export type BlogPost = {
   internal_links: { href: string; label: string }[];
   published_at: string | null;
   updated_at: string;
+  seo_indexable: boolean;
+  translation_group_id: string | null;
 };
 
 function asStringArray(value: unknown): string[] {
@@ -275,6 +277,8 @@ function mapBlog(row: Record<string, unknown>): BlogPost {
     internal_links: Array.isArray(row.internal_links) ? (row.internal_links as BlogPost['internal_links']) : [],
     published_at: typeof row.published_at === 'string' ? row.published_at : null,
     updated_at: String(row.updated_at),
+    seo_indexable: row.seo_indexable !== false,
+    translation_group_id: typeof row.translation_group_id === 'string' ? row.translation_group_id : null,
   };
 }
 
@@ -304,6 +308,19 @@ export async function getBlogPost(slug: string, language = 'tr'): Promise<BlogPo
     .maybeSingle();
   if (error || !data) return null;
   return mapBlog(data as Record<string, unknown>);
+}
+
+export async function listBlogTranslations(groupId: string | null): Promise<{ language: string; slug: string }[]> {
+  if (!groupId) return [];
+  const client = createAnonClient();
+  if (!client) return [];
+  const { data, error } = await client
+    .from('web_blog_posts')
+    .select('language, slug')
+    .eq('translation_group_id', groupId)
+    .eq('status', 'published');
+  if (error || !data) return [];
+  return data.map((row) => ({ language: String(row.language), slug: String(row.slug) }));
 }
 
 export async function listBlogByCity(citySlug: string): Promise<BlogPost[]> {

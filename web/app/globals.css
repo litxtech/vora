@@ -546,3 +546,57 @@ body:has(.phone-app) .open-app { bottom: 5.4rem; }
 }
 .home-cta p { color: var(--hero-muted); }
 .home-cta .btn.secondary { color: var(--hero-ink); }
+
+.studio {
+  min-height: 100dvh;
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom) + var(--keyboard-inset, 0px));
+}
+.studio-top, .studio-actions, .studio-nav, .studio-stats, .studio-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+}
+.studio-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.8fr);
+  gap: 1rem;
+}
+.studio-side, .studio-note, .studio-modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.8rem;
+}
+.studio-tools {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  background: var(--surface);
+  padding: 0.4rem 0;
+}
+.studio-content { min-height: 18rem; width: 100%; }
+.studio input, .studio textarea, .studio select { width: 100%; }
+.studio-stats article {
+  min-width: 8rem;
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+}
+.studio-bar {
+  position: sticky;
+  bottom: calc(var(--keyboard-inset, 0px) + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.6rem;
+  z-index: 3;
+}
+.studio-modal { position: sticky; bottom: calc(4rem + var(--keyboard-inset, 0px)); }
+@media (max-width: 860px) {
+  .studio-grid { grid-template-columns: 1fr; }
+}

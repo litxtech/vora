@@ -4,7 +4,7 @@ import { requireAdmin } from '@/lib/admin-auth';
 export default async function AdminBlogPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const supabase = await requireAdmin();
   const { status } = await searchParams;
-  const filter = status === 'draft' || status === 'trash' || status === 'published' ? status : null;
+  const filter = ['draft', 'review', 'scheduled', 'published', 'archived', 'trash'].includes(status ?? '') ? status : null;
   let query = supabase.from('web_blog_posts').select('id, title, slug, status, language, updated_at').order('updated_at', { ascending: false }).limit(100);
   if (filter) query = query.eq('status', filter);
   const { data } = await query;

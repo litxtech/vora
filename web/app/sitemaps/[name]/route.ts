@@ -32,7 +32,7 @@ export async function GET(_request: Request, context: { params: Promise<{ name: 
     const posts = await listBlogPosts('tr', 200);
     entries = [
       { path: '/blog' },
-      ...posts.filter((post) => post.content.trim().length > 80).map((post) => ({ path: `/blog/${post.slug}`, lastmod: post.updated_at })),
+      ...posts.filter((post) => post.content.trim().length > 80 && post.seo_indexable).map((post) => ({ path: `/blog/${post.slug}`, lastmod: post.updated_at })),
     ];
   } else if (name === 'posts.xml') {
     const posts = await listPosts({ limit: 200 });

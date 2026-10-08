@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
 import { Breadcrumbs, CtaBand, JsonLd, ShareBar } from '@/components/site';
 import { cityById } from '@/lib/cities';
-import { findRedirect, getBlogPost, listBlogPosts } from '@/lib/data';
+import { findRedirect, getBlogPost, listBlogPosts, listBlogTranslations } from '@/lib/data';
 import { parseVideo, renderMarkdown } from '@/lib/markdown';
 import { breadcrumbLd, graph, toMetadata, trimDescription } from '@/lib/seo/engine';
 import { absoluteUrl } from '@/lib/site';
@@ -15,14 +15,21 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   const post = await getBlogPost(slug, 'tr');
   if (!post) return { title: 'Yazı bulunamadı', robots: { index: false, follow: false } };
   const path = `/blog/${post.slug}`;
+  const translations = await listBlogTranslations(post.translation_group_id);
   return toMetadata({
     title: post.seo_title || post.title,
     description: trimDescription(post.seo_description || post.excerpt || post.content),
     path,
-    index: post.content.trim().length > 80,
+    index: post.content.trim().length > 80 && post.seo_indexable,
     type: 'article',
     image: post.og_image_url || post.cover_image_url,
     language: 'tr',
+    alternates: translations.length > 1
+      ? translations.map((item) => ({
+          hrefLang: item.language,
+          path: item.language === 'tr' ? `/blog/${item.slug}` : `/${item.language}/blog/${item.slug}`,
+        }))
+      : undefined,
     publishedAt: post.published_at,
     modifiedAt: post.updated_at,
   });

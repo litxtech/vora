@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { getBlogPost } from '@/lib/data';
+import { getBlogPost, listBlogTranslations } from '@/lib/data';
 import { renderMarkdown } from '@/lib/markdown';
 import { toMetadata, trimDescription } from '@/lib/seo/engine';
 import { TRANSLATED_LOCALES } from '@/lib/site';
@@ -14,17 +14,20 @@ export async function generateMetadata({ params }: { params: Promise<Params> }):
   }
   const post = await getBlogPost(slug, locale);
   if (!post) return { title: 'Not found', robots: { index: false, follow: false } };
+  const translations = await listBlogTranslations(post.translation_group_id);
   return toMetadata({
     title: post.seo_title || post.title,
     description: trimDescription(post.seo_description || post.excerpt),
     path: `/${locale}/blog/${post.slug}`,
-    index: true,
+    index: post.content.trim().length > 80 && post.seo_indexable,
     type: 'article',
     language: locale,
-    alternates: [
-      { hrefLang: 'tr', path: `/blog/${post.slug}` },
-      { hrefLang: locale, path: `/${locale}/blog/${post.slug}` },
-    ],
+    alternates: translations.length > 1
+      ? translations.map((item) => ({
+          hrefLang: item.language,
+          path: item.language === 'tr' ? `/blog/${item.slug}` : `/${item.language}/blog/${item.slug}`,
+        }))
+      : undefined,
   });
 }
 
