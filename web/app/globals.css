@@ -224,14 +224,19 @@ th, td { text-align: left; padding: 0.55rem; border-bottom: 1px solid var(--line
 body:has(.phone-app) {
   background: #050810;
   color: #f4f7fb;
+  height: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 body:has(.phone-app) .site-header,
 body:has(.phone-app) .site-footer,
 body:has(.phone-app) .skip { display: none; }
-body:has(.phone-app) main { min-height: 100dvh; }
+body:has(.phone-app) main { min-height: 100dvh; height: auto; overflow: visible; }
 
 .phone-app {
   min-height: 100dvh;
+  height: auto;
+  overflow: visible;
   background:
     radial-gradient(circle at 85% 0%, rgba(0, 191, 165, 0.18), transparent 26%),
     radial-gradient(circle at 0% 90%, rgba(30, 136, 229, 0.24), transparent 32%),
@@ -242,6 +247,8 @@ body:has(.phone-app) main { min-height: 100dvh; }
   width: min(480px, 100%);
   margin: 0 auto;
   min-height: 100dvh;
+  height: auto;
+  overflow: visible;
 }
 .phone-top {
   position: sticky;
@@ -271,6 +278,19 @@ body:has(.phone-app) main { min-height: 100dvh; }
   padding: 0.28rem 0.6rem;
   font-size: 0.78rem;
   font-weight: 700;
+}
+.phone-tools a.home-jump {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.95rem;
+  border: 0;
+  background: linear-gradient(135deg, #1e88e5, #00897b);
+  color: #fff;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  box-shadow: 0 8px 20px rgba(30, 136, 229, 0.35);
 }
 .phone-body { padding: 0.4rem 1rem 7.2rem; }
 .phone-body h1 { font-size: 1.45rem; margin: 0.2rem 0 0.35rem; }
@@ -399,25 +419,30 @@ body:has(.phone-app) .open-app { bottom: 5.4rem; }
     width: min(1180px, calc(100% - 2rem));
     margin: 1rem auto 1.4rem;
     min-height: calc(100dvh - 2rem);
+    height: auto;
     display: grid;
     grid-template-columns: 240px minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto auto;
     border: 1px solid #2a3444;
     border-radius: 28px;
-    overflow: hidden;
+    overflow: visible;
   }
   .phone-tabs {
-    position: static;
+    position: sticky;
+    top: 1rem;
     transform: none;
     left: auto;
     bottom: auto;
     width: auto;
     grid-column: 1;
     grid-row: 1 / span 2;
+    align-self: start;
     display: flex;
     flex-direction: column;
     align-items: stretch;
+    max-height: calc(100dvh - 2rem);
     height: auto;
+    overflow: auto;
     border-radius: 0;
     padding: 1rem 0.7rem;
     box-shadow: none;

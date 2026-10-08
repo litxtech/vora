@@ -26,10 +26,12 @@ export function PhoneShell({ name, children }: { name: string; children: React.R
             <p className="phone-hello">{name}</p>
           </div>
           <nav className="phone-tools" aria-label="Kısayollar">
+            <Link href="/" className="home-jump">
+              Anasayfa
+            </Link>
             <Link href="/app/notifications">Bildirimler</Link>
             <Link href="/app/centers">Merkezler</Link>
             <Link href="/app/settings">Ayarlar</Link>
-            <Link href="/">Site</Link>
           </nav>
           <form action={logoutAction}>
             <button className="btn ghost" type="submit">
