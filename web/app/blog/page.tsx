@@ -17,7 +17,7 @@ export default async function BlogIndexPage() {
     <section className="block">
       <div className="wrap">
         <h1>Blog</h1>
-        <p className="muted">Yazılar admin panelinden yayımlanır. Otomatik üretilmiş haber yoktur.</p>
+        <p className="muted">Karadeniz, şehirler ve topluluk üzerine yazılar.</p>
         {posts.length === 0 ? (
           <p className="empty">Henüz yayımlanmış yazı yok.</p>
         ) : (

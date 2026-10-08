@@ -1,15 +1,13 @@
 import Link from 'next/link';
-import { CityLinks, CtaBand, FeatureLinks, JsonLd, StoreBadges } from '@/components/site';
-import { CITIES } from '@/lib/cities';
-import { displayName, listBlogPosts, listEvents, listPosts, listProfiles, postHeadline, postSeo } from '@/lib/data';
-import { cityById } from '@/lib/cities';
-import { breadcrumbLd, graph, toMetadata, trimDescription, websiteLd } from '@/lib/seo/engine';
-import { absoluteUrl } from '@/lib/site';
+import { CityLinks, CtaBand, JsonLd, StoreBadges } from '@/components/site';
+import { CITIES, cityById } from '@/lib/cities';
+import { displayName, listBlogPosts, listEvents, listPosts, listProfiles, postHeadline } from '@/lib/data';
+import { breadcrumbLd, graph, toMetadata, websiteLd } from '@/lib/seo/engine';
 
 export const metadata = toMetadata({
   title: 'Vora — Karadeniz’in canlı dijital ağı',
   description:
-    'Şehrini keşfet, komşularınla bağ kur ve Karadeniz’deki herkese açık paylaşımları Vora’da gör. Uygulama App Store ve Google Play’de.',
+    'Şehrini keşfet, komşularınla bağ kur ve Karadeniz’deki paylaşımları Vora’da gör. Giriş yap, kayıt ol veya uygulamayı indir.',
   path: '/',
   index: true,
   type: 'website',
@@ -23,11 +21,7 @@ export default async function HomePage() {
     listEvents({ limit: 4 }),
     listBlogPosts('tr', 3),
   ]);
-  const visiblePosts = posts.filter((post) => postSeo(post).index);
-  const jsonLd = graph([
-    websiteLd(),
-    breadcrumbLd([{ name: 'Ana sayfa', path: '/' }]),
-  ]);
+  const jsonLd = graph([websiteLd(), breadcrumbLd([{ name: 'Ana sayfa', path: '/' }])]);
 
   return (
     <>
@@ -38,54 +32,56 @@ export default async function HomePage() {
             <img src="/vora-logo.png" alt="Vora" width={72} height={72} />
             <h1>Karadeniz’in canlı dijital ağı.</h1>
             <p className="lead">
-              Şehrinin nabzını tut, komşularınla bağ kur, herkese açık paylaşımları oku. Vora; kıyıdan iç kesime şehir odaları, meclis ve günlük hayat için kurulmuş yerel bir sosyal platformdur.
+              Şehrinin nabzını tut, komşularınla konuş, paylaşım yap ve etkinlikleri kaçırma. Web’de hesabınla devam et; aynı hesap telefonda da açık.
             </p>
             <div className="hero-actions">
-              <StoreBadges />
-              <Link className="btn secondary" href="/explore">
-                Web’de keşfet
+              <Link className="btn" href="/register">
+                Kayıt ol
+              </Link>
+              <Link className="btn secondary" href="/login">
+                Giriş yap
+              </Link>
+              <Link className="btn secondary" href="/app">
+                Uygulamayı aç
               </Link>
             </div>
+            <StoreBadges />
             <CityLinks ids={['trabzon', 'rize', 'artvin', 'giresun', 'ordu', 'samsun', 'sinop']} />
           </div>
           <aside className="panel">
-            <strong>Bugün web’de görünenler</strong>
-            <p className="meta">Yalnızca herkese açık, yayındaki içerik. Uydurma sayaç yok.</p>
-            <p>{visiblePosts.length} dizine uygun paylaşım</p>
-            <p>{people.length} herkese açık profil listeleniyor</p>
-            <p>{events.length} yayındaki etkinlik</p>
-            <p>{blogs.length} yayımlanmış blog yazısı</p>
+            <strong>Bugün Vora’da</strong>
+            <p>Şehrini seç, insanları gör, son paylaşımlara göz at.</p>
+            <p>
+              <Link href="/cities">18 Karadeniz ili</Link>
+            </p>
+            <p>
+              <Link href="/people">İnsanları keşfet</Link>
+            </p>
+            <p>
+              <Link href="/events">Etkinlikler</Link>
+            </p>
+            <p>
+              <Link href="/posts">Paylaşımlar</Link>
+            </p>
           </aside>
         </div>
       </section>
 
       <section className="block">
-        <div className="wrap prose">
-          <h2>Vora nedir?</h2>
-          <p>
-            Vora, Karadeniz şehirlerini merkeze alan bir sosyal keşif ve iletişim uygulamasıdır. Haber, gönderi, mesaj, etkinlik, şehir odası ve şehir yönetimi aynı hesapta durur. Bu site o uygulamanın tanıtım broşürü değildir; herkese açık şehir, profil, paylaşım, etkinlik ve blog sayfalarını okunur HTML olarak sunar.
-          </p>
-          <p>
-            <Link href="/about">Hakkımızda</Link>
-          </p>
-        </div>
-      </section>
-
-      <section className="block">
         <div className="wrap">
-          <h2>Neden Vora?</h2>
+          <h2>Neler yapabilirsin?</h2>
           <div className="grid-3">
             <article className="card">
-              <h3>Şehir bir filtreden fazlası</h3>
-              <p>İl kimliği profilde, paylaşımda, etkinlikte ve şehir odasında aynıdır.</p>
+              <h3>Paylaş</h3>
+              <p>Şehrinden metin paylaş, beğen ve yorum yaz.</p>
             </article>
             <article className="card">
-              <h3>Herkese açık olan görünür</h3>
-              <p>Arkadaş kitlesi, mesaj ve hassas içerik web sayfasına yazılmaz.</p>
+              <h3>Yazış</h3>
+              <p>Tanıdığın kişilerle mesajlaş, bildirimlerini takip et.</p>
             </article>
             <article className="card">
-              <h3>Uygulama duruyor</h3>
-              <p>Sesli oda, meclis ve mesajlaşma telefonda kalır. Web onları anlatır, kopyalamaz.</p>
+              <h3>Şehrini bul</h3>
+              <p>İlini seç, komşularını ve o şehirdeki etkinlikleri gör.</p>
             </article>
           </div>
         </div>
@@ -93,8 +89,7 @@ export default async function HomePage() {
 
       <section className="block">
         <div className="wrap">
-          <h2>Karadeniz şehirlerini keşfet</h2>
-          <p className="muted">Her ilin metni ayrı yazıldı. Aynı paragraf kopyalanmaz.</p>
+          <h2>Karadeniz şehirleri</h2>
           <div className="grid-3">
             {CITIES.slice(0, 6).map((city) => (
               <Link className="card" key={city.id} href={`/city/${city.id}`}>
@@ -111,16 +106,16 @@ export default async function HomePage() {
 
       <section className="block">
         <div className="wrap">
-          <h2>İnsanları keşfet</h2>
+          <h2>İnsanlar</h2>
           {people.length === 0 ? (
-            <p className="empty">Henüz web’de listelenecek herkese açık profil yok.</p>
+            <p className="empty">Herkese açık profiller burada görünecek.</p>
           ) : (
             <div className="grid-3">
               {people.map((person) => (
                 <Link className="card" key={person.id} href={`/u/${person.username}`}>
                   <h3>{displayName(person.full_name, person.username)}</h3>
                   <p className="meta">@{person.username}</p>
-                  <p>{person.bio || 'Herkese açık profil'}</p>
+                  <p>{person.bio || 'Profili aç'}</p>
                 </Link>
               ))}
             </div>
@@ -130,9 +125,9 @@ export default async function HomePage() {
 
       <section className="block">
         <div className="wrap">
-          <h2>Son herkese açık paylaşımlar</h2>
+          <h2>Son paylaşımlar</h2>
           {posts.length === 0 ? (
-            <p className="empty">Henüz koşulları sağlayan herkese açık paylaşım yok.</p>
+            <p className="empty">İlk paylaşımı yapmak için giriş yap.</p>
           ) : (
             <div className="grid-2">
               {posts.map((post) => (
@@ -150,48 +145,9 @@ export default async function HomePage() {
 
       <section className="block">
         <div className="wrap">
-          <h2>Popüler şehirler</h2>
-          <CityLinks ids={['trabzon', 'samsun', 'rize', 'ordu', 'giresun', 'zonguldak']} />
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="wrap">
-          <h2>Vora özellikleri</h2>
-          <FeatureLinks />
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="wrap grid-2">
-          <article>
-            <h2>Şehir odaları</h2>
-            <p>Her ilin canlı sesli odası, o şehirle bağı olan kişileri aynı anda bir araya getirir. Konuşma kaydı bu sitede yayımlanmaz.</p>
-            <Link href="/features/city-rooms">Şehir odaları</Link>
-          </article>
-          <article>
-            <h2>Şehir liderleri</h2>
-            <p>Liderlik uygulama içindeki şehir yönetiminin parçasıdır. Web, kişisel iletişim veya hassas aday bilgisi göstermez.</p>
-            <Link href="/city-leaders">Şehir liderleri</Link>
-          </article>
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="wrap">
-          <h2>Meclis ve diplomasi</h2>
-          <p>Meclis şehir gündemini, diplomasi ise iller arasındaki ortak düzeni uygulama içinde taşır.</p>
-          <p>
-            <Link href="/features/council">Meclis</Link> · <Link href="/features/diplomacy">Diplomasi</Link>
-          </p>
-        </div>
-      </section>
-
-      <section className="block">
-        <div className="wrap">
           <h2>Etkinlikler</h2>
           {events.length === 0 ? (
-            <p className="empty">Yayında herkese açık etkinlik yok.</p>
+            <p className="empty">Yaklaşan etkinlik olduğunda burada listelenecek.</p>
           ) : (
             <div className="grid-2">
               {events.map((event) => (
@@ -207,9 +163,9 @@ export default async function HomePage() {
 
       <section className="block">
         <div className="wrap">
-          <h2>Son blog yazıları</h2>
+          <h2>Blog</h2>
           {blogs.length === 0 ? (
-            <p className="empty">Henüz yayımlanmış blog yazısı yok. Yazılar admin panelinden eklenir.</p>
+            <p className="empty">Yeni yazılar yayınlandığında burada görünecek.</p>
           ) : (
             <div className="grid-3">
               {blogs.map((post) => (
@@ -222,20 +178,7 @@ export default async function HomePage() {
           )}
         </div>
       </section>
-
-      <section className="block">
-        <div className="wrap prose">
-          <h2>Vora topluluğu</h2>
-          <p>
-            Topluluk 18 yaş ve üzeridir. Çocuklara yönelik hesap açılmaz. Herkese açık olan içerik bu sitede okunabilir; özel olan içerik uygulamada kalır.
-          </p>
-          <p>
-            <Link href="/community-rules">Topluluk kuralları</Link>
-          </p>
-        </div>
-      </section>
       <CtaBand />
-      <p className="wrap meta">Kanonik adres: {absoluteUrl('/')}</p>
     </>
   );
 }

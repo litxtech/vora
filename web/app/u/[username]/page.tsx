@@ -32,7 +32,6 @@ export default async function ProfilePage({ params }: { params: Promise<Params> 
   if (!profile) notFound();
   const posts = (await listPosts({ limit: 30 })).filter((post) => post.author_id === profile.id);
   const city = cityById(profile.region_id ?? '');
-  const seo = profileSeo(profile, posts.length);
   const crumbs = [
     { name: 'Ana sayfa', path: '/' },
     { name: 'İnsanlar', path: '/people' },
@@ -66,8 +65,7 @@ export default async function ProfilePage({ params }: { params: Promise<Params> 
           </p>
         ) : null}
         {profile.interests.length > 0 ? <p>İlgi alanları: {profile.interests.join(', ')}</p> : null}
-        <p className="meta">{seo.index ? 'Arama motorlarında gösterilmeye izin verilmiş.' : 'noindex — arama izni veya yeterli herkese açık içerik yok.'}</p>
-        <h2>Herkese açık paylaşımlar</h2>
+        <h2>Paylaşımlar</h2>
         {posts.length === 0 ? (
           <p className="empty">Listelenecek herkese açık paylaşım yok.</p>
         ) : (

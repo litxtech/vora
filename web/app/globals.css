@@ -196,3 +196,24 @@ th, td { text-align: left; padding: 0.55rem; border-bottom: 1px solid var(--line
   .nav-toggle:checked ~ .nav-links { display: flex; }
   .nav-toggle:focus-visible ~ .nav-burger { outline: 3px solid #90caf9; }
 }
+
+.auth-wrap { display: grid; justify-items: center; }
+.auth-card {
+  width: min(32rem, 100%);
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 24px;
+  padding: 1.4rem;
+}
+.auth-links { display: grid; gap: 0.35rem; }
+.form-error { color: var(--danger); margin: 0; }
+.form-ok { color: var(--accent); margin: 0; }
+.check-line, .choice-row { display: flex; gap: 0.8rem; align-items: flex-start; }
+.check-line input, .choice-row input { width: auto; }
+.app-top, .app-head, .row-actions { display: flex; justify-content: space-between; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.app-nav { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 1.4rem; }
+.app-nav a { text-decoration: none; background: #fff; border: 1px solid var(--line); border-radius: 999px; padding: 0.35rem 0.75rem; color: var(--ink); font-weight: 650; }
+.thread { margin-bottom: 1rem; }
+.bubble { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 0.6rem 0.8rem; max-width: 36rem; }
+.bubble.mine { background: #e3f2fd; margin-left: auto; }
+.settings-list { display: grid; gap: 0.45rem; padding: 0; list-style: none; }

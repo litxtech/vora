@@ -6,7 +6,7 @@ import { toMetadata } from '@/lib/seo/engine';
 
 export const metadata: Metadata = toMetadata({
   title: 'Arama',
-  description: 'Vora içinde arama. Bu sayfa dizine eklenmez.',
+  description: 'Vora içinde şehir, insan ve paylaşım ara.',
   path: '/search',
   index: false,
   follow: false,
@@ -22,7 +22,6 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     <section className="block">
       <div className="wrap">
         <h1>Arama</h1>
-        <p className="meta">Bu sayfa noindex, nofollow. Sonuçlar site haritasına girmez.</p>
         <form action="/search">
           <label htmlFor="q">Ara</label>
           <input id="q" name="q" defaultValue={q ?? ''} />

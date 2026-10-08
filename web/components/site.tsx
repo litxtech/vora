@@ -3,12 +3,15 @@ import { CopyLink } from '@/components/copy-link';
 import { CITIES } from '@/lib/cities';
 import { FEATURES } from '@/lib/features';
 import type { BreadcrumbItem } from '@/lib/seo/engine';
+import { currentProfile } from '@/lib/session';
 import { StoreBadges } from '@/components/store-badges';
 
 export { StoreBadges };
 import { ANDROID_PLAY_STORE_URL, IOS_APP_STORE_URL, SUPPORT_EMAIL } from '@/lib/site';
 
-export function SiteHeader() {
+export async function SiteHeader() {
+  const session = await currentProfile();
+  const label = session?.profile?.full_name || session?.profile?.username || 'Hesabım';
   return (
     <header className="site-header">
       <div className="wrap header-bar">
@@ -21,15 +24,22 @@ export function SiteHeader() {
           Menü
         </label>
         <nav className="nav-links" aria-label="Ana menü">
-          <Link href="/about">Vora</Link>
-          <Link href="/features">Özellikler</Link>
           <Link href="/cities">Şehirler</Link>
           <Link href="/explore">Keşfet</Link>
-          <Link href="/blog">Blog</Link>
           <Link href="/events">Etkinlikler</Link>
-          <Link className="btn" href="/download">
-            Uygulamayı indir
-          </Link>
+          <Link href="/blog">Blog</Link>
+          {session ? (
+            <Link className="btn" href="/app">
+              {label}
+            </Link>
+          ) : (
+            <>
+              <Link href="/login">Giriş yap</Link>
+              <Link className="btn" href="/register">
+                Kayıt ol
+              </Link>
+            </>
+          )}
         </nav>
       </div>
     </header>

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { PostEngage } from '@/components/post-engage';
 import { Breadcrumbs, CtaBand, JsonLd, ShareBar } from '@/components/site';
 import { cityById } from '@/lib/cities';
 import { displayName, getPost, listPosts, postHeadline, postSeo } from '@/lib/data';
@@ -37,7 +38,6 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
   const post = await getPost(id);
   if (!post) notFound();
   const city = cityById(post.region_id);
-  const seo = postSeo(post);
   const related = (await listPosts({ regionId: post.region_id, limit: 5 })).filter((item) => item.id !== post.id).slice(0, 3);
   const crumbs = [
     { name: 'Ana sayfa', path: '/' },
@@ -86,7 +86,7 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
           <p key={line}>{line}</p>
         ))}
         <ShareBar path={absoluteUrl(`/p/${post.id}`)} title={postHeadline(post)} />
-        <p className="meta">{seo.index ? 'Bu paylaşım dizin ölçütlerini karşılıyor.' : 'Bu paylaşım herkese açık olsa da kalite eşiği nedeniyle noindex.'}</p>
+        <PostEngage postId={post.id} />
         <h2>{city?.name ?? 'Şehir'}’deki diğer paylaşımlar</h2>
         <ul>
           {related.map((item) => (
