@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Analytics } from '@/components/analytics';
 import { OpenInApp } from '@/components/open-in-app';
 import { SiteFooter, SiteHeader } from '@/components/site';
+import { SiteTabBar } from '@/components/site-tabs';
 import { graph, organizationLd, softwareLd, websiteLd } from '@/lib/seo/engine';
 import { isIndexableDeployment, siteUrl, SITE_NAME } from '@/lib/site';
 import './globals.css';
@@ -27,6 +28,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <SiteHeader />
         <main id="icerik">{children}</main>
         <SiteFooter />
+        <SiteTabBar />
         <OpenInApp />
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
         <Analytics />

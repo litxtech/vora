@@ -25,8 +25,9 @@ export async function SiteHeader() {
           Menü
         </label>
         <nav className="nav-links" aria-label="Ana menü">
-          <Link href="/cities">Şehirler</Link>
+          <Link href="/posts">Akış</Link>
           <Link href="/explore">Keşfet</Link>
+          <Link href="/cities">Şehirler</Link>
           <Link href="/events">Etkinlikler</Link>
           <Link href="/blog">Blog</Link>
           {session ? (
