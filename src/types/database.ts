@@ -5758,6 +5758,7 @@ export type Database = {
           updated_at: string
           username: string
           verified_content_count: number
+          web_search_visible: boolean
         }
         Insert: {
           account_status?: string
@@ -5812,6 +5813,7 @@ export type Database = {
           updated_at?: string
           username: string
           verified_content_count?: number
+          web_search_visible?: boolean
         }
         Update: {
           account_status?: string
@@ -5866,6 +5868,7 @@ export type Database = {
           updated_at?: string
           username?: string
           verified_content_count?: number
+          web_search_visible?: boolean
         }
         Relationships: [
           {

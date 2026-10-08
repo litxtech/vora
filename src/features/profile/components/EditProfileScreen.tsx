@@ -56,7 +56,7 @@ import {
 import { EmailChangePanel } from '@/features/profile/components/EmailChangePanel';
 import { ProfileLinksEditor } from '@/features/profile/components/ProfileLinksEditor';
 import { fetchOwnProfileContactFields } from '@/features/profile/services/profileContactFields';
-import { updateProfile } from '@/features/profile/services/profileData';
+import { fetchWebSearchVisible, updateProfile } from '@/features/profile/services/profileData';
 import {
   fetchProfileLinks,
   profileLinksToDrafts,
@@ -109,6 +109,8 @@ export function EditProfileScreen() {
   const [visibility, setVisibility] = useState<ProfileVisibility>('public');
   const [showProfileViews, setShowProfileViews] = useState(true);
   const [showLikedPosts, setShowLikedPosts] = useState(false);
+  const [webSearchVisible, setWebSearchVisible] = useState(false);
+  const [webSearchSupported, setWebSearchSupported] = useState(false);
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [coverUri, setCoverUri] = useState<string | null>(null);
   const [linkDrafts, setLinkDrafts] = useState<ProfileLinkDraft[]>([]);
@@ -161,6 +163,11 @@ export function EditProfileScreen() {
 
     void fetchProfileLinks(user.id).then((links) => {
       setLinkDrafts(profileLinksToDrafts(links));
+    });
+
+    void fetchWebSearchVisible(user.id).then((result) => {
+      setWebSearchSupported(result.supported);
+      setWebSearchVisible(result.visible);
     });
   }, [user?.id]);
 
@@ -397,6 +404,7 @@ export function EditProfileScreen() {
       profileVisibility: visibility,
       showProfileViews,
       showLikedPosts,
+      ...(webSearchSupported ? { webSearchVisible } : {}),
     });
 
     if (error) {
@@ -713,6 +721,22 @@ export function EditProfileScreen() {
               </View>
               <Switch value={showLikedPosts} onValueChange={setShowLikedPosts} trackColor={{ true: colors.primary }} />
             </View>
+            {webSearchSupported ? (
+              <View style={styles.switchRow}>
+                <View style={styles.switchMeta}>
+                  <Text variant="label">Profilimi arama motorlarında göster</Text>
+                  <Text secondary variant="caption">
+                    Açıkken herkese açık profilin Vora web sitesinde dizine eklenebilir. Kapalıyken profil sayfası noindex kalır.
+                  </Text>
+                </View>
+                <Switch
+                  value={webSearchVisible}
+                  onValueChange={setWebSearchVisible}
+                  trackColor={{ true: colors.primary }}
+                  accessibilityLabel="Profilimi arama motorlarında göster"
+                />
+              </View>
+            ) : null}
           </EditProfileSection>
         </ScrollView>
       </KeyboardAvoidingView>

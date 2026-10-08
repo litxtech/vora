@@ -79,6 +79,7 @@
     "expo-nse-plugin": "^2.2.1",
     "patch-package": "^8.0.1",
     "sharp": "^0.35.3",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -87,6 +88,13 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
+    "seo:test": "tsx --test src/features/seo/seo.test.ts",
+    "seo:audit": "node web/scripts/seo-audit.mjs",
+    "seo:crawl": "node web/scripts/seo-audit.mjs",
+    "web:dev": "npm --prefix web run dev",
+    "web:lint": "npm --prefix web run lint",
+    "web:typecheck": "npm --prefix web run typecheck",
+    "web:build": "npm --prefix web run build",
     "ensure:google-services": "node scripts/ensure-google-services.mjs",
     "fit-android-icon": "node scripts/fit-android-icon.mjs",
     "postinstall": "patch-package",

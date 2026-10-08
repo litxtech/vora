@@ -767,6 +767,19 @@ export async function fetchUserReels(
   return enrichFeedAuthorsInItems(items);
 }
 
+/** Arama motoru tercihi. Kolon yoksa profil kaydını bozmaz. */
+export async function fetchWebSearchVisible(
+  userId: string,
+): Promise<{ supported: boolean; visible: boolean }> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('web_search_visible')
+    .eq('id', userId)
+    .maybeSingle();
+  if (error || !data) return { supported: false, visible: false };
+  return { supported: true, visible: Boolean(data.web_search_visible) };
+}
+
 export async function updateProfile(
   userId: string,
   updates: {
@@ -789,6 +802,7 @@ export async function updateProfile(
     profileVisibility?: PublicProfile['profileVisibility'];
     showProfileViews?: boolean;
     showLikedPosts?: boolean;
+    webSearchVisible?: boolean;
   },
 ): Promise<{ error: string | null }> {
   const fullName =
@@ -819,6 +833,9 @@ export async function updateProfile(
       profile_visibility: updates.profileVisibility,
       show_profile_views: updates.showProfileViews,
       show_liked_posts: updates.showLikedPosts,
+      ...(updates.webSearchVisible !== undefined
+        ? { web_search_visible: updates.webSearchVisible }
+        : {}),
       updated_at: new Date().toISOString(),
     })
     .eq('id', userId);

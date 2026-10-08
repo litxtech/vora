@@ -9,6 +9,18 @@ const config = getDefaultConfig(__dirname);
 // semver gibi exports'suz paketlerin deep import'ları (reanimated) bozulmasın.
 config.resolver.unstable_enablePackageExports = false;
 
+// Next derleme çıktısı yazılırken silinen klasörler Windows izleyicisini düşürür.
+const nextBuildOutput = /\/web\/\.next(\/|$)/;
+const currentBlockList = config.resolver.blockList;
+config.resolver.blockList = [
+  ...(Array.isArray(currentBlockList)
+    ? currentBlockList
+    : currentBlockList
+      ? [currentBlockList]
+      : []),
+  nextBuildOutput,
+];
+
 // Windows'ta %TEMP% altında EMFILE riskini azaltmak için önbelleği projede tut.
 config.cacheStores = [
   new FileStore({

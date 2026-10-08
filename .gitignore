@@ -47,6 +47,10 @@ supabase/.temp/
 # typescript
 *.tsbuildinfo
 
+# Vora web (Next.js) — mobil Expo derlemesinden ayrı
+web/.next/
+web/out/
+
 # generated native folders
 /ios
 /android
