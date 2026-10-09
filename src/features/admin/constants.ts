@@ -221,6 +221,7 @@ export const ADMIN_MENU_SECTIONS = [
       { id: 'events', label: 'Etkinlikler', icon: 'calendar-outline' as const, href: '/admin/events', adminOnly: false, accent: 'accent' as const },
       { id: 'lost-items', label: 'Kayıp Merkezi', icon: 'search-outline' as const, href: '/admin/lost-items', adminOnly: false, accent: 'danger' as const },
       { id: 'vora-needs', label: 'İhtiyaç Ağı', icon: 'hand-left-outline' as const, href: '/admin/vora-needs', adminOnly: false, accent: 'accent' as const },
+      { id: 'vora-canlar', label: 'Vora Canlar', icon: 'paw-outline' as const, href: '/admin/vora-canlar', adminOnly: false, accent: 'warning' as const },
       { id: 'izdivac', label: 'İzdivaç Erişimi', icon: 'heart-half-outline' as const, href: '/admin/izdivac', adminOnly: false, accent: 'danger' as const },
       { id: 'izdivac-badge-notes', label: 'İzdivaç Tik Notları', icon: 'ribbon-outline' as const, href: '/admin/izdivac-badge-notes', adminOnly: true, accent: 'danger' as const },
       { id: 'marketplace', label: 'Yerel Pazar', icon: 'storefront-outline' as const, href: '/admin/marketplace', adminOnly: false, accent: 'warning' as const },

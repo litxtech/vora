@@ -7,6 +7,7 @@ import { MARKETPLACE_CENTER_DEF } from '@/features/marketplace/constants';
 import { RIDES_CENTER_DEF } from '@/features/rides/constants';
 import { PERSONNEL_CENTER_DEF } from '@/features/personnel-center/constants';
 import { TIP_LINE_CENTER_DEF } from '@/features/tip-line/constants';
+import { VORA_CANLAR_CENTER_DEF } from '@/features/vora-canlar/constants';
 import { VORA_NEEDS_CENTER_DEF } from '@/features/vora-needs/constants';
 import { VORA_HIZMETLER_CENTER_DEF } from '@/features/vora-hizmetler/constants';
 import { IZDIVAC_CENTER_DEF } from '@/features/izdivac/constants';
@@ -30,6 +31,7 @@ export const CENTERS: CenterDef[] = [
   HOTEL_CENTER_DEF,
   RIDES_CENTER_DEF,
   VORA_NEEDS_CENTER_DEF,
+  VORA_CANLAR_CENTER_DEF,
   VORA_HIZMETLER_CENTER_DEF,
   IZDIVAC_CENTER_DEF,
   DATE_CENTER_DEF,

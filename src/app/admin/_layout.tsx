@@ -42,6 +42,7 @@ export default function AdminLayout() {
       <Stack.Screen name="events" />
       <Stack.Screen name="lost-items" />
       <Stack.Screen name="vora-needs" />
+      <Stack.Screen name="vora-canlar" />
       <Stack.Screen name="centers" />
       <Stack.Screen name="reporter" />
       <Stack.Screen name="news-verification" />

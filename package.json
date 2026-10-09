@@ -89,6 +89,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "seo:test": "tsx --test src/features/seo/seo.test.ts",
+    "vora-canlar:test": "tsx --test src/features/vora-canlar/services/money.test.ts",
     "seo:audit": "node web/scripts/seo-audit.mjs",
     "seo:crawl": "node web/scripts/seo-audit.mjs",
     "web:dev": "npm --prefix web run dev",

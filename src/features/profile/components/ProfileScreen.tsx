@@ -24,6 +24,7 @@ import { ProfileHeader } from '@/features/profile/components/ProfileHeader';
 import { ProfileReelGrid } from '@/features/profile/components/ProfileReelGrid';
 import { ProfileHeaderDetails } from '@/features/profile/components/ProfileHeaderDetails';
 import { ProfileOwnActionsBar } from '@/features/profile/components/ProfileOwnActionsBar';
+import { CanlarContributionCard } from '@/features/vora-canlar/components/CanlarContributionCard';
 import { TrustStatsCard } from '@/features/profile/components/TrustStatsCard';
 import { SoundProfileStats } from '@/features/sounds/components/SoundProfileStats';
 import { ProfileVerifyAccountNudge } from '@/features/profile/components/ProfileVerifyAccountNudge';
@@ -639,6 +640,10 @@ export function ProfileScreen({
 
       {isOwnProfile && !isDeletedProfile ? (
         <ProfileHeaderDetails profile={displayProfile} badges={badges} />
+      ) : null}
+
+      {!isDeletedProfile ? (
+        <CanlarContributionCard userId={profile.id} isOwnProfile={isOwnProfile} />
       ) : null}
 
       {!isDeletedProfile &&

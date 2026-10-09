@@ -9,6 +9,7 @@ export { SUB_FEATURES as lostFound } from '@/features/lost-found/featureFlags';
 export { SUB_FEATURES as marketplace } from '@/features/marketplace/featureFlags';
 export { SUB_FEATURES as help } from '@/features/help/featureFlags';
 export { SUB_FEATURES as voraNeeds } from '@/features/vora-needs/featureFlags';
+export { SUB_FEATURES as voraCanlar } from '@/features/vora-canlar/featureFlags';
 export { SUB_FEATURES as hotel } from '@/features/hotel-center/featureFlags';
 export { SUB_FEATURES as voraHizmetler } from '@/features/vora-hizmetler/featureFlags';
 export { SUB_FEATURES as support } from '@/features/live-support/featureFlags';

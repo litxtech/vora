@@ -13,7 +13,8 @@ export type CenterId =
   | 'support-center'
   | 'izdivac-center'
   | 'date-center'
-  | 'city-system';
+  | 'city-system'
+  | 'vora-canlar';
 
 export type CenterGroup = 'community' | 'map' | 'economy' | 'media' | 'social';
 

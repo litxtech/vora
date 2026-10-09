@@ -43,6 +43,7 @@ const EXTRA_KEYWORDS: Record<string, string[]> = {
   operations: ['operasyon', 'is yuku'],
   'commerce-ops': ['ekonomi', 'operasyon', 'otel', 'pazar', 'yolculuk', 'personel', 'finans', 'pdf'],
   'vora-hizmetler': ['hizmet', 'usta', 'escrow', 'odeme', 'payout', 'iban', 'itiraz', 'iade'],
+  'vora-canlar': ['canlar', 'hayvan', 'bagis', 'kurtarma', 'kampanya', 'kanit'],
   'hotel-marketing': ['otel', 'pazarlama', 'kampanya', 'reklam', 'tanitim', 'one cikan', 'konaklama'],
   revenue: ['gelir', 'kazanc', 'para'],
   stripe: ['odeme', 'iade', 'kart'],

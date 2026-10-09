@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.224.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.49.1';
 import type Stripe from 'https://esm.sh/stripe@17.7.0?target=deno';
+import { dispatchCanlarStripeEvent } from '../_shared/canlarDonation.ts';
 import { upsertStripeSubscription } from '../_shared/premiumSubscription.ts';
 import { corsHeaders, getStripe, stripeCryptoProvider } from '../_shared/stripe.ts';
 
@@ -33,6 +34,12 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const admin = createClient(supabaseUrl, serviceKey);
+
+    if (await dispatchCanlarStripeEvent(admin, stripe, event)) {
+      return new Response(JSON.stringify({ received: true }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
     switch (event.type) {
       case 'checkout.session.completed': {

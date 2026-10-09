@@ -249,6 +249,58 @@ export const LEGAL_DOCUMENTS = {
       },
     ],
   },
+  canlar_aid: {
+    title: 'Vora Canlar Bağış ve Yardım Politikası',
+    slug: 'canlar_aid',
+    summary:
+      'Hayvan kurtarma, bağış, harcama kanıtı, ayni yardım ve gönüllülük için LITXTECH LLC kuralları. Bu metin hukuki uygunluk onayı değildir.',
+    sections: [
+      {
+        heading: 'İşleten',
+        body: 'Vora Canlar, LITXTECH LLC tarafından işletilen Vora uygulamasının bir özelliğidir. Destek: support@litxtech.com. Adres: 15442 VENTURA BLVD STE 201-183.',
+      },
+      {
+        heading: 'Ne işe yarar',
+        body: 'Vora Canlar hayvan ihbarı, kurtarma dosyası, tedavi takibi, bağış kampanyası, harcama kanıtı, ayni yardım ve gönüllülük kaydı tutar. Ayrı bir hesap açılmaz. Platformun tamamen yasal veya resmî olarak onaylı olduğu iddia edilmez. Türkiye’de yardım toplama, kişisel veri ve ödeme hizmetleri için ayrıca profesyonel hukuki değerlendirme gerekir.',
+      },
+      {
+        heading: 'Kim ne yapabilir',
+        body: 'Misafirler herkese açık kayıtları görebilir. Gönderi, beğeni, yorum, mesaj, bağış, kampanya ve rol başvurusu için e-posta doğrulamalı üyelik gerekir. Gönüllü, kurtarıcı, kampanya sahibi ve klinik ilişkisi için mevcut kimlik doğrulamasının onaylanmış olması gerekir. Belge yüklemek tek başına kimlik doğrulaması değildir.',
+      },
+      {
+        heading: 'Bağış tutarları',
+        body: 'Brüt bağış, ödeme kuruluşu işlem ücreti, varsa ayrıca açıklanan kesinti, iade, ters ibraz, kampanyaya ayrılan net tutar, yararlanıcıya veya kliniğe yapılan ödeme ve onaylanmış harcama ayrı tutulur. İşlem ücreti ödeme yöntemine göre değişir ve ödeme tamamlanmadan kesin tutar gibi gösterilmez. Bekleyen, başarısız veya iade edilmiş ödemeler tamamlanmış bağış sayılmaz. Platform bu politikayla ayrıca bir komisyon eklemez.',
+      },
+      {
+        heading: 'Paranın kime gittiği',
+        body: 'Kampanyanın yayınlanması para çekme yetkisi vermez. Ödeme, kampanya incelemesinden ayrı açılır. Stripe üzerinden tahsilat, paranın kliniğe veya yararlanıcıya geçtiği anlamına gelmez. Bu hesapta Stripe Connect yapılandırılmamıştır. Kliniğe veya tedarikçiye ödeme, referanslı ve denetimli kayıtla izlenir; otomatik transfer vaat edilmez.',
+      },
+      {
+        heading: 'Kanıt ve şeffaflık',
+        body: 'Kampanya sahibi fatura, makbuz, klinik belgesi veya benzeri kanıt yükleyebilir. Yükleme onay değildir. Onaylı etiket yalnızca yetkili incelemeden sonra kullanılır. Kamuya ham fatura, kimlik, tam adres veya banka bilgisi açılmaz. Onaylı kayıtlarda kişisel verilerden arındırılmış özet gösterilir. Kanıt eksikse bu durum kampanya sayfasında gizlenmez.',
+      },
+      {
+        heading: 'İade',
+        body: 'İade ve ters ibraz, ödeme kuruluşunun kuralları ve uygulanabilir tüketici mevzuatı çerçevesinde işlenir. Kısmi iade, bağışçının net bağışından ve kampanya bakiyesinden düşülür. İade talepleri support@litxtech.com adresine iletilebilir. Hukuki zorunluluk veya şüpheli kampanya halinde ödeme durdurulabilir.',
+      },
+      {
+        heading: 'Ayni yardım',
+        body: 'Mama, ilaç, nakil, geçici yuva ve gönüllü emek parasal bağış toplamına eklenmez. Tahmini parasal değer ancak doğrulandıysa ve parasal bağıştan ayrı gösterilir.',
+      },
+      {
+        heading: 'Gizlilik ve saklama',
+        body: 'Hassas konum, kimlik belgesi ve ham harcama dosyası herkese açık alanda tutulmaz. Katkı göstergeleri varsayılan olarak gizlidir ve gizlenen değer başkasının profil yanıtından da çıkarılır. Bağışçı kimliği, bağışçı aksini seçmedikçe kampanya sahibine açılmaz. Politikanın bu sürümü ayrıca onaylanır; eski bir kullanım şartı onayı bu sürümün onayı sayılmaz.',
+      },
+      {
+        heading: 'Çocuk güvenliği',
+        body: 'Vora 18 yaş ve üzeri kullanıcılar içindir. Vora Canlar bu yaş sınırını değiştirmez. Çocuk güvenliği ihlalleri mevcut çocuk koruma politikasına tabidir.',
+      },
+      {
+        heading: 'İletişim',
+        body: 'Bağış, kanıt, iade ve veri talepleri için support@litxtech.com adresine yazabilirsiniz. LITXTECH LLC, 15442 VENTURA BLVD STE 201-183.',
+      },
+    ],
+  },
 } as const;
 
 export type LegalSlug = keyof typeof LEGAL_DOCUMENTS;
