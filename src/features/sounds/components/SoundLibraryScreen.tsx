@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   ScrollView,
@@ -20,6 +21,7 @@ import type { SoundListTabId } from '@/features/sounds/types';
 import { useSoundSearch } from '@/features/sounds/hooks/useSoundSearch';
 import { invalidateSoundCache } from '@/features/sounds/services/soundCache';
 import {
+  deleteSound,
   fetchFollowingSounds,
   fetchMySounds,
   fetchNewSounds,
@@ -34,6 +36,7 @@ import { useMusicSelectionStore } from '@/features/music/store/musicSelectionSto
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
+import { fetchAiMusicBalance, formatAiMusicAllowance } from '@/features/ai-music';
 
 const TAB_ICONS: Record<SoundListTabId, keyof typeof Ionicons.glyphMap> = {
   recent: 'time-outline',
@@ -53,6 +56,7 @@ export function SoundLibraryScreen() {
   const [tab, setTab] = useState<SoundListTabId>('recent');
   const [sounds, setSounds] = useState<Sound[]>([]);
   const [loading, setLoading] = useState(true);
+  const [musicMinutes, setMusicMinutes] = useState<string | null>(null);
   const { results: searchResults, searching, hasQuery } = useSoundSearch(query);
   const { togglePreview, stopPreview, playingId } = useMusicPreview();
 
@@ -60,6 +64,22 @@ export function SoundLibraryScreen() {
     invalidateSoundCache();
     return () => stopPreview();
   }, [stopPreview]);
+
+  useEffect(() => {
+    if (!user) {
+      setMusicMinutes(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchAiMusicBalance().then((balance) => {
+      if (!cancelled) {
+        setMusicMinutes(balance ? formatAiMusicAllowance(balance.availableSec) : null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user]);
 
   const loadSounds = useCallback(async () => {
     if (hasQuery) return;
@@ -185,27 +205,52 @@ export function SoundLibraryScreen() {
                 playing={playingId === item.id}
                 onPress={() => router.push(`/sounds/${item.id}` as Href)}
                 onPreview={() => void togglePreview(item.id, item.audioUrl)}
-                onUse={() => handleUse(item)}
+                onUse={tab === 'mine' ? undefined : () => handleUse(item)}
+                onEdit={tab === 'mine' ? () => router.push(`/sounds/${item.id}/edit` as Href) : undefined}
+                onDelete={
+                  tab === 'mine' && user
+                    ? () => {
+                        Alert.alert('Sesi kaldır', `"${item.title}" kalkar.`, [
+                          { text: 'Vazgeç', style: 'cancel' },
+                          {
+                            text: 'Kaldır',
+                            style: 'destructive',
+                            onPress: () => {
+                              void deleteSound(item.id, user.id).then((result) => {
+                                if (result.error) Alert.alert('Kaldırılamadı', result.error);
+                                else void loadSounds();
+                              });
+                            },
+                          },
+                        ]);
+                      }
+                    : undefined
+                }
               />
             )}
           />
         )}
 
-        <Pressable
-          style={[
-            styles.fab,
-            {
-              backgroundColor: colors.primary,
-              bottom: insets.bottom + spacing.lg,
-            },
-          ]}
-          onPress={() => router.push('/sounds/create' as Href)}
-        >
-          <Ionicons name="mic" size={22} color="#fff" />
-          <Text variant="label" style={styles.fabText}>
-            Ses Oluştur
-          </Text>
-        </Pressable>
+        <View style={[styles.fabRow, { bottom: insets.bottom + spacing.lg }]}>
+          <Pressable
+            style={[styles.fab, { backgroundColor: colors.accent }]}
+            onPress={() => router.push('/sounds/ai' as Href)}
+          >
+            <Ionicons name="sparkles" size={18} color="#fff" />
+            <Text variant="label" style={styles.fabText}>
+              {musicMinutes ? `AI Müzik · ${musicMinutes}` : 'AI Müzik'}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.fab, { backgroundColor: colors.primary }]}
+            onPress={() => router.push('/sounds/create' as Href)}
+          >
+            <Ionicons name="mic" size={18} color="#fff" />
+            <Text variant="label" style={styles.fabText}>
+              Ses Oluştur
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </GradientBackground>
   );
@@ -253,9 +298,13 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.xxl,
     paddingHorizontal: spacing.lg,
   },
-  fab: {
+  fabRow: {
     position: 'absolute',
-    right: spacing.lg,
+    right: spacing.md,
+    flexDirection: 'row',
+    gap: spacing.sm,
+  },
+  fab: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,

@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { declineCall } from '@/features/calls/services/callService';
 import {
@@ -29,6 +30,7 @@ export function resetNotificationResponseStateForTests(): void {
 }
 
 async function clearLastNotificationResponse(): Promise<void> {
+  if (Platform.OS === 'web') return;
   await Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
 }
 
@@ -130,6 +132,7 @@ export function handleNotificationResponse(
 }
 
 export async function handleColdStartNotificationResponse(): Promise<void> {
+  if (Platform.OS === 'web') return;
   if (coldStartConsumed) return;
   coldStartConsumed = true;
 

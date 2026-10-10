@@ -87,8 +87,17 @@ export type ProfileStats = {
   totalViews: number;
   totalLikes: number;
   totalComments: number;
+  /** Gönderilerin aldığı alıntı etkileşimi toplamı — sekme sayısı değildir. */
   totalQuotes: number;
   profileViewCount: number;
+  /** Kullanıcının yayınladığı alıntı gönderisi sayısı. */
+  quotePostCount?: number;
+  /** Fotoğraf veya video içeren yayın sayısı. */
+  mediaCount?: number;
+  /** null: beğeniler gizli veya bu izleyici için sayılmadı. */
+  likedPostCount?: number | null;
+  /** null: kayıtlar yalnızca profile sahibine açıktır. */
+  savedPostCount?: number | null;
 };
 
 export type ProfileRelationship = {

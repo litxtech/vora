@@ -7,12 +7,12 @@ export const VORA_CANLAR_CENTER_DEF: CenterDef = {
   title: 'Vora Canlar',
   subtitle: 'Hayvan kurtarma, tedavi ve dayanışma',
   icon: 'paw',
-  accent: '#C47B4A',
+  accent: '#2F6B4F',
   group: 'social',
   hasCreate: true,
 };
 
-export const CANLAR_ACCENT = '#C47B4A';
+export const CANLAR_ACCENT = '#2F6B4F';
 export const CANLAR_POLICY_VERSION = '2026-10-09';
 export const CANLAR_MIN_DONATION_MINOR = 1000;
 export const CANLAR_MAX_DONATION_MINOR = 50_000_000;
@@ -26,11 +26,11 @@ export const CANLAR_COMPANY = {
 /** Yapılandırılmamış dış servisler. Arayüz bunları varmış gibi göstermez. */
 export const CANLAR_UNCONFIGURED = {
   stripeConnect:
-    'Bu Stripe hesabında Connect / connected account akışı yok. Doğrudan kliniğe otomatik transfer yapılmaz. Ödeme, yönetici onaylı ve referanslı manuel kayıtla izlenir.',
+    'Doğrudan kliniğe otomatik transfer yapılmaz. Ödeme, yönetici onaylı ve referanslı manuel kayıtla izlenir.',
   identityLiveness:
     'Kimlik belgesi yüklemek canlılık kontrolü değildir. Vora’nın mevcut kimlik incelemesi kullanılır. Ayrı bir canlılık veya kimlik eşleştirme sağlayıcısı yapılandırılmamıştır.',
   processorFee:
-    'İşlem ücreti için sabit bir oran kullanılmaz. Kesin ücret, Stripe bakiye hareketi geldikten sonra bağış kaydına yazılır.',
+    'İşlem ücreti için sabit bir oran kullanılmaz. Kesin ücret, ödeme kuruluşunun bakiye hareketi geldikten sonra bağış kaydına yazılır.',
 } as const;
 
 export const SPECIES_OPTIONS = [
@@ -44,6 +44,26 @@ export const URGENCY_OPTIONS = [
   { id: 'normal', label: 'Normal' },
   { id: 'urgent', label: 'Acil' },
   { id: 'critical', label: 'Çok acil' },
+] as const;
+
+export const HELP_KIND_OPTIONS = [
+  { id: 'treatment', label: 'Tedavi' },
+  { id: 'food', label: 'Mama' },
+  { id: 'medicine', label: 'İlaç' },
+  { id: 'transport', label: 'Nakil' },
+  { id: 'care', label: 'Bakım' },
+  { id: 'other', label: 'Diğer' },
+] as const;
+
+export const PROOF_KIND_OPTIONS = [
+  { id: 'vet_invoice', label: 'Veteriner faturası' },
+  { id: 'clinic_note', label: 'Klinik notu' },
+  { id: 'medicine_invoice', label: 'İlaç faturası' },
+  { id: 'food_receipt', label: 'Mama fişi' },
+  { id: 'transport', label: 'Nakil gideri' },
+  { id: 'receipt', label: 'Makbuz' },
+  { id: 'statement', label: 'Hesap özeti' },
+  { id: 'payment_reference', label: 'Ödeme dekontu' },
 ] as const;
 
 export const RESCUE_STATUS_LABELS: Record<string, string> = {

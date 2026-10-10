@@ -7,6 +7,7 @@ import {
   fetchProfileById,
   fetchProfileByUsername,
   fetchProfileEngagementTotals,
+  countVisibleLikedPosts,
   fetchProfileStatsCore,
   fetchRelationship,
   fetchUserAchievements,
@@ -192,9 +193,10 @@ async function fetchProfileScreenBundleFromNetwork(
   viewerId: string | null,
   options: LoadProfileOptions = {},
 ): Promise<ProfileScreenBundle | null> {
+  const isSelf = viewerId === userId;
   const [fetchedProfile, stats, badges, achievements, relationship, links] = await Promise.all([
     fetchProfileById(userId),
-    fetchProfileStatsCore(userId),
+    fetchProfileStatsCore(userId, { includeLiked: isSelf, includeSaved: isSelf }),
     fetchUserBadges(userId),
     fetchUserAchievements(userId),
     fetchRelationship(viewerId, userId),
@@ -226,15 +228,24 @@ async function fetchProfileScreenBundleFromNetwork(
       : resolvedProfile;
 
   const cachedStats = getCachedProfileBundle(userId, viewerId)?.stats;
-  const mergedStats: ProfileStats = cachedStats
+  let mergedStats: ProfileStats = cachedStats
     ? {
         ...stats,
+        quotePostCount: stats.quotePostCount ?? cachedStats.quotePostCount,
+        mediaCount: stats.mediaCount ?? cachedStats.mediaCount,
         totalViews: stats.totalViews || cachedStats.totalViews,
         totalLikes: stats.totalLikes || cachedStats.totalLikes,
         totalComments: stats.totalComments || cachedStats.totalComments,
         totalQuotes: stats.totalQuotes || cachedStats.totalQuotes,
       }
     : stats;
+
+  if (!isSelf && profile.showLikedPosts) {
+    const likedPostCount = await countVisibleLikedPosts(userId);
+    if (typeof likedPostCount === 'number') {
+      mergedStats = { ...mergedStats, likedPostCount };
+    }
+  }
 
   return {
     profile,

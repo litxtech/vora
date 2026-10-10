@@ -1,3 +1,4 @@
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 import { uploadCapImage } from '@/features/caps/services/capsUpload';
@@ -12,7 +13,7 @@ import { fetchCapById } from '@/features/caps/services/capsData';
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
-import { CAP_IMAGE_MAX_SIZE, CAPS_BUCKET } from '@/features/caps/constants';
+import { CAP_IMAGE_MAX_SIZE } from '@/features/caps/constants';
 
 export async function fetchMyVoraVideosForCaps(
   userId: string,
@@ -54,21 +55,22 @@ async function uploadPosterFromUri(
     const resized = await manipulateAsync(
       localUri,
       [{ resize: { width: CAP_IMAGE_MAX_SIZE } }],
-      { compress: 0.88, format: SaveFormat.JPEG },
+      { compress: 0.9, format: SaveFormat.WEBP },
     );
     const bytes = await readLocalFileBytes(resized.uri);
-    const path = `${userId}/${Date.now()}_poster.jpg`;
-    const { error } = await supabase.storage.from(CAPS_BUCKET).upload(path, bytes, {
-      contentType: 'image/jpeg',
-      upsert: false,
-    });
-    if (error) {
-      return { url: '', path: '', width: null, height: null, error: supabaseErrorMessage(error) };
-    }
-    const { data } = supabase.storage.from(CAPS_BUCKET).getPublicUrl(path);
-    return {
-      url: data.publicUrl,
+    const path = `${userId}/${Date.now()}_poster.webp`;
+    const uploaded = await uploadPublicImage({
+      folder: 'caps',
       path,
+      bytes,
+      contentType: 'image/webp',
+    });
+    if (uploaded.error || !uploaded.url) {
+      return { url: '', path: '', width: null, height: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+    }
+    return {
+      url: uploaded.url,
+      path: uploaded.storagePath ?? path,
       width: resized.width ?? null,
       height: resized.height ?? null,
       error: null,

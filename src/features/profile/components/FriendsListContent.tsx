@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { router } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { Text } from '@/components/ui/Text';
 import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
 import { getTrustScoreColor } from '@/features/profile/constants';
 import { fetchFriendsList } from '@/features/profile/services/friendship';
 import type { FriendUser } from '@/features/profile/services/friendship';
+import { FindFriendsShortcut } from '@/features/contact-discovery';
 import { radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -39,20 +39,25 @@ export function FriendsListContent({ userId }: FriendsListContentProps) {
     <View style={styles.container}>
       <AuthHeader title="Arkadaşlar" showBack compact />
 
-      <TextInput
-        style={[styles.search, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
-        placeholder="Ara..."
-        placeholderTextColor={colors.textMuted}
-        value={search}
-        onChangeText={setSearch}
-      />
+      <View style={styles.searchRow}>
+        <TextInput
+          style={[styles.search, { color: colors.text, borderColor: colors.border, backgroundColor: colors.surface }]}
+          placeholder="Ara..."
+          placeholderTextColor={colors.textMuted}
+          value={search}
+          onChangeText={setSearch}
+        />
+        {user?.id === userId ? <FindFriendsShortcut /> : null}
+      </View>
 
       {loading ? (
         <ActivityIndicator color={colors.primary} style={styles.loader} />
       ) : friends.length === 0 ? (
-        <Text secondary style={styles.empty}>
-          {search ? 'Sonuç bulunamadı.' : 'Henüz arkadaş yok. Karşılıklı takipleştiğiniz kişiler burada görünür.'}
-        </Text>
+        <View style={styles.emptyWrap}>
+          <Text secondary style={styles.empty}>
+            {search ? 'Sonuç bulunamadı.' : 'Henüz arkadaş yok. Karşılıklı takipleştiğiniz kişiler burada görünür.'}
+          </Text>
+        </View>
       ) : (
         friends.map((f) => (
           <Pressable
@@ -82,9 +87,11 @@ export function FriendsListContent({ userId }: FriendsListContentProps) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: spacing.lg, gap: spacing.md },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  search: { borderWidth: 1, borderRadius: radius.md, padding: spacing.md },
+  searchRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  search: { flex: 1, borderWidth: 1, borderRadius: radius.md, padding: spacing.md, minHeight: 44 },
   loader: { marginTop: spacing.xl },
   empty: { textAlign: 'center', marginTop: spacing.xl },
+  emptyWrap: { gap: spacing.sm },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

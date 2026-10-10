@@ -209,6 +209,7 @@ export function CreateReelScreen() {
                 trackId: musicSelection.trackId,
                 displayTitle: musicSelection.displayTitle,
                 artist: musicSelection.artist,
+                durationSec: Math.max(0, musicSelection.musicEndSec - musicSelection.musicStartSec) || musicSelection.durationSec,
               }}
             />
             <Pressable onPress={clearMusicSelection}>

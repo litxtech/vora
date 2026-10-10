@@ -11,6 +11,8 @@ import type { AdminDocumentMediaType } from '@/features/admin/services/adminDocu
 import {
   approveBusiness,
   rejectBusiness,
+  removeBusinessProfile,
+  setBusinessPostsVisible,
   setBusinessPremium,
   type BusinessApprovalRow,
 } from '@/features/admin/services/businessApprovals';
@@ -165,6 +167,47 @@ export function BusinessVerificationApplicationCard({
     ]);
   };
 
+  const handlePostsVisibility = () => {
+    const hide = item.posts_visible;
+    Alert.alert(
+      hide ? 'Gönderilerde gizle' : 'Gönderilerde göster',
+      hide
+        ? `${item.name} gönderilerde ve akıştaki işletme kartında görünmesin mi? Profil kaydı durur.`
+        : `${item.name} gönderilerde tekrar işletme olarak görünsün mü?`,
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: hide ? 'Gizle' : 'Göster',
+          style: hide ? 'destructive' : 'default',
+          onPress: async () => {
+            const { error } = await setBusinessPostsVisible(item.id, !hide);
+            if (error) Alert.alert('Hata', error);
+            else onUpdated();
+          },
+        },
+      ],
+    );
+  };
+
+  const handleRemoveProfile = () => {
+    Alert.alert(
+      'İşletme profilini kaldır',
+      `${item.name} profili kaldırılsın mı? Doğrulama, mağaza yayını ve gönderilerdeki işletme görünümü kapanır.`,
+      [
+        { text: 'Vazgeç', style: 'cancel' },
+        {
+          text: 'Kaldır',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await removeBusinessProfile(item.id);
+            if (error) Alert.alert('Hata', error);
+            else onUpdated();
+          },
+        },
+      ],
+    );
+  };
+
   return (
     <GlassCard style={styles.row}>
       <View style={styles.header}>
@@ -172,6 +215,7 @@ export function BusinessVerificationApplicationCard({
           <Text variant="label">{item.name}</Text>
           <Text secondary variant="caption">
             {item.category} · {statusLabel}
+            {item.registration_status === 'approved' && !item.posts_visible ? ' · Gönderilerde gizli' : ''}
           </Text>
           {owner ? (
             <Pressable onPress={() => router.push(`/admin/users/${item.owner_id}` as Href)}>
@@ -237,7 +281,15 @@ export function BusinessVerificationApplicationCard({
           <AdminActionChip label="Başvuruyu reddet" icon="close-circle-outline" tone="danger" onPress={handleReject} />
         </View>
       ) : item.registration_status === 'approved' ? (
-        <AdminActionChip label="Premium paket ver" icon="star-outline" tone="primary" onPress={handlePremium} />
+        <View style={styles.actions}>
+          <AdminActionChip label="Premium paket ver" icon="star-outline" tone="primary" onPress={handlePremium} />
+          <AdminActionChip
+            label={item.posts_visible ? 'Gönderilerde gizle' : 'Gönderilerde göster'}
+            icon={item.posts_visible ? 'eye-off-outline' : 'eye-outline'}
+            onPress={handlePostsVisibility}
+          />
+          <AdminActionChip label="Profili kaldır" icon="trash-outline" tone="danger" onPress={handleRemoveProfile} />
+        </View>
       ) : null}
     </GlassCard>
   );

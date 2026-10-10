@@ -24,6 +24,7 @@ import { useGuestMode } from '@/features/auth/hooks/useGuestMode';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { getAndroidInstantPressableProps, isAndroid } from '@/lib/device/androidPerfProfile';
 import { prefetchComposeRoute } from '@/lib/navigation/lazyRouteScreens';
+import { pressTabWithoutReload } from '@/lib/navigation/pressTabWithoutReload';
 import { pushRoute } from '@/lib/navigation/pushRoute';
 import { asGradientColors } from '@/lib/ui/gradientColors';
 import { useAuth } from '@/providers/AuthProvider';
@@ -102,7 +103,7 @@ export function CreateTabButton({
       accessibilityLabel="Paylaş"
       accessibilityState={accessibilityState}
       onPressIn={handlePressIn}
-      onPress={handlePress}
+      onPress={(event) => pressTabWithoutReload(event, handlePress)}
       style={[style as StyleProp<ViewStyle>, styles.hit]}
       hitSlop={8}
       {...getAndroidInstantPressableProps()}

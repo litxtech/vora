@@ -1,9 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useWindowDimensions } from 'react-native';
 import { spacing } from '@/constants/theme';
+import {
+  PROFILE_GRID_COLUMNS,
+  resolveProfileGridCellSize,
+  resolveProfileGridContainerWidth,
+} from '@/features/profile/services/profileGridMetrics';
 
-/** Profil gönderi ızgarası — her zaman Instagram gibi 3 sütun. */
-export const PROFILE_GRID_COLUMNS = 3;
+export { PROFILE_GRID_COLUMNS, PROFILE_GRID_MAX_WIDTH } from '@/features/profile/services/profileGridMetrics';
 
 type ProfileGridLayoutOptions = {
   /** Sayfa yatay padding'ini iptal ederek kenardan kenara ızgara. */
@@ -19,23 +23,27 @@ export function useProfileGridLayout(gap: number, options?: ProfileGridLayoutOpt
   const pagePadding = options?.pagePadding ?? spacing.lg;
 
   const onGridLayout = useCallback((width: number) => {
-    if (width > 0) setMeasuredWidth(width);
-  }, []);
+    if (fullBleed) return;
+    const next = Math.floor(width);
+    if (next <= 0) return;
+    setMeasuredWidth((prev) => (prev === next ? prev : next));
+  }, [fullBleed]);
 
-  const containerWidth = useMemo(() => {
-    if (fullBleed) {
-      // Negatif margin ile genişleyen view onLayout'ta dar kalabilir — ekran genişliğini kullan.
-      return Math.max(0, Math.floor(windowWidth));
-    }
-    const width = measuredWidth > 0 ? measuredWidth : windowWidth - pagePadding * 2;
-    return Math.max(0, Math.floor(width));
-  }, [fullBleed, measuredWidth, windowWidth, pagePadding]);
+  const containerWidth = useMemo(
+    () =>
+      resolveProfileGridContainerWidth({
+        windowWidth,
+        measuredWidth,
+        fullBleed,
+        pagePadding,
+      }),
+    [fullBleed, measuredWidth, pagePadding, windowWidth],
+  );
 
-  const cellSize = useMemo(() => {
-    if (containerWidth <= 0) return 0;
-    // floor: float taşması 3. hücreyi alt satıra düşürüp 2'li dizilim gibi gösterir.
-    return Math.floor((containerWidth - gap * (columns - 1)) / columns);
-  }, [containerWidth, gap, columns]);
+  const cellSize = useMemo(
+    () => resolveProfileGridCellSize(containerWidth, gap, columns),
+    [containerWidth, gap, columns],
+  );
 
   return {
     columns,

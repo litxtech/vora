@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { resolveWebAccess } from '@/lib/access-review';
 import { siteUrl } from '@/lib/site';
 import { createSessionClient } from '@/lib/supabase';
 
@@ -38,8 +39,22 @@ export async function loginAction(_prev: AuthState, formData: FormData): Promise
     email = String(data).toLowerCase();
   }
 
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { error: BAD_LOGIN, message: null };
+  const { data: signedIn, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error || !signedIn.user) return { error: BAD_LOGIN, message: null };
+  const access = await resolveWebAccess(supabase, signedIn.user.id);
+  if (access.action === 'end') {
+    await supabase.auth.signOut();
+    redirect(`/login?access=${access.scenario}`);
+  }
+  if (access.action === 'keep') redirect('/app/account-access');
+  redirect('/app');
+}
+
+export async function cancelDeletionAction(): Promise<void> {
+  const supabase = await createSessionClient();
+  if (!supabase) redirect('/login');
+  const { error } = await supabase.rpc('cancel_account_deletion');
+  if (error) redirect('/app/account-access?error=1');
   redirect('/app');
 }
 

@@ -8,6 +8,12 @@ type DonationCheckoutBody = {
   cancelUrl?: string;
 };
 
+function clip(value: string, max: number) {
+  const clean = value.replace(/\s+/g, ' ').trim();
+  if (clean.length <= max) return clean;
+  return `${clean.slice(0, Math.max(0, max - 1))}…`;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -53,7 +59,7 @@ serve(async (req) => {
 
     const { data: campaign } = await admin
       .from('canlar_campaigns')
-      .select('id, title, status, payments_enabled, currency')
+      .select('id, title, case_id, status, payments_enabled, currency')
       .eq('id', donation.campaign_id)
       .maybeSingle();
 
@@ -89,11 +95,50 @@ serve(async (req) => {
       await admin.from('profiles').update({ stripe_customer_id: customerId }).eq('id', authData.user.id);
     }
 
+    const [{ data: rescue }, { data: posts }] = await Promise.all([
+      campaign.case_id
+        ? admin.from('canlar_cases').select('name, public_code').eq('id', campaign.case_id).maybeSingle()
+        : Promise.resolve({ data: null }),
+      admin
+        .from('canlar_posts')
+        .select('id, body')
+        .eq('campaign_id', campaign.id)
+        .order('created_at', { ascending: false })
+        .limit(1),
+    ]);
+    const post = posts?.[0] ?? null;
+    const donorName = profile?.full_name?.trim() || 'Ad yok';
+    const donorUsername = profile?.username?.trim() ? `@${profile.username.trim()}` : 'kullanıcı adı yok';
+    const caseName = rescue?.name?.trim() || 'İsimsiz vaka';
+    const caseCode = rescue?.public_code?.trim() || 'vaka kodu yok';
+    const postLabel = post ? `${post.id} — ${clip(post.body, 180)}` : 'Bağlı gönderi yok';
+    const action = 'Bağış ödemesi';
+    const description = clip(
+      [
+        'Vora Canlar bağışı.',
+        `Bağışçı: ${donorName} (${donorUsername}).`,
+        `Kullanıcı: ${authData.user.id}.`,
+        `Kampanya: ${campaign.title}.`,
+        `Vaka: ${caseName} (${caseCode}).`,
+        `Gönderi: ${postLabel}.`,
+        `İşlem: ${action}.`,
+      ].join(' '),
+      1000,
+    );
+
     const metadata = {
       checkout_type: 'canlar_donation',
       donation_id: donation.id,
       campaign_id: donation.campaign_id,
+      campaign_title: clip(campaign.title, 500),
       user_id: authData.user.id,
+      donor_name: clip(donorName, 500),
+      donor_username: clip(donorUsername, 500),
+      case_name: clip(caseName, 500),
+      case_code: clip(caseCode, 500),
+      post_id: post?.id ?? '',
+      post_excerpt: clip(post?.body ?? 'Bağlı gönderi yok', 500),
+      action,
       amount_cents: String(donation.gross_minor),
     };
 
@@ -106,8 +151,8 @@ serve(async (req) => {
             currency: donation.currency,
             unit_amount: donation.gross_minor,
             product_data: {
-              name: `Vora Canlar bağışı — ${campaign.title}`,
-              description: 'Tutar sunucudaki bağış kaydından alınır. İşlem ücreti ödeme sonrası kesinleşir.',
+              name: clip(`Vora Canlar bağışı — ${donorName} — ${campaign.title}`, 250),
+              description,
             },
           },
           quantity: 1,
@@ -117,7 +162,7 @@ serve(async (req) => {
       cancel_url: body.cancelUrl ?? `vora://vora-canlar/campaign/${donation.campaign_id}`,
       client_reference_id: donation.id,
       metadata,
-      payment_intent_data: { metadata },
+      payment_intent_data: { description, metadata },
     });
 
     const { error: attachError } = await admin.rpc('canlar_attach_checkout', {

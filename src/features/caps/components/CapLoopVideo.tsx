@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -13,6 +13,9 @@ type CapLoopVideoProps = {
   muted?: boolean;
   /** false: VideoView mount etme (liste kaydırma titremesini önler). */
   playing?: boolean;
+  /** false: bir kez oynar, bitince onEnd. */
+  loop?: boolean;
+  onEnd?: () => void;
 };
 
 /** Caps sticker: sessiz, döngülü kısa video. */
@@ -23,7 +26,11 @@ export function CapLoopVideo({
   contentFit = 'cover',
   muted = true,
   playing = true,
+  loop = true,
+  onEnd,
 }: CapLoopVideoProps) {
+  const onEndRef = useRef(onEnd);
+  onEndRef.current = onEnd;
   const uri = useMemo(() => {
     const raw = videoUrl.trim();
     if (!raw) return '';
@@ -34,18 +41,39 @@ export function CapLoopVideo({
   }, [videoUrl]);
 
   const playable = Boolean(uri) && isPlayableVideoUrl(uri) && playing;
+  const [frameReady, setFrameReady] = useState(false);
   const player = useVideoPlayer(playable ? toVideoSource(uri) : null, (p) => {
-    p.loop = true;
+    p.loop = loop;
     p.muted = muted;
     p.play();
   });
 
   useEffect(() => {
-    if (!player) return;
-    player.loop = true;
+    setFrameReady(false);
+  }, [uri, playable]);
+
+  useEffect(() => {
+    if (!player || !playable) return;
+    player.loop = loop;
     player.muted = muted;
     player.play();
-  }, [player, muted]);
+
+    const markReady = () => setFrameReady(true);
+    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+      if (isPlaying) markReady();
+    });
+    const statusSub = player.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay') markReady();
+    });
+    const endSub = player.addListener('playToEnd', () => {
+      if (!loop) onEndRef.current?.();
+    });
+    return () => {
+      playingSub.remove();
+      statusSub.remove();
+      endSub.remove();
+    };
+  }, [player, muted, playable, loop]);
 
   if (!playable) {
     if (posterUrl) {
@@ -56,7 +84,7 @@ export function CapLoopVideo({
 
   return (
     <View style={[styles.root, style]} collapsable={false}>
-      {posterUrl ? (
+      {posterUrl && !frameReady ? (
         <Image
           source={{ uri: posterUrl }}
           style={styles.poster}

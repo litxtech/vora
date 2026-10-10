@@ -11,10 +11,45 @@ export type PostViewer = {
 
 export type ViewerFilter = 'all' | 'followers' | 'recent';
 
+type AdminViewerRow = {
+  view_id: string;
+  viewer_id: string;
+  viewed_at: string;
+  username: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  role: string;
+  is_verified: boolean;
+  is_follower: boolean;
+};
+
+function mapAdminViewerRows(rows: AdminViewerRow[], filter: ViewerFilter): PostViewer[] {
+  let result = rows.map((row) => ({
+    id: row.view_id,
+    viewer: {
+      id: row.viewer_id,
+      username: row.username,
+      fullName: row.full_name,
+      avatarUrl: row.avatar_url,
+      role: row.role as UserRole,
+      isVerified: row.is_verified,
+    },
+    viewedAt: row.viewed_at,
+    isFollower: row.is_follower,
+  }));
+
+  if (filter === 'followers') {
+    result = result.filter((row) => row.isFollower);
+  }
+
+  return result;
+}
+
 export async function fetchPostViewers(
   postId: string,
   authorId: string,
   filter: ViewerFilter = 'recent',
+  asAdmin = false,
 ): Promise<PostViewer[]> {
   if (postId.startsWith('demo-')) {
     return [
@@ -45,6 +80,15 @@ export async function fetchPostViewers(
         isFollower: false,
       },
     ];
+  }
+
+  if (asAdmin) {
+    const { data, error } = await supabase.rpc('admin_list_post_viewers', {
+      p_post_id: postId,
+      p_limit: 200,
+    });
+    if (error || !data) return [];
+    return mapAdminViewerRows(data as AdminViewerRow[], filter);
   }
 
   const { data: views } = await supabase

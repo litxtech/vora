@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Alert, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { router, type Href } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import { CENTERS_HUB_FEATURE } from '@/features/centers/featureFlags';
 import { CITY_SYSTEM_FEATURE } from '@/features/city-governance/featureFlags';
 import { cityPath } from '@/features/city-governance/constants';
 import { WALLET_ROUTE } from '@/features/wallet/constants';
+import { fetchAiMusicBalance, formatAiMusicAllowance } from '@/features/ai-music';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
 import { spacing } from '@/constants/theme';
@@ -61,9 +62,27 @@ export function CentersDrawerMenu({
   const showHubSupport = useFeatureVisible(CENTERS_HUB_FEATURE.support);
   const showCentersHub = useFeatureVisible('centers-hub');
   const showCitySystem = useFeatureVisible(CITY_SYSTEM_FEATURE.id);
+  const showVoraMusic = useFeatureVisible('user-sounds');
   const citySlug = (feedRegionId ?? (profile?.region_id as RegionId | undefined) ?? 'trabzon') as RegionId;
   const [search, setSearch] = useState('');
+  const [musicMinutes, setMusicMinutes] = useState<string | null>(null);
   const query = normalizeSearch(search);
+
+  useEffect(() => {
+    if (!showVoraMusic || isGuest) {
+      setMusicMinutes(null);
+      return;
+    }
+    let cancelled = false;
+    void fetchAiMusicBalance().then((balance) => {
+      if (!cancelled) {
+        setMusicMinutes(balance ? formatAiMusicAllowance(balance.availableSec) : null);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isGuest, showVoraMusic]);
 
   const sections = useMemo(
     () =>
@@ -109,6 +128,7 @@ export function CentersDrawerMenu({
   }, [isGuest, onCenterNavigate, signOut]);
 
   const showAccountSection = showWallet || showSettings;
+  const showVoraMusicRow = showVoraMusic && (!query || 'vora müzik'.includes(query));
 
   return (
     <ScrollView
@@ -196,7 +216,18 @@ export function CentersDrawerMenu({
                 {group.label}
               </Text>
               {group.items.map((center) => (
-                <CentersDrawerRow key={center.id} center={center} onNavigate={onCenterNavigate} />
+                <Fragment key={center.id}>
+                  <CentersDrawerRow center={center} onNavigate={onCenterNavigate} />
+                  {center.id === 'vora-canlar' && showVoraMusicRow ? (
+                    <CentersDrawerLinkRow
+                      icon="musical-notes-outline"
+                      label="Vora Müzik"
+                      hint={musicMinutes ?? undefined}
+                      href="/sounds/ai"
+                      onNavigate={onCenterNavigate}
+                    />
+                  ) : null}
+                </Fragment>
               ))}
               {index < sections.length - 1 ? (
                 <View style={[styles.divider, { backgroundColor: colors.border }]} />

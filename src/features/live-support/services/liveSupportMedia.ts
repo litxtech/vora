@@ -1,8 +1,9 @@
 import { getLocalFileSize, readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { compressVideoForUpload, shouldSkipVideoCompression } from '@/lib/video/compress';
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { supabase } from '@/lib/supabase/client';
-import { supabaseErrorMessage, toUserFacingError } from '@/lib/errors';
+import { toUserFacingError } from '@/lib/errors';
 import {
   LIVE_SUPPORT_VIDEO_MAX_DURATION_SEC,
   LIVE_SUPPORT_VIDEO_MAX_UPLOAD_BYTES,
@@ -35,16 +36,14 @@ export async function uploadLiveSupportImage(
     const contentType = guessImageContentType(localUri, mimeType);
     const ext = contentType === 'image/png' ? 'png' : contentType === 'image/webp' ? 'webp' : 'jpg';
     const path = `${userId}/live-support/${Date.now()}.${ext}`;
-
-    const { error } = await supabase.storage.from('message-media').upload(path, arrayBuffer, {
+    const uploaded = await uploadPublicImage({
+      folder: 'message-media',
+      path,
+      bytes: arrayBuffer,
       contentType,
-      upsert: false,
     });
-
-    if (error) return { url: null, error: supabaseErrorMessage(error)! };
-
-    const { data } = supabase.storage.from('message-media').getPublicUrl(path);
-    return { url: data.publicUrl, error: null };
+    if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+    return { url: uploaded.url, error: null };
   } catch (err) {
     return {
       url: null,

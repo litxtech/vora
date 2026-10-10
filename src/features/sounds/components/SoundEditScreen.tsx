@@ -21,7 +21,7 @@ import { GlassCard } from '@/components/ui/GlassCard';
 import { Button } from '@/components/ui/Button';
 import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
-import { fetchSoundById, updateSound } from '@/features/sounds/services/soundData';
+import { deleteSound, fetchSoundById, updateSound } from '@/features/sounds/services/soundData';
 import type { SoundPrivacy } from '@/features/sounds/types';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -263,6 +263,32 @@ export function SoundEditScreen() {
                 loading={saving}
                 onPress={() => void handleSave()}
               />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  if (!user?.id || !soundId) return;
+                  Alert.alert('Sesi kaldır', 'Bu ses listeden ve müzik kütüphanesinden kalkar.', [
+                    { text: 'Vazgeç', style: 'cancel' },
+                    {
+                      text: 'Kaldır',
+                      style: 'destructive',
+                      onPress: () => {
+                        void deleteSound(soundId, user.id).then((result) => {
+                          if (result.error) {
+                            Alert.alert('Kaldırılamadı', result.error);
+                            return;
+                          }
+                          router.replace('/sounds/mine');
+                        });
+                      },
+                    },
+                  ]);
+                }}
+                style={styles.remove}
+              >
+                <Ionicons name="trash-outline" size={16} color={colors.danger} />
+                <Text style={{ color: colors.danger, fontWeight: '800' }}>Sesi kaldır</Text>
+              </Pressable>
             </View>
           </>
         )}
@@ -330,5 +356,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
+    gap: spacing.sm,
+  },
+  remove: {
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
   },
 });

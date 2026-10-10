@@ -1,3 +1,4 @@
+import '@/lib/device/webAppFrame';
 import '@/lib/notifications/handler';
 import * as SplashScreen from 'expo-splash-screen';
 import { Stack } from 'expo-router';
@@ -16,8 +17,11 @@ import { GuestProfileGateProvider } from '@/features/auth/providers/GuestProfile
 import { ShakeToComposeListener } from '@/features/compose/components/ShakeToComposeListener';
 import { StoryRingsBootstrap } from '@/features/stories/components/StoryRingsBootstrap';
 import { ProximityMatchProvider } from '@/features/proximity-match/components/ProximityMatchProvider';
+import { AiMusicJobBanner } from '@/features/ai-music/components/AiMusicJobBanner';
 import { SystemGateOverlay } from '@/features/system-gate';
 import { hydrateFeedCacheFromDisk } from '@/features/feed/services/feedCache';
+import { hydrateConversationListCache } from '@/features/messaging/services/conversationListCache';
+import { prefetchChatRoute, prefetchComposeRoute } from '@/lib/navigation/lazyRouteScreens';
 import { startScreenTimeTracking } from '@/features/screen-time';
 import { holdNativeSplash } from '@/lib/boot/nativeSplash';
 import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
@@ -34,9 +38,16 @@ import { NotificationProvider } from '@/providers/NotificationProvider';
 import { AppStripeProvider } from '@/providers/AppStripeProvider';
 import { ThemeProvider, useTheme } from '@/providers/ThemeProvider';
 import { UserCardProvider } from '@/providers/UserCardProvider';
+import { useFonts } from 'expo-font';
+import { Ionicons } from '@expo/vector-icons';
+
+function WebIconFonts() {
+  useFonts(Ionicons.font);
+  return null;
+}
 
 enableScreens(true);
-if (Platform.OS !== 'android') {
+if (Platform.OS === 'ios') {
   enableFreeze(true);
 }
 
@@ -78,6 +89,7 @@ function ThemedAppShell() {
         <ShakeToComposeListener />
         <BootOrchestrator />
         <SystemGateOverlay />
+        <AiMusicJobBanner />
       </ProximityMatchProvider>
     </View>
   );
@@ -93,6 +105,9 @@ export default function RootLayout() {
   useEffect(() => {
     const run = () => {
       void hydrateFeedCacheFromDisk();
+      void hydrateConversationListCache();
+      prefetchChatRoute();
+      void prefetchComposeRoute();
       if (!isAndroidTablet()) {
         startScreenTimeTracking();
       }
@@ -103,8 +118,15 @@ export default function RootLayout() {
 
   return (
     <StartupErrorBoundary>
+      {Platform.OS === 'web' ? <WebIconFonts /> : null}
       <ScreenOrientationBootstrap />
-      <GestureHandlerRootView style={[styles.root, { backgroundColor: shellBackground }]}>
+      <GestureHandlerRootView
+        style={[
+          styles.root,
+          Platform.OS === 'web' ? styles.webRoot : null,
+          { backgroundColor: shellBackground },
+        ]}
+      >
         <KeyboardProvider preload={false}>
           <AppearanceProvider>
             <BootShellBackgroundSync onColor={setShellBackground} />
@@ -139,6 +161,11 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: {
     flex: 1,
+  },
+  webRoot: {
+    width: '100%',
+    height: '100%',
+    overflow: 'hidden',
   },
   appShell: {
     flex: 1,

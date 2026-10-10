@@ -9,11 +9,14 @@ type ReelsPlaybackState = {
   setScrolling: (scrolling: boolean) => void;
 };
 
-export const useReelsPlaybackStore = create<ReelsPlaybackState>((set) => ({
+export const useReelsPlaybackStore = create<ReelsPlaybackState>((set, get) => ({
   activeIndex: 0,
   itemCount: 0,
   isScrolling: false,
   setActiveIndex: (index) => set({ activeIndex: index }),
   setItemCount: (count) => set({ itemCount: count }),
-  setScrolling: (scrolling) => set({ isScrolling: scrolling }),
+  setScrolling: (scrolling) => {
+    if (get().isScrolling === scrolling) return;
+    set({ isScrolling: scrolling });
+  },
 }));

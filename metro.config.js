@@ -3,6 +3,9 @@ const fs = require('fs');
 const path = require('path');
 const { FileStore } = require('metro-cache');
 
+// Metro workers force FORCE_COLOR. Cursor also sets NO_COLOR, and Node warns on every bundle.
+if (process.env.NO_COLOR) delete process.env.NO_COLOR;
+
 // Web route context drops +native-intent, so tab links fall back to the feed.
 const webCtxPath = path.join(__dirname, 'node_modules/expo-router/_ctx.web.js');
 if (fs.existsSync(webCtxPath)) {
@@ -112,8 +115,26 @@ function resolveLiveKitModule(moduleName) {
   return null;
 }
 
+const webNativeShim = path.resolve(__dirname, 'src/lib/shims/webNativeModule.js');
+const webNativeModules = new Set([
+  'react-native-agora',
+  '@livekit/react-native',
+  '@livekit/react-native-webrtc',
+  '@rnmapbox/maps',
+  '@stripe/stripe-react-native',
+  'react-native-compressor',
+  'react-native-video-trim',
+  'react-native-view-shot',
+]);
+
 const defaultResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    platform === 'web' &&
+    [...webNativeModules].some((name) => moduleName === name || moduleName.startsWith(`${name}/`))
+  ) {
+    return { type: 'sourceFile', filePath: webNativeShim };
+  }
   const liveKitResolved = resolveLiveKitModule(moduleName);
   if (liveKitResolved) return liveKitResolved;
 

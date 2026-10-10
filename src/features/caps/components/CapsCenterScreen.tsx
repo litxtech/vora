@@ -272,6 +272,7 @@ export function CapsCenterScreen() {
           <ActivityIndicator color={colors.primary} style={{ marginTop: spacing.xl }} />
         ) : tab === 'creators' ? (
           <FlatList
+            key="caps-creators"
             data={creators}
             keyExtractor={(item) => item.creatorId}
             contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.xl }]}
@@ -308,6 +309,7 @@ export function CapsCenterScreen() {
           />
         ) : (
           <FlatList
+            key="caps-grid"
             data={caps}
             keyExtractor={(item) => item.id}
             numColumns={3}

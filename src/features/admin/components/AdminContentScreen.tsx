@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+import { router, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Text } from '@/components/ui/Text';
@@ -110,6 +111,11 @@ export function AdminContentScreen() {
     };
   }, [tab, posts, reels, comments]);
 
+  const openViewers = (kind: 'post' | 'reel', id: string, authorId: string) => {
+    const path = kind === 'post' ? `/post-viewers/${id}` : `/reel-viewers/${id}`;
+    router.push(`${path}?authorId=${authorId}` as Href);
+  };
+
   const runModeration = (id: string, action: 'warn' | 'hide' | 'remove' | 'restore' | 'delete_permanent') => {
     if (!user) return;
 
@@ -118,9 +124,13 @@ export function AdminContentScreen() {
       hide: 'Gizle',
       remove: 'Kaldır',
       restore: 'Geri yükle',
-      delete_permanent: 'Kalıcı sil',
+      delete_permanent: 'Anında sil',
     };
-    Alert.alert('İçerik moderasyonu', `${labels[action]} işlemi uygulansın mı? Sahibe bildirim gider.`, [
+    const message =
+      action === 'delete_permanent'
+        ? 'İçerik anında silinsin mi? Akıştan hemen kalkar ve sahibine bildirim gider.'
+        : `${labels[action]} işlemi uygulansın mı? Sahibe bildirim gider.`;
+    Alert.alert(action === 'delete_permanent' ? 'Anında sil' : 'İçerik moderasyonu', message, [
       { text: 'Vazgeç', style: 'cancel' },
       {
         text: 'Uygula',
@@ -213,6 +223,8 @@ export function AdminContentScreen() {
                   onRemove={() => runModeration(item.id, 'remove')}
                   onRestore={() => runModeration(item.id, 'restore')}
                   onDeletePermanent={() => runModeration(item.id, 'delete_permanent')}
+                  onInstantDelete={() => runModeration(item.id, 'delete_permanent')}
+                  onViewers={() => openViewers('post', item.id, item.author_id)}
                 />
               ))
             : null}
@@ -229,6 +241,8 @@ export function AdminContentScreen() {
                   onRemove={() => runModeration(item.id, 'remove')}
                   onRestore={() => runModeration(item.id, 'restore')}
                   onDeletePermanent={() => runModeration(item.id, 'delete_permanent')}
+                  onInstantDelete={() => runModeration(item.id, 'delete_permanent')}
+                  onViewers={() => openViewers('reel', item.id, item.author_id)}
                 />
               ))
             : null}
@@ -253,6 +267,8 @@ export function AdminContentScreen() {
         onWarn={(id) => runModeration(id, 'warn')}
         onHide={(id) => runModeration(id, 'hide')}
         onRemove={(id) => runModeration(id, 'remove')}
+        onInstantDelete={(id) => runModeration(id, 'delete_permanent')}
+        onViewers={(kind, id, authorId) => openViewers(kind, id, authorId)}
         busyId={busyId}
       />
     </AdminShell>

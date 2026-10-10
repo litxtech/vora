@@ -311,8 +311,46 @@ export async function fetchProfileByUsername(username: string): Promise<PublicPr
   return enrichPublicProfile(profile, business);
 }
 
-export async function fetchProfileStatsCore(userId: string): Promise<ProfileStats> {
-  const [followersRes, followingRes, friendCount, postsRes, reelsRes, profileViewsRes] =
+type ProfileStatsAccess = {
+  /** Beğeni sekmesi bu izleyiciye açıksa. */
+  includeLiked?: boolean;
+  /** Kayıtlar yalnızca profil sahibine sayılır. */
+  includeSaved?: boolean;
+};
+
+function countPublishedAuthorPosts(userId: string) {
+  return excludeCommunityPosts(
+    excludeAdEngagementPosts(
+      supabase
+        .from('posts')
+        .select('id', { count: 'exact', head: true })
+        .eq('author_id', userId)
+        .eq('status', 'published'),
+    ),
+  );
+}
+
+function countFromHead(
+  result: { count: number | null; error: { message: string } | null } | null,
+): number | undefined {
+  if (!result || result.error) return undefined;
+  return result.count ?? 0;
+}
+
+/** Beğeni sekmesi görünürken tek head-count. Gizli profiller için çağrılmaz. */
+export async function countVisibleLikedPosts(userId: string): Promise<number | undefined> {
+  const result = await supabase
+    .from('post_likes')
+    .select('post_id', { count: 'exact', head: true })
+    .eq('user_id', userId);
+  return countFromHead(result);
+}
+
+export async function fetchProfileStatsCore(
+  userId: string,
+  access: ProfileStatsAccess = {},
+): Promise<ProfileStats> {
+  const [followersRes, followingRes, friendCount, postsRes, reelsRes, profileViewsRes, quotesRes, mediaRes, likedRes, savedRes] =
     await Promise.all([
       supabase
         .from('follows')
@@ -323,14 +361,7 @@ export async function fetchProfileStatsCore(userId: string): Promise<ProfileStat
         .select('following_id', { count: 'exact', head: true })
         .eq('follower_id', userId),
       countMutualFriends(userId),
-      excludeAdEngagementPosts(
-        supabase
-        .from('posts')
-        .select('id', { count: 'exact', head: true })
-        .eq('author_id', userId)
-        .eq('status', 'published')
-        .in('post_type', ['post', 'incident']),
-      ),
+      countPublishedAuthorPosts(userId).in('post_type', ['post', 'incident']),
       supabase
         .from('reels')
         .select('id', { count: 'exact', head: true })
@@ -340,19 +371,33 @@ export async function fetchProfileStatsCore(userId: string): Promise<ProfileStat
         .from('profile_views')
         .select('id', { count: 'exact', head: true })
         .eq('profile_id', userId),
+      countPublishedAuthorPosts(userId).eq('post_type', 'quote'),
+      countPublishedAuthorPosts(userId)
+        .in('post_type', ['post', 'incident', 'reel'])
+        .not('media_urls', 'eq', '{}'),
+      access.includeLiked
+        ? supabase.from('post_likes').select('post_id', { count: 'exact', head: true }).eq('user_id', userId)
+        : Promise.resolve(null),
+      access.includeSaved
+        ? supabase.from('post_saves').select('post_id', { count: 'exact', head: true }).eq('user_id', userId)
+        : Promise.resolve(null),
     ]);
 
   return {
     followerCount: followersRes.count ?? 0,
     followingCount: followingRes.count ?? 0,
     friendCount,
-    postCount: postsRes.count ?? 0,
+    postCount: countFromHead(postsRes) ?? 0,
     reelCount: reelsRes.count ?? 0,
     totalViews: 0,
     totalLikes: 0,
     totalComments: 0,
     totalQuotes: 0,
     profileViewCount: profileViewsRes.count ?? 0,
+    quotePostCount: countFromHead(quotesRes),
+    mediaCount: countFromHead(mediaRes),
+    likedPostCount: access.includeLiked ? (countFromHead(likedRes) ?? null) : null,
+    savedPostCount: access.includeSaved ? (countFromHead(savedRes) ?? null) : null,
   };
 }
 

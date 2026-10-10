@@ -1,6 +1,7 @@
-import { memo, useState } from 'react';
+import { memo, useRef, useState } from 'react';
 import { ActionSheetIOS, Alert, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Image } from 'expo-image';
+import { Ionicons } from '@expo/vector-icons';
 import { router, type Href } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { ProfileAvatar } from '@/features/profile/components/ProfileAvatar';
@@ -35,11 +36,10 @@ type CapAttachmentProps = {
   size?: number;
   showUsageHint?: boolean;
   uniqueUserCount?: number;
-  /**
-   * Liste/scroll içinde false tut — VideoView Surface kayması (titreme) yapmasın.
-   * Tam ekran uzun basmada yine oynar.
-   */
+  /** true: döngülü otomatik oynatma. Varsayılan kapalı; oynat düğmesi bir kez başlatır. */
   autoplay?: boolean;
+  /** Sohbet balonu: uzun basış mesaj menüsünü açar. Video yerinde döner, tam ekran açılmaz. */
+  onMessageLongPress?: () => void;
 };
 
 export const CapAttachment = memo(function CapAttachment({
@@ -55,10 +55,13 @@ export const CapAttachment = memo(function CapAttachment({
   size = CAP_DISPLAY_SIZE,
   showUsageHint = false,
   uniqueUserCount,
-  autoplay = true,
+  autoplay = false,
+  onMessageLongPress,
 }: CapAttachmentProps) {
   const { user } = useAuth();
   const [fullscreen, setFullscreen] = useState(false);
+  const [playingOnce, setPlayingOnce] = useState(false);
+  const suppressMediaPress = useRef(false);
 
   const resolvedVideo =
     (videoUrl && isVideoUrl(videoUrl) ? videoUrl : null) ||
@@ -128,33 +131,60 @@ export const CapAttachment = memo(function CapAttachment({
     }
   };
 
+  const handleMediaPress = () => {
+    if (suppressMediaPress.current) {
+      suppressMediaPress.current = false;
+      return;
+    }
+    openActions();
+  };
+
+  const handleMediaLongPress = () => {
+    if (onMessageLongPress) {
+      onMessageLongPress();
+      return;
+    }
+    if (resolvedVideo) {
+      setPlayingOnce(false);
+      setFullscreen(true);
+    }
+  };
+
+  const showVideo = Boolean(resolvedVideo) && (autoplay || playingOnce);
+
   return (
     <>
       <Pressable
-        onPress={openActions}
-        onLongPress={() => setFullscreen(true)}
-        delayLongPress={220}
+        onPress={handleMediaPress}
+        onLongPress={handleMediaLongPress}
+        delayLongPress={280}
         style={styles.wrap}
         accessibilityRole="imagebutton"
         accessibilityLabel={`Caps — @${creator.username}`}
       >
         <View style={[styles.media, { width: mediaWidth, height: mediaHeight }]}>
-          {resolvedVideo && autoplay ? (
+          {showVideo ? (
             hasClip ? (
               <CapClipVideo
-                videoUrl={resolvedVideo}
+                videoUrl={resolvedVideo!}
                 posterUrl={posterUrl}
                 startMs={startMs}
                 endMs={endMs}
                 style={styles.mediaFill}
                 contentFit="contain"
+                playing={!fullscreen}
+                loop={autoplay}
+                onEnd={() => setPlayingOnce(false)}
               />
             ) : (
               <CapLoopVideo
-                videoUrl={resolvedVideo}
+                videoUrl={resolvedVideo!}
                 posterUrl={posterUrl}
                 style={styles.mediaFill}
                 contentFit="contain"
+                playing={!fullscreen}
+                loop={autoplay}
+                onEnd={() => setPlayingOnce(false)}
               />
             )
           ) : (
@@ -165,10 +195,25 @@ export const CapAttachment = memo(function CapAttachment({
               recyclingKey={capId}
             />
           )}
+          {resolvedVideo && !showVideo ? (
+            <Pressable
+              onPress={() => {
+                suppressMediaPress.current = true;
+                setPlayingOnce(true);
+              }}
+              style={styles.playBadge}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Caps oynat"
+            >
+              <Ionicons name="play" size={18} color="#fff" />
+            </Pressable>
+          ) : null}
           <CapOverlayLayer overlay={overlay} />
         </View>
         <Pressable
           onPress={openCreatorProfile}
+          onLongPress={onMessageLongPress ? openActions : undefined}
           style={styles.creatorRow}
           hitSlop={6}
           accessibilityLabel={`@${creator.username} profili`}
@@ -212,6 +257,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     overflow: 'hidden',
     borderWidth: 0,
+  },
+  playBadge: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 36,
+    height: 36,
+    marginTop: -18,
+    marginLeft: -18,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   mediaFill: {
     width: '100%',

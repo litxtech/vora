@@ -1,8 +1,9 @@
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
-import { Platform } from 'react-native';
+import { Image, Platform } from 'react-native';
 import { hashMediaBytes } from '@/features/vcts/services/contentHash';
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
+import { completePublicImageUpload, reservePublicImageUpload } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 
@@ -29,13 +30,14 @@ async function prepareUploadBytes(
 
   const maxWidth = isAndroidTablet() ? 1600 : Platform.OS === 'android' ? 1920 : 2048;
   try {
+    const width = await readImageWidth(localUri);
     const compressed = await manipulateAsync(
       localUri,
-      [{ resize: { width: maxWidth } }],
-      { compress: 0.82, format: SaveFormat.JPEG },
+      width != null && width <= maxWidth ? [] : [{ resize: { width: maxWidth } }],
+      { compress: 0.9, format: SaveFormat.WEBP },
     );
     const bytes = await readLocalFileBytes(compressed.uri);
-    return { bytes, contentType: 'image/jpeg', ext: 'jpg' };
+    return { bytes, contentType: 'image/webp', ext: 'webp' };
   } catch {
     // renderAsync / "image content has been lost" — orijinal dosyayı yükle
     const bytes = await readLocalFileBytes(localUri);
@@ -58,16 +60,66 @@ export type PostMediaUploadResult = {
   error: string | null;
 };
 
+function readImageWidth(uri: string): Promise<number | null> {
+  return new Promise((resolve) => {
+    Image.getSize(
+      uri,
+      (width) => resolve(width > 0 ? width : null),
+      () => resolve(null),
+    );
+  });
+}
+
 export async function uploadPostMedia(
   userId: string,
   localUri: string,
   index: number,
+  kind?: 'image' | 'video',
 ): Promise<PostMediaUploadResult> {
   try {
-    const guessedType = guessContentType(localUri);
+    const guessedType = kind === 'video' ? 'video/mp4' : guessContentType(localUri);
+    const directImage = guessedType.startsWith('image/') && guessedType !== 'image/gif';
+    if (directImage) {
+      const path = `${userId}/${Date.now()}_${index}.webp`;
+      const [prepared, reserved] = await Promise.all([
+        prepareUploadBytes(localUri, guessedType),
+        reservePublicImageUpload({ folder: 'post-media', path, contentType: 'image/webp' }),
+      ]);
+      const ticket = prepared.contentType === 'image/webp' ? reserved.ticket : null;
+      const uploading = ticket
+        ? completePublicImageUpload(ticket, prepared.bytes)
+        : (async () => {
+            const again = await reservePublicImageUpload({
+              folder: 'post-media',
+              path: `${userId}/${Date.now()}_${index}.${prepared.ext}`,
+              contentType: prepared.contentType,
+            });
+            if (!again.ticket) return { url: null, storagePath: null, error: again.error };
+            return completePublicImageUpload(again.ticket, prepared.bytes);
+          })();
+      const sha256 = await hashMediaBytes(prepared.bytes);
+      const uploaded = await uploading;
+      if (uploaded.error || !uploaded.url) {
+        return { url: null, storagePath: null, sha256: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      }
+      return { url: uploaded.url, storagePath: uploaded.storagePath, sha256, error: null };
+    }
+
     const { bytes, contentType, ext } = await prepareUploadBytes(localUri, guessedType);
     const sha256 = await hashMediaBytes(bytes);
     const path = `${userId}/${Date.now()}_${index}.${ext}`;
+
+    if (contentType.startsWith('image/')) {
+      const reserved = await reservePublicImageUpload({ folder: 'post-media', path, contentType });
+      if (!reserved.ticket) {
+        return { url: null, storagePath: null, sha256: null, error: reserved.error ?? 'Görsel yüklenemedi.' };
+      }
+      const uploaded = await completePublicImageUpload(reserved.ticket, bytes);
+      if (uploaded.error || !uploaded.url) {
+        return { url: null, storagePath: null, sha256: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      }
+      return { url: uploaded.url, storagePath: uploaded.storagePath, sha256, error: null };
+    }
 
     const { error } = await supabase.storage.from('post-media').upload(path, bytes, {
       contentType,

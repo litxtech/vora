@@ -17,6 +17,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="security" />
       <Stack.Screen name="notifications" />
       <Stack.Screen name="premium" />
+      <Stack.Screen name="purchase-history" />
       <Stack.Screen name="contribute" />
       <Stack.Screen name="messaging" />
       <Stack.Screen name="insights" />
@@ -26,6 +27,7 @@ export default function SettingsLayout() {
       <Stack.Screen name="screen-time" />
       <Stack.Screen name="story-archive" />
       <Stack.Screen name="invite-center" />
+      <Stack.Screen name="find-friends" />
       <Stack.Screen name="business-application" />
       <Stack.Screen name="link-business-account" />
     </Stack>

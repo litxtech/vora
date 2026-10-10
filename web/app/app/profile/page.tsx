@@ -8,7 +8,12 @@ export default async function ProfileSettingsPage({ searchParams }: { searchPara
   const { saved, error } = await searchParams;
   return (
     <>
-      <h1>Profil</h1>
+      <div className="app-head">
+        <h1>Profil</h1>
+        <Link className="btn ghost" href="/app/settings">
+          Ayarlar
+        </Link>
+      </div>
       {profile?.username ? (
         <p>
           Herkese açık adresin: <Link href={`/u/${profile.username}`}>@{profile.username}</Link>

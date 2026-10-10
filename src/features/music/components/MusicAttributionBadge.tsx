@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import type { MusicAttribution } from '@/features/music/types';
+import { formatMusicMeta } from '@/features/music/utils/formatMusicTime';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -13,6 +14,7 @@ type MusicAttributionBadgeProps = {
 
 export function MusicAttributionBadge({ music, light }: MusicAttributionBadgeProps) {
   const { colors } = useTheme();
+  const meta = formatMusicMeta(music.artist, music.durationSec);
 
   return (
     <Pressable
@@ -36,13 +38,13 @@ export function MusicAttributionBadge({ music, light }: MusicAttributionBadgePro
         >
           {music.displayTitle}
         </Text>
-        {music.artist ? (
+        {meta ? (
           <Text
             variant="caption"
             style={[styles.artist, light && styles.lightSub]}
             numberOfLines={1}
           >
-            {music.artist}
+            {meta}
           </Text>
         ) : null}
       </View>

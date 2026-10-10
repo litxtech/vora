@@ -15,16 +15,10 @@ export async function uploadCommentMedia(
   const uris = localUris.slice(0, MAX_COMMENT_IMAGES);
   if (uris.length === 0) return { urls: [], error: null };
 
-  const urls: string[] = [];
-  for (let i = 0; i < uris.length; i += 1) {
-    const result = await uploadPostMedia(userId, uris[i], i);
-    if (result.error || !result.url) {
-      return { urls, error: result.error ?? 'Görsel yüklenemedi' };
-    }
-    urls.push(result.url);
-  }
-
-  return { urls, error: null };
+  const uploaded = await Promise.all(uris.map((uri, index) => uploadPostMedia(userId, uri, index)));
+  const failed = uploaded.find((item) => item.error || !item.url);
+  if (failed) return { urls: [], error: failed.error ?? 'Görsel yüklenemedi' };
+  return { urls: uploaded.map((item) => item.url as string), error: null };
 }
 
 export { MAX_COMMENT_IMAGES };

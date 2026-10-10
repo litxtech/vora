@@ -2,18 +2,20 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
+import { formatMusicDuration } from '@/features/music/utils/formatMusicTime';
 import { radius, spacing } from '@/constants/theme';
 
 type StoryMusicBadgeProps = {
   title: string;
   artist?: string | null;
+  durationSec?: number | null;
   onPress?: () => void;
   /** Konum etiketi varsa biraz yukarı kay */
   stacked?: boolean;
 };
 
 /** Sol alt — cam efektli müzik rozeti */
-export function StoryMusicBadge({ title, artist, onPress, stacked = false }: StoryMusicBadgeProps) {
+export function StoryMusicBadge({ title, artist, durationSec, onPress, stacked = false }: StoryMusicBadgeProps) {
   return (
     <Pressable
       onPress={onPress}
@@ -41,9 +43,9 @@ export function StoryMusicBadge({ title, artist, onPress, stacked = false }: Sto
               <Text variant="caption" style={styles.title} numberOfLines={1}>
                 {title}
               </Text>
-              {artist ? (
+              {artist || (durationSec != null && durationSec > 0) ? (
                 <Text variant="caption" style={styles.artist} numberOfLines={1}>
-                  {artist}
+                  {[artist, durationSec && durationSec > 0 ? formatMusicDuration(durationSec) : null].filter(Boolean).join(' · ')}
                 </Text>
               ) : null}
             </View>

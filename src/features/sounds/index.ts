@@ -1,4 +1,5 @@
 export { SoundLibraryScreen } from '@/features/sounds/components/SoundLibraryScreen';
+export { SoundMineScreen } from '@/features/sounds/components/SoundMineScreen';
 export { SoundCreateScreen } from '@/features/sounds/components/SoundCreateScreen';
 export { SoundDetailScreen } from '@/features/sounds/components/SoundDetailScreen';
 export { SoundPickerSheet } from '@/features/sounds/components/SoundPickerSheet';

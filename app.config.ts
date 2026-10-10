@@ -110,6 +110,8 @@ const config: ExpoConfig = {
       NSPhotoLibraryUsageDescription:
         'Profil fotoğrafı ve mesajlarda medya paylaşımı için galeri erişimi gerekir.',
       NSPhotoLibraryAddUsageDescription: 'Mesajlara fotoğraf kaydetmek için galeri erişimi gerekir.',
+      NSContactsUsageDescription:
+        'Rehberindeki kişilerin Vora kullanıp kullanmadığını, sen eşleştirmeyi başlattığında karşılaştırmak için rehber erişimi kullanılır.',
     },
   },
   android: {
@@ -122,6 +124,8 @@ const config: ExpoConfig = {
     blockedPermissions: [
       // expo-sensors manifest'e ekler; Pedometer kullanmıyoruz — Play Sağlık politikası tetiklenmesin.
       'android.permission.ACTIVITY_RECOGNITION',
+      // Rehber eşleştirme yalnızca okur; kişi yazma izni istenmez.
+      'android.permission.WRITE_CONTACTS',
       // full-screen-sharing-special kaldırıldı; yedek olarak manifest'ten de silinir.
       'android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION',
       'android.permission.CAPTURE_VIDEO_OUTPUT',
@@ -144,6 +148,7 @@ const config: ExpoConfig = {
       'android.permission.READ_MEDIA_IMAGES',
       'android.permission.READ_MEDIA_VIDEO',
       'android.permission.READ_MEDIA_AUDIO',
+      'android.permission.READ_CONTACTS',
     ],
     adaptiveIcon: {
       backgroundColor: '#FFFFFF',
@@ -162,6 +167,7 @@ const config: ExpoConfig = {
           { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/u' },
           { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/m' },
           { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/s' },
+          { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/c/' },
           { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/city' },
           { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/room' },
           { scheme: 'https', host: APP_DOMAIN, pathPrefix: '/council' },
@@ -272,7 +278,7 @@ const config: ExpoConfig = {
     [
       'expo-notifications',
       {
-        icon: './assets/icon-android.png',
+        icon: './assets/android-notification-icon.png',
         color: '#E85D5D',
         mode: notificationMode,
         enableBackgroundRemoteNotifications: true,
@@ -306,6 +312,13 @@ const config: ExpoConfig = {
         photosPermission: 'Mesajlarda medya paylaşımı için galeri erişimi gerekir.',
         savePhotosPermission: 'Mesajlardan fotoğraf kaydetmek için galeri erişimi gerekir.',
         isAccessMediaLocationEnabled: false,
+      },
+    ],
+    [
+      'expo-contacts',
+      {
+        contactsPermission:
+          'Rehberindeki kişilerin Vora kullanıp kullanmadığını, sen eşleştirmeyi başlattığında karşılaştırmak için rehber erişimi kullanılır.',
       },
     ],
     './plugins/withStripApplePayEntitlement',

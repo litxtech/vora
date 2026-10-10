@@ -3,6 +3,7 @@ import { useAuth } from '@/providers/AuthProvider';
 import { fetchConversationList } from '../services/conversationData';
 import {
   getCachedConversationList,
+  hydrateConversationListCache,
   setCachedConversationList,
 } from '../services/conversationListCache';
 import { subscribeInboxRealtime } from '../services/inboxRealtime';
@@ -40,28 +41,39 @@ function scheduleInboxDiskHydrate(userId: string, conversationIds: string[]) {
   run();
 }
 
+function listScopeKey(userId: string, archivedOnly: boolean): string {
+  return `${userId}:${archivedOnly ? 'archived' : 'inbox'}`;
+}
+
 export function useConversationList(enabled = true, archivedOnly = false) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const scopeKey = userId ? listScopeKey(userId, archivedOnly) : null;
+  const cachedNow = userId ? getCachedConversationList(userId, archivedOnly) : null;
 
-  const initialCache =
-    userId && enabled ? getCachedConversationList(userId, archivedOnly) : null;
-
-  const [conversations, setConversations] = useState<ConversationListItem[]>(initialCache ?? []);
+  const [conversations, setConversations] = useState<ConversationListItem[]>(cachedNow ?? []);
+  const [ready, setReady] = useState(Boolean(cachedNow?.length));
   const [error, setError] = useState<string | null>(null);
   const activeConversationId = useMessagingStore((s) => s.activeConversationId);
   const setUnreadFromConversations = useMessagingStore((s) => s.setUnreadFromConversations);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeConversationIdRef = useRef(activeConversationId);
   const conversationsRef = useRef(conversations);
-  const enabledRef = useRef(enabled);
+  const seenScopeRef = useRef(scopeKey);
   activeConversationIdRef.current = activeConversationId;
   conversationsRef.current = conversations;
-  enabledRef.current = enabled;
+
+  // Sekme odağı gelmeden önce yazılmış önbellek ilk boyada görünsün.
+  if (scopeKey !== seenScopeRef.current) {
+    seenScopeRef.current = scopeKey;
+    const next = userId ? getCachedConversationList(userId, archivedOnly) : null;
+    setConversations(next ?? []);
+    setReady(Boolean(next?.length));
+  }
 
   const refresh = useCallback(
     async (silent = false) => {
-      if (!enabledRef.current || !userId) return;
+      if (!userId) return;
 
       const cached = getCachedConversationList(userId, archivedOnly);
       const quiet =
@@ -72,6 +84,7 @@ export function useConversationList(enabled = true, archivedOnly = false) {
 
       if (!quiet && cached?.length) {
         setConversations(cached);
+        setReady(true);
       }
 
       setError(null);
@@ -79,6 +92,7 @@ export function useConversationList(enabled = true, archivedOnly = false) {
         const list = await fetchConversationList(archivedOnly);
         setCachedConversationList(userId, archivedOnly, list);
         setConversations(list);
+        setReady(true);
         if (!archivedOnly) {
           setUnreadFromConversations(list);
           scheduleInboxDiskHydrate(
@@ -88,6 +102,7 @@ export function useConversationList(enabled = true, archivedOnly = false) {
         }
       } catch (err) {
         setError(String(err));
+        setReady(true);
       }
     },
     [archivedOnly, setUnreadFromConversations, userId],
@@ -132,25 +147,55 @@ export function useConversationList(enabled = true, archivedOnly = false) {
   scheduleSilentRefreshRef.current = scheduleSilentRefresh;
 
   useEffect(() => {
-    if (!enabled || !userId) {
-      if (!userId) setConversations([]);
+    if (!userId) {
+      setConversations([]);
+      setReady(false);
       return;
     }
 
-    const cached = getCachedConversationList(userId, archivedOnly);
-    if (cached?.length) {
+    let cancelled = false;
+
+    const paintCache = async () => {
+      let cached = getCachedConversationList(userId, archivedOnly);
+      if (!cached?.length) {
+        await hydrateConversationListCache();
+        if (cancelled) return;
+        cached = getCachedConversationList(userId, archivedOnly);
+      }
+      if (cancelled || !cached?.length) return;
+
       setConversations(cached);
+      setReady(true);
       if (!archivedOnly) {
         scheduleInboxDiskHydrate(
           userId,
           cached.map((item) => item.id),
         );
       }
-      void refreshRef.current(true);
-      return;
+    };
+
+    const refreshNow = () => {
+      if (!cancelled) void refreshRef.current(true);
+    };
+
+    // Önbellek hemen boyansın. Ağ isteği, sekme kapalıyken akışın ilk karesini beklesin.
+    if (!enabled && shouldDeferHeavyFocusWork()) {
+      void paintCache();
+      const task = deferBackgroundWork(refreshNow);
+      return () => {
+        cancelled = true;
+        task.cancel();
+      };
     }
 
-    void refreshRef.current(true);
+    void (async () => {
+      await paintCache();
+      refreshNow();
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [userId, archivedOnly, enabled]);
 
   const prevActiveConversationRef = useRef<string | null>(null);
@@ -200,6 +245,7 @@ export function useConversationList(enabled = true, archivedOnly = false) {
 
   return {
     conversations,
+    ready,
     error,
     refresh: refreshPublic,
     refreshSilent: refreshSilentPublic,

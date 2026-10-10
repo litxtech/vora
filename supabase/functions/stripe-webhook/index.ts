@@ -220,6 +220,20 @@ serve(async (req) => {
               console.error('fulfill_business_shop_boost failed:', fulfillError.message);
             }
           }
+        } else if (session.mode === 'payment' && session.metadata?.checkout_type === 'ai_music_minutes') {
+          const userId = session.metadata.user_id ?? session.client_reference_id;
+          const packageId = session.metadata.package_id;
+          if (session.payment_status === 'paid' && userId && packageId) {
+            const { error: fulfillError } = await admin.rpc('fulfill_ai_music_purchase', {
+              p_user_id: userId,
+              p_session_id: session.id,
+              p_package_id: packageId,
+              p_amount_minor: session.amount_total ?? parseInt(session.metadata.amount_minor ?? '0', 10),
+            });
+            if (fulfillError) {
+              throw new Error(`fulfill_ai_music_purchase failed: ${fulfillError.message}`);
+            }
+          }
         } else if (session.mode === 'subscription' && session.subscription) {
           if (session.payment_status !== 'paid') {
             break;

@@ -20,6 +20,7 @@ type ReelMenuSheetProps = {
   onReport: () => void;
   onSafety?: () => void;
   onDelete?: () => void;
+  onModerate?: () => void;
 };
 
 export function ReelMenuSheet({
@@ -29,6 +30,7 @@ export function ReelMenuSheet({
   onReport,
   onSafety,
   onDelete,
+  onModerate,
 }: ReelMenuSheetProps) {
   const { colors } = useTheme();
 
@@ -64,6 +66,16 @@ export function ReelMenuSheet({
                   label: 'Kullanıcı Seçenekleri',
                   icon: 'shield-outline' as const,
                   onPress: () => run(onSafety),
+                },
+              ]
+            : []),
+          ...(onModerate
+            ? [
+                {
+                  key: 'moderate',
+                  label: 'Moderasyon',
+                  icon: 'shield-checkmark-outline' as const,
+                  onPress: () => run(onModerate),
                 },
               ]
             : []),

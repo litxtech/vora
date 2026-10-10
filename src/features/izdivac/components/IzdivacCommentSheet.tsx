@@ -28,6 +28,7 @@ import type { IzdivacPostComment } from '@/features/izdivac/types';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
+import { useCloseModalOnRouteChange } from '@/hooks/useCloseModalOnRouteChange';
 
 type Props = {
   visible: boolean;
@@ -84,6 +85,7 @@ export function IzdivacCommentSheet({
   const extraContentPadding = useSharedValue(96);
   const footerHeightRef = useRef(96);
   const [footerOffset, setFooterOffset] = useState(96);
+  useCloseModalOnRouteChange(visible, onClose);
 
   const [comments, setComments] = useState<IzdivacPostComment[]>([]);
   const [loading, setLoading] = useState(false);

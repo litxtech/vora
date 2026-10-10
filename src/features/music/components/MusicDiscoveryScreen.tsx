@@ -153,6 +153,11 @@ export function MusicDiscoveryScreen() {
                   <Text secondary variant="caption" style={{ marginTop: 2 }}>
                     {track.usageCount} kullanım · {items.length} önizleme
                   </Text>
+                  {track.licenseInfo ? (
+                    <Text secondary variant="caption" numberOfLines={3} style={{ marginTop: 4 }}>
+                      {track.licenseInfo}
+                    </Text>
+                  ) : null}
 
                   <Pressable
                     style={({ pressed }) => [

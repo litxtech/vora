@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { isVideoUrl } from '@/features/marketplace/services/descriptionBlocks';
 
@@ -37,6 +38,17 @@ export async function uploadMarketplaceMedia(
     const ext = fileExtension(contentType, localUri);
     // RLS: auth.uid() = storage.foldername(name)[1] — kullanıcı id ilk klasör olmalı
     const path = `${userId}/${folder}/${Date.now()}-${index}.${ext}`;
+
+    if (contentType.startsWith('image/')) {
+      const uploaded = await uploadPublicImage({
+        folder: 'marketplace-listings',
+        path,
+        bytes: arrayBuffer,
+        contentType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
 
     const { error: uploadError } = await supabase.storage.from('marketplace-listings').upload(path, arrayBuffer, {
       contentType,

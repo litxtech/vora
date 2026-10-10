@@ -135,7 +135,7 @@ export const PROFILE_TABS: {
   { id: 'reels', label: 'Reels', icon: 'play-circle-outline' },
   { id: 'quotes', label: 'Alıntılar', icon: 'repeat-outline' },
   { id: 'media', label: 'Medya', icon: 'images-outline' },
-  { id: 'liked', label: 'Beğenilenler', icon: 'heart-outline' },
+  { id: 'liked', label: 'Beğeniler', icon: 'heart-outline' },
   { id: 'saved', label: 'Kaydedilenler', icon: 'bookmark-outline', privateOnly: true },
   { id: 'badges', label: 'Rozetler', icon: 'ribbon-outline' },
 ];

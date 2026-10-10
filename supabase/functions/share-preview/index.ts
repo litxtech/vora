@@ -56,7 +56,7 @@ function htmlEscape(value: string): string {
 function resolveRequestPath(url: URL): string {
   const kind = url.searchParams.get('kind') ?? url.searchParams.get('type');
   const id = url.searchParams.get('id');
-  if (kind && id && /^[prvums]$/.test(kind)) {
+  if (kind && id && /^[prvumsc]$/.test(kind)) {
     return `/${kind}/${id}`;
   }
 
@@ -530,6 +530,37 @@ async function fetchBusinessShopMeta(
   };
 }
 
+async function fetchCanlarMeta(
+  supabase: ReturnType<typeof createClient>,
+  id: string,
+): Promise<ShareMeta | null> {
+  const { data } = await supabase
+    .from('canlar_posts')
+    .select('id, body, city_label, media, status')
+    .eq('id', id)
+    .maybeSingle();
+  if (!data || data.status === 'removed') return null;
+
+  const body = ((data.body as string | null) ?? '').trim();
+  const city = ((data.city_label as string | null) ?? '').trim();
+  const media = Array.isArray(data.media) ? data.media : [];
+  const image = media
+    .map((item) => (item && typeof item === 'object' ? (item as { url?: string; kind?: string }) : null))
+    .find((item) => item?.url && item.kind !== 'video')?.url ?? null;
+
+  return {
+    title: city ? `Vora Canlar · ${city}` : 'Vora Canlar',
+    description: body.slice(0, 180) || 'Canlar ilanı',
+    imageUrl: image,
+    videoUrl: null,
+    canonicalUrl: `${SHARE_BASE_URL}/c/${id}`,
+    deepLink: `${APP_SCHEME}://c/${id}`,
+    contentType: 'article',
+    badgeLabel: 'Vora Canlar',
+    primaryCtaLabel: 'İlanı aç',
+  };
+}
+
 function serveAppleAssociation(): Response {
   const body = {
     applinks: {
@@ -537,7 +568,7 @@ function serveAppleAssociation(): Response {
       details: [
         {
           appID: `${APPLE_TEAM_ID}.${IOS_BUNDLE_ID}`,
-          paths: ['/p/*', '/r/*', '/v/*', '/u/*', '/m/*', '/s/*'],
+          paths: ['/p/*', '/r/*', '/v/*', '/u/*', '/m/*', '/s/*', '/c/*'],
         },
       ],
     },
@@ -577,7 +608,7 @@ serve(async (req) => {
     return serveAssetLinks();
   }
 
-  const match = path.match(/^\/(p|r|v|u|m|s)\/([^/]+)\/?$/);
+  const match = path.match(/^\/(p|r|v|u|m|s|c)\/([^/]+)\/?$/);
   if (!match) {
     return htmlResponse(
       renderLandingPage({
@@ -620,6 +651,9 @@ serve(async (req) => {
       break;
     case 's':
       meta = await fetchBusinessShopMeta(supabase, id);
+      break;
+    case 'c':
+      meta = await fetchCanlarMeta(supabase, id);
       break;
   }
 

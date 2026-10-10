@@ -1,6 +1,7 @@
 import { isMusicTrackPlayable, PHOTO_POST_MUSIC_DURATION_SEC } from '@/features/music/constants';
 import { resolvePlayableMusicUrl } from '@/features/music/constants/demoTracks';
 import type { MusicAttribution, MusicPlaybackConfig } from '@/features/music/types';
+import { musicClipDurationSec } from '@/features/music/utils/formatMusicTime';
 
 type MusicTrackJoin =
   | { id: string; display_title: string; artist: string; audio_url?: string; duration_seconds?: number }
@@ -29,6 +30,7 @@ export function mapPostMusicAttribution(row: PostMusicRow): MusicAttribution | n
     trackId: track.id,
     displayTitle: track.display_title,
     artist: track.artist,
+    durationSec: musicClipDurationSec(row.music_start_sec, row.music_end_sec, track.duration_seconds),
   };
 }
 

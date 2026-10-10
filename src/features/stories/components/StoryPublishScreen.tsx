@@ -16,6 +16,7 @@ import { Text } from '@/components/ui/Text';
 import type { SelectedLocation } from '@/features/compose/components/LocationPicker';
 import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
 import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
+import { useLockStackBackGesture } from '@/features/music/hooks/useLockStackBackGesture';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
 import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
@@ -129,6 +130,7 @@ export function StoryPublishScreen({
   const [activeTool, setActiveTool] = useState<StoryPublishToolId | null>(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [musicEditing, setMusicEditing] = useState(false);
+  useLockStackBackGesture(Boolean(musicSelection) && musicEditing);
   const [musicConfirmed, setMusicConfirmed] = useState(false);
   const [musicInfoOpen, setMusicInfoOpen] = useState(false);
   const [videoMuted, setVideoMuted] = useState(false);
@@ -771,6 +773,7 @@ export function StoryPublishScreen({
               <StoryMusicBadge
                 title={musicSelection.displayTitle}
                 artist={musicSelection.artist}
+                durationSec={Math.max(0, musicSelection.musicEndSec - musicSelection.musicStartSec) || musicSelection.durationSec}
                 stacked={musicStackedWithLocation}
                 onPress={() => setMusicInfoOpen(true)}
               />
@@ -897,6 +900,16 @@ export function StoryPublishScreen({
       </View>
 
       {musicSelection && musicEditing ? (
+        <Pressable
+          style={[styles.musicDismiss, { top: previewTop }]}
+          onPress={() => {
+            setMusicConfirmed(true);
+            setMusicEditing(false);
+          }}
+        />
+      ) : null}
+
+      {musicSelection && musicEditing ? (
         <View style={styles.musicStripHost} pointerEvents="box-none">
           <StoryMusicStrip
             visible
@@ -976,6 +989,14 @@ const styles = StyleSheet.create({
     minHeight: 0,
     width: '100%',
     overflow: 'hidden',
+  },
+  musicDismiss: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 70,
+    elevation: 70,
   },
   musicStripHost: {
     position: 'absolute',

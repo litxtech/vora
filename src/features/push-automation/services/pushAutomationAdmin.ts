@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 import {
@@ -265,7 +266,7 @@ export async function uploadPushTemplateImage(
 ): Promise<{ url: string | null; error: string | null }> {
   const ext = localUri.split('.').pop()?.toLowerCase() ?? 'jpg';
   const safeExt = ['jpg', 'jpeg', 'png', 'webp', 'gif'].includes(ext) ? ext : 'jpg';
-  const storagePath = `templates/${templateId}.${safeExt}`;
+  const storagePath = `templates/${templateId}-${Date.now()}.${safeExt}`;
 
   const buffer = await readLocalFileBytes(localUri);
   const mime =
@@ -277,14 +278,14 @@ export async function uploadPushTemplateImage(
           ? 'image/gif'
           : 'image/jpeg';
 
-  const { error: uploadError } = await supabase.storage
-    .from('push-template-images')
-    .upload(storagePath, buffer, { contentType: mime, upsert: true });
-
-  if (uploadError) return { url: null, error: uploadError.message };
-
-  const { data: urlData } = supabase.storage.from('push-template-images').getPublicUrl(storagePath);
-  return { url: urlData.publicUrl, error: null };
+  const uploaded = await uploadPublicImage({
+    folder: 'push-template-images',
+    path: storagePath,
+    bytes: buffer,
+    contentType: mime,
+  });
+  if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+  return { url: uploaded.url, error: null };
 }
 
 const PUSH_TEMPLATE_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'gif'] as const;

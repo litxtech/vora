@@ -12,6 +12,7 @@ export default function AdminLayout() {
       })}
     >
       <Stack.Screen name="index" options={{ gestureEnabled: false }} />
+      <Stack.Screen name="sitemap" />
       <Stack.Screen name="features" />
       <Stack.Screen name="appearance" />
       <Stack.Screen name="users" />
@@ -39,6 +40,7 @@ export default function AdminLayout() {
       <Stack.Screen name="campaigns" />
       <Stack.Screen name="calls" />
       <Stack.Screen name="social-safety" />
+      <Stack.Screen name="contact-books" />
       <Stack.Screen name="events" />
       <Stack.Screen name="lost-items" />
       <Stack.Screen name="vora-needs" />
@@ -66,6 +68,7 @@ export default function AdminLayout() {
       <Stack.Screen name="operations" />
       <Stack.Screen name="notification-sounds" />
       <Stack.Screen name="music-library" />
+      <Stack.Screen name="ai-music-minutes" />
       <Stack.Screen name="user-sounds" />
       <Stack.Screen name="notification-stats" />
       <Stack.Screen name="map" />

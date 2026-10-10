@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { Image } from 'expo-image';
 import { useVideoPlayer, VideoView } from 'expo-video';
@@ -14,6 +14,9 @@ type CapClipVideoProps = {
   contentFit?: 'contain' | 'cover';
   muted?: boolean;
   playing?: boolean;
+  /** false: aralık bir kez oynar, bitince durur. */
+  loop?: boolean;
+  onEnd?: () => void;
 };
 
 /**
@@ -29,7 +32,12 @@ export function CapClipVideo({
   contentFit = 'contain',
   muted = true,
   playing = true,
+  loop = true,
+  onEnd,
 }: CapClipVideoProps) {
+  const onEndRef = useRef(onEnd);
+  onEndRef.current = onEnd;
+  const endedRef = useRef(false);
   const uri = useMemo(() => {
     const raw = videoUrl.trim();
     if (!raw) return '';
@@ -42,20 +50,37 @@ export function CapClipVideo({
   const startSec = Math.max(0, (startMs ?? 0) / 1000);
   const endSec = endMs != null && endMs > (startMs ?? 0) ? endMs / 1000 : null;
   const playable = Boolean(uri) && isPlayableVideoUrl(uri) && playing;
+  const [frameReady, setFrameReady] = useState(false);
   const lastTickRef = useRef(startSec);
 
   const player = useVideoPlayer(playable ? toVideoSource(uri) : null, (p) => {
-    p.loop = endSec == null;
+    p.loop = loop && endSec == null;
     p.muted = muted;
     p.currentTime = startSec;
     p.play();
   });
 
   useEffect(() => {
-    if (!player) return;
+    setFrameReady(false);
+    endedRef.current = false;
+  }, [uri, playable, startSec, endSec]);
+
+  useEffect(() => {
+    if (!player || !playable) return;
     player.muted = muted;
-    player.loop = endSec == null;
-  }, [player, muted, endSec]);
+    player.loop = loop && endSec == null;
+    const markReady = () => setFrameReady(true);
+    const playingSub = player.addListener('playingChange', ({ isPlaying }) => {
+      if (isPlaying) markReady();
+    });
+    const statusSub = player.addListener('statusChange', ({ status }) => {
+      if (status === 'readyToPlay') markReady();
+    });
+    return () => {
+      playingSub.remove();
+      statusSub.remove();
+    };
+  }, [player, muted, endSec, playable, loop]);
 
   useEffect(() => {
     if (!player) return;
@@ -69,16 +94,29 @@ export function CapClipVideo({
 
     const id = setInterval(() => {
       const t = player.currentTime;
-      if (t >= endSec - 0.05 || t < startSec - 0.05) {
+      if (t >= endSec - 0.05) {
+        if (!loop) {
+          if (!endedRef.current) {
+            endedRef.current = true;
+            player.pause();
+            onEndRef.current?.();
+          }
+          return;
+        }
         player.currentTime = startSec;
         lastTickRef.current = startSec;
-      } else {
-        lastTickRef.current = t;
+        return;
       }
+      if (t < startSec - 0.05) {
+        player.currentTime = startSec;
+        lastTickRef.current = startSec;
+        return;
+      }
+      lastTickRef.current = t;
     }, 80);
 
     return () => clearInterval(id);
-  }, [player, startSec, endSec]);
+  }, [player, startSec, endSec, loop]);
 
   if (!playable) {
     if (posterUrl) {
@@ -89,7 +127,7 @@ export function CapClipVideo({
 
   return (
     <View style={[styles.root, style]} collapsable={false}>
-      {posterUrl ? (
+      {posterUrl && !frameReady ? (
         <Image source={{ uri: posterUrl }} style={styles.poster} contentFit={contentFit} />
       ) : null}
       <VideoView

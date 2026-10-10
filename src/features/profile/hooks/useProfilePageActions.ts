@@ -1,11 +1,9 @@
 import { useCallback } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Text } from '@/components/ui/Text';
-import { radius, spacing } from '@/constants/theme';
 import { openAdminPanel } from '@/features/admin/services/adminNavigation';
 import { PROXIMITY_MATCH_ROUTES } from '@/features/proximity-match/constants';
+import { PURCHASE_HISTORY_ROUTE } from '@/features/purchase-history/constants';
 import { WALLET_ROUTE } from '@/features/wallet/constants';
 import { canModerate } from '@/constants/roles';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
@@ -14,33 +12,33 @@ import { BUSINESS_FEATURE } from '@/features/business-center/featureFlags';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAccountSwitch } from '@/features/account-switch/providers/AccountSwitchProvider';
 import { ACCOUNT_SWITCH_ROUTES } from '@/features/account-switch/constants';
-import { VORA_HIZMETLER_ACCENT } from '@/features/vora-hizmetler/constants';
 import { useMyProviderProfile } from '@/features/vora-hizmetler/hooks/useProviderProfile';
 import { useUserSoundStats } from '@/features/sounds/hooks/useUserSoundStats';
-import { useTheme } from '@/providers/ThemeProvider';
 
-type ProfileOwnActionsBarProps = {
+export type ProfilePageActionTone = 'default' | 'premium' | 'wallet' | 'admin' | 'provider';
+
+export type ProfilePageAction = {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tone: ProfilePageActionTone;
+  active?: boolean;
+  onPress: () => void;
+};
+
+type UseProfilePageActionsOptions = {
   isPremium: boolean;
   onInsightsPress?: () => void;
   onSoundStatsPress?: () => void;
   soundStatsActive?: boolean;
 };
 
-type QuickAction = {
-  key: string;
-  label: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  tone: 'default' | 'premium' | 'wallet' | 'admin';
-  onPress: () => void;
-};
-
-export function ProfileOwnActionsBar({
+export function useProfilePageActions({
   isPremium,
   onInsightsPress,
   onSoundStatsPress,
   soundStatsActive = false,
-}: ProfileOwnActionsBarProps) {
-  const { colors } = useTheme();
+}: UseProfilePageActionsOptions): ProfilePageAction[] {
   const { profile, user } = useAuth();
   const { effectiveAccountType, linkedSibling, outgoingPendingUsername, hasOwnedBusiness } =
     useAccountSwitch();
@@ -51,6 +49,7 @@ export function ProfileOwnActionsBar({
       void reloadProfile();
     }, [reloadProfile]),
   );
+
   const showAdminPanel = profile?.role ? canModerate(profile.role) : false;
   const showPremium = useFeatureVisible('premium');
   const showProximityMatches = useFeatureVisible('proximity-match');
@@ -58,6 +57,7 @@ export function ProfileOwnActionsBar({
   const showEditProfile = useFeatureVisible(PROFILE_FEATURE.editProfile);
   const showInsights = useFeatureVisible(PROFILE_FEATURE.insights);
   const showCloseFriends = useFeatureVisible(PROFILE_FEATURE.closeFriends);
+  const showSettings = useFeatureVisible(PROFILE_FEATURE.settingsGear);
   const showSoundCreate = useFeatureVisible('user-sounds');
   const soundStats = useUserSoundStats(showSoundCreate ? user?.id : null);
   const showSoundStats = showSoundCreate && (soundStats?.totalSounds ?? 0) > 0;
@@ -71,14 +71,25 @@ export function ProfileOwnActionsBar({
     !linkedSibling &&
     !outgoingPendingUsername;
 
-  const quickActions: QuickAction[] = [
+  const actions: ProfilePageAction[] = [
+    ...(showEditProfile
+      ? [
+          {
+            key: 'edit-profile',
+            label: 'Profili Düzenle',
+            icon: 'create-outline' as const,
+            tone: 'default' as const,
+            onPress: () => router.push('/profile/edit' as Href),
+          },
+        ]
+      : []),
     ...(effectiveAccountType === 'personal' && provider
       ? [
           {
             key: 'provider-manage',
             label: provider.showOnProfile ? 'Usta Profilim' : 'Usta profili gizli',
             icon: (provider.showOnProfile ? 'construct-outline' : 'eye-off-outline') as keyof typeof Ionicons.glyphMap,
-            tone: 'default' as const,
+            tone: 'provider' as const,
             onPress: () => router.push('/vora-hizmetler/provider-manage' as Href),
           },
         ]
@@ -116,6 +127,13 @@ export function ProfileOwnActionsBar({
           },
         ]
       : []),
+    {
+      key: 'purchase-history',
+      label: 'Satın Alma Geçmişi',
+      icon: 'receipt-outline',
+      tone: 'default',
+      onPress: () => router.push(PURCHASE_HISTORY_ROUTE as Href),
+    },
     ...(showAdminPanel
       ? [
           {
@@ -148,13 +166,20 @@ export function ProfileOwnActionsBar({
             tone: 'default' as const,
             onPress: () => router.push('/sounds/create' as Href),
           },
+          {
+            key: 'sound-mine',
+            label: 'Seslerim',
+            icon: 'library-outline' as const,
+            tone: 'default' as const,
+            onPress: () => router.push('/sounds/mine' as Href),
+          },
         ]
       : []),
     {
       key: 'caps-library',
       label: 'Caps Merkezi',
-      icon: 'happy-outline' as const,
-      tone: 'default' as const,
+      icon: 'happy-outline',
+      tone: 'default',
       onPress: () => router.push('/caps' as Href),
     },
     ...(showCloseFriends
@@ -175,6 +200,7 @@ export function ProfileOwnActionsBar({
             label: 'Ses İstatistikleri',
             icon: 'musical-notes-outline' as const,
             tone: 'default' as const,
+            active: soundStatsActive,
             onPress: () =>
               onSoundStatsPress ? onSoundStatsPress() : router.push('/sounds' as Href),
           },
@@ -202,155 +228,18 @@ export function ProfileOwnActionsBar({
           },
         ]
       : []),
+    ...(showSettings
+      ? [
+          {
+            key: 'settings',
+            label: 'Ayarlar',
+            icon: 'settings-outline' as const,
+            tone: 'default' as const,
+            onPress: () => router.push('/settings' as Href),
+          },
+        ]
+      : []),
   ];
 
-  return (
-    <View style={styles.container}>
-      {showEditProfile ? (
-        <View style={styles.primaryRow}>
-          <Pressable
-            onPress={() => router.push('/profile/edit' as Href)}
-            style={({ pressed }) => [
-              styles.primaryBtn,
-              { backgroundColor: colors.primary, opacity: pressed ? 0.85 : 1 },
-            ]}
-          >
-            <Ionicons name="create-outline" size={16} color="#fff" />
-            <Text variant="caption" style={styles.primaryBtnTextMain}>
-              Profili Düzenle
-            </Text>
-          </Pressable>
-        </View>
-      ) : null}
-
-      {quickActions.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.quickScrollOuter}
-          contentContainerStyle={styles.quickScroll}
-        >
-          {quickActions.map((action) => {
-            const isProviderAction = action.key === 'provider-manage';
-            const isSoundStatsAction = action.key === 'sound-stats';
-            const isActiveChip = isSoundStatsAction && soundStatsActive;
-            const accent =
-              action.tone === 'premium'
-                ? '#FFB300'
-                : action.tone === 'wallet'
-                  ? colors.warning
-                  : action.tone === 'admin'
-                    ? colors.primary
-                    : isActiveChip
-                      ? colors.accent
-                    : isProviderAction
-                      ? VORA_HIZMETLER_ACCENT
-                      : colors.textSecondary;
-
-            const chipBg =
-              action.tone === 'wallet'
-                ? `${colors.warning}14`
-                : action.tone === 'admin'
-                  ? `${colors.primary}14`
-                  : action.tone === 'premium'
-                    ? 'rgba(255,179,0,0.12)'
-                    : isActiveChip
-                      ? `${colors.accent}18`
-                    : isProviderAction
-                      ? `${VORA_HIZMETLER_ACCENT}14`
-                      : colors.surfaceElevated;
-
-            const chipBorder =
-              action.tone === 'wallet'
-                ? `${colors.warning}55`
-                : action.tone === 'admin'
-                  ? `${colors.primary}55`
-                  : action.tone === 'premium'
-                    ? 'rgba(255,179,0,0.35)'
-                    : isActiveChip
-                      ? `${colors.accent}55`
-                    : isProviderAction
-                      ? `${VORA_HIZMETLER_ACCENT}55`
-                      : colors.border;
-
-            return (
-              <Pressable
-                key={action.key}
-                onPress={action.onPress}
-                style={({ pressed }) => [
-                  styles.actionChip,
-                  {
-                    backgroundColor: chipBg,
-                    borderColor: chipBorder,
-                    opacity: pressed ? 0.72 : 1,
-                  },
-                ]}
-              >
-                <Ionicons name={action.icon} size={15} color={accent} />
-                <Text
-                  variant="caption"
-                  numberOfLines={1}
-                  style={[
-                    styles.chipLabel,
-                    (action.tone !== 'default' || isProviderAction || isActiveChip) && {
-                      color: accent,
-                      fontWeight: '700',
-                    },
-                  ]}
-                >
-                  {action.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      ) : null}
-    </View>
-  );
+  return actions;
 }
-
-const styles = StyleSheet.create({
-  container: { gap: spacing.sm },
-  primaryRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-  },
-  primaryBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    minHeight: 44,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-  },
-  primaryBtnSecondary: {
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  primaryBtnTextMain: {
-    color: '#fff',
-    fontWeight: '700',
-  },
-  quickScrollOuter: {
-    marginHorizontal: -spacing.lg,
-  },
-  quickScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    paddingHorizontal: spacing.lg,
-  },
-  actionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    minHeight: 36,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 7,
-    borderRadius: radius.full,
-    borderWidth: StyleSheet.hairlineWidth,
-  },
-  chipLabel: { fontSize: 12, fontWeight: '600' },
-});

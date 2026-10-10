@@ -1,4 +1,4 @@
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { syncAppIconBadge } from '@/lib/notifications/badge';
 
@@ -8,7 +8,7 @@ const MESSAGE_EVENT_TYPES = new Set(['message', 'group_message']);
  * Yalnızca uygulama ÖN PLANDAYKEN banner/ses davranışını belirler.
  * Arka plan / kapalı durumda bildirim Apple APNs üzerinden gelir (sunucu push payload).
  */
-if (typeof Notifications.setNotificationHandler === 'function') {
+if (Platform.OS !== 'web' && typeof Notifications.setNotificationHandler === 'function') {
   Notifications.setNotificationHandler({
     handleNotification: async (notification) => {
       const content = notification.request.content;

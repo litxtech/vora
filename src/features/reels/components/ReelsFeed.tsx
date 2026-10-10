@@ -39,12 +39,15 @@ import { subscribeMuxVideoReady } from '@/services/video/muxReadyEvents';
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const IOS_REELS_LIST_PERF = {
-  initialNumToRender: 1,
-  maxToRenderPerBatch: 1,
-  windowSize: 4,
-  updateCellsBatchingPeriod: 80,
-  removeClippedSubviews: true,
+  initialNumToRender: 2,
+  maxToRenderPerBatch: 2,
+  windowSize: 5,
+  updateCellsBatchingPeriod: 16,
+  removeClippedSubviews: false,
 } as const;
+
+/** Parmak kalkınca momentum başlamazsa yedek yerleşim. Momentum varsa iptal edilir. */
+const SCROLL_SETTLE_FALLBACK_MS = 90;
 
 export function ReelsFeed() {
   const isFocused = useIsFocused();
@@ -59,7 +62,7 @@ export function ReelsFeed() {
   const anchorFetchStartedRef = useRef<string | null>(null);
   const initialIndexSyncedRef = useRef(false);
   const wasFocusedRef = useRef(isFocused);
-  const [viewportHeight, setViewportHeight] = useState(SCREEN_HEIGHT);
+  const [viewportHeight, setViewportHeight] = useState(() => Math.max(1, Math.round(SCREEN_HEIGHT)));
   const feed = useReels();
 
   useEffect(() => {
@@ -86,6 +89,7 @@ export function ReelsFeed() {
   feedRef.current = feed;
 
   const scrollSettleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const momentumActiveRef = useRef(false);
 
   const recordViewForIndex = useCallback((idx: number) => {
     const item = itemsRef.current[idx];
@@ -300,13 +304,9 @@ export function ReelsFeed() {
     };
   }, [playbackAllowed, activeIndex, isAnchorPending, queueWarmup]);
 
-  const handleScrollBegin = useCallback(() => {
-    setScrolling(true);
-    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
-  }, [setScrolling]);
-
   const handleScrollSettled = useCallback(
     (offsetY: number) => {
+      momentumActiveRef.current = false;
       setScrolling(false);
       if (isAnchorPending()) return;
       commitActiveIndex(offsetY);
@@ -315,12 +315,26 @@ export function ReelsFeed() {
     [setScrolling, commitActiveIndex, queueWarmup, isAnchorPending],
   );
 
+  const handleScrollBegin = useCallback(() => {
+    momentumActiveRef.current = false;
+    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+    setScrolling(true);
+  }, [setScrolling]);
+
+  const handleMomentumBegin = useCallback(() => {
+    momentumActiveRef.current = true;
+    if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+    setScrolling(true);
+  }, [setScrolling]);
+
   const handleScrollEndDrag = useCallback(
     (offsetY: number) => {
       if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
+      // Momentum snap devam ederken aktif reel değişirse video ortada takılır.
       scrollSettleTimerRef.current = setTimeout(() => {
+        if (momentumActiveRef.current) return;
         handleScrollSettled(offsetY);
-      }, 120);
+      }, SCROLL_SETTLE_FALLBACK_MS);
     },
     [handleScrollSettled],
   );
@@ -460,7 +474,7 @@ export function ReelsFeed() {
     <View
       style={styles.container}
       onLayout={(event) => {
-        const nextHeight = event.nativeEvent.layout.height;
+        const nextHeight = Math.round(event.nativeEvent.layout.height);
         if (nextHeight > 0 && nextHeight !== viewportHeight) {
           setViewportHeight(nextHeight);
         }
@@ -480,15 +494,22 @@ export function ReelsFeed() {
 
       <FlatList
         ref={listRef}
+        style={{ height: viewportHeight }}
         data={items}
         keyExtractor={(item) => item.id}
         renderItem={renderItem}
-        pagingEnabled
+        pagingEnabled={!isAndroid()}
+        {...(isAndroid()
+          ? { snapToInterval: viewportHeight, snapToAlignment: 'start' as const }
+          : null)}
         decelerationRate="fast"
         disableIntervalMomentum
+        bounces={false}
+        overScrollMode="never"
         showsVerticalScrollIndicator={false}
         viewabilityConfigCallbackPairs={viewabilityConfigCallbackPairs}
         onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollBegin={handleMomentumBegin}
         onMomentumScrollEnd={(event) => {
           if (scrollSettleTimerRef.current) clearTimeout(scrollSettleTimerRef.current);
           handleScrollSettled(event.nativeEvent.contentOffset.y);

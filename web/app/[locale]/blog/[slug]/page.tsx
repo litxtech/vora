@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
+import { OfflineTools } from '@/components/offline/offline-tools';
 import { getBlogPost, listBlogTranslations } from '@/lib/data';
 import { renderMarkdown } from '@/lib/markdown';
 import { toMetadata, trimDescription } from '@/lib/seo/engine';
@@ -40,6 +41,7 @@ export default async function LocaleBlogPostPage({ params }: { params: Promise<P
     <article className="block">
       <div className="wrap prose">
         <h1>{post.title}</h1>
+        <OfflineTools kind="blog" title={post.title} href={`/${locale}/blog/${post.slug}`} />
         <div dangerouslySetInnerHTML={{ __html: renderMarkdown(post.content) }} />
       </div>
     </article>

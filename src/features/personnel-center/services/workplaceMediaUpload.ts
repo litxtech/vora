@@ -1,20 +1,6 @@
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
-import { supabase } from '@/lib/supabase/client';
-
-function guessContentType(uri: string): string {
-  const lower = uri.toLowerCase();
-  if (lower.includes('.png')) return 'image/png';
-  if (lower.includes('.webp')) return 'image/webp';
-  if (lower.includes('.heic') || lower.includes('.heif')) return 'image/heic';
-  return 'image/jpeg';
-}
-
-function fileExtension(contentType: string): string {
-  if (contentType === 'image/png') return 'png';
-  if (contentType === 'image/webp') return 'webp';
-  if (contentType === 'image/heic') return 'heic';
-  return 'jpg';
-}
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 
 export async function uploadJobWorkplaceImage(
   userId: string,
@@ -22,20 +8,16 @@ export async function uploadJobWorkplaceImage(
   index: number,
 ): Promise<{ url: string | null; error: string | null }> {
   try {
-    const arrayBuffer = await readLocalFileBytes(localUri);
-    const contentType = guessContentType(localUri);
-    const ext = fileExtension(contentType);
-    const path = `${userId}/${Date.now()}-${index}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage.from('job-listings').upload(path, arrayBuffer, {
-      contentType,
-      upsert: false,
+    const prepared = await manipulateAsync(localUri, [], { compress: 0.9, format: SaveFormat.WEBP });
+    const bytes = await readLocalFileBytes(prepared.uri);
+    const uploaded = await uploadPublicImage({
+      folder: 'job-listings',
+      path: `${userId}/${Date.now()}-${index}.webp`,
+      bytes,
+      contentType: 'image/webp',
     });
-
-    if (uploadError) return { url: null, error: uploadError.message };
-
-    const { data } = supabase.storage.from('job-listings').getPublicUrl(path);
-    return { url: data.publicUrl, error: null };
+    if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+    return { url: uploaded.url, error: null };
   } catch (err) {
     return { url: null, error: String(err) };
   }

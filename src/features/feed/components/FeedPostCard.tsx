@@ -50,7 +50,7 @@ import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { focusMapOnCoordinate } from '@/features/map/services/mapNavigation';
 import type { FeedItem } from '@/features/feed/types';
 import { formatFeedTime } from '@/features/feed/utils';
-import { canModerate } from '@/constants/roles';
+import { canAdmin, canModerate } from '@/constants/roles';
 import { REGIONS } from '@/constants/regions';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -185,6 +185,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
   const isPost = item.sourceType === 'post';
   const isOwnPost = user?.id === item.author.id && isPost && !item.isDemo;
   const canModeratePost = Boolean(profile?.role && canModerate(profile.role) && isPost && !item.isDemo);
+  const canOpenViewers = Boolean(profile?.role && canAdmin(profile.role));
   const showVerification = isPost && supportsNewsVerification(item.category);
 
   const handleDeletePost = () => {
@@ -243,7 +244,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
     videoMounted && routeFocused && (isDetail || focusVideo || !isFeedScrolling);
   const inFullscreen = mediaViewerIndex !== null;
   const musicUiEnabled = inFullscreen ? fullscreenMusicEnabled : isFeedSoundOn;
-  const musicScopeActive = rowInScope && hasPostMusic && routeFocused;
+  const musicScopeActive = hasPostMusic && routeFocused && (rowInScope || inFullscreen);
   const musicPlaying = musicScopeActive && musicUiEnabled;
   const videoOriginalMuted = hasVideo && !!item.videoOriginalMuted;
   const showMediaSoundToggle = hasPostMusic || (hasVideo && !videoOriginalMuted);
@@ -324,6 +325,9 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
       return;
     }
 
+    if (hasPostMusic) {
+      setFullscreenMusicEnabled(true);
+    }
     setMediaViewerIndex(index);
   };
 
@@ -536,7 +540,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
           {isPost && item.viewCount > 0 ? (
             <Pressable
               onPress={async () => {
-                if (user?.id === item.author.id || item.isDemo) {
+                if (user?.id === item.author.id || item.isDemo || canOpenViewers) {
                   router.push(`/post-viewers/${item.sourceId}?authorId=${item.author.id}` as never);
                 }
               }}
@@ -678,6 +682,7 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
           onClose={() => {
             setMediaViewerIndex(null);
             setHoldInlineVideo(false);
+            setFullscreenMusicEnabled(false);
           }}
           musicSoundEnabled={fullscreenMusicEnabled}
           onMusicSoundToggle={hasPostMusic ? () => setFullscreenMusicEnabled((v) => !v) : undefined}

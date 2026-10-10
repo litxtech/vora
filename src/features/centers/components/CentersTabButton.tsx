@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import type { BottomTabBarButtonProps } from '@react-navigation/bottom-tabs';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
+import { pressTabWithoutReload } from '@/lib/navigation/pressTabWithoutReload';
 import { radius } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -30,7 +31,7 @@ export function CentersTabButton({
       {...rest}
       accessibilityRole="button"
       accessibilityState={accessibilityState}
-      onPress={handlePress}
+      onPress={(event) => pressTabWithoutReload(event, handlePress)}
       style={[style as StyleProp<ViewStyle>, styles.slot]}
       hitSlop={8}
       {...getAndroidInstantPressableProps()}

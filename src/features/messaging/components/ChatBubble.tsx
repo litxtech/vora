@@ -142,6 +142,15 @@ function ChatFile({ content, mediaUrl, isMine, labelColor }: { content: string; 
   );
 }
 
+function resolveCapMessageVideoUrl(message: ChatMessage): string | null {
+  if (isCapMessageMetadata(message.metadata)) {
+    const fromMeta = message.metadata.videoUrl;
+    if (fromMeta && isVideoUrl(fromMeta)) return fromMeta;
+  }
+  if (message.mediaUrl && isVideoUrl(message.mediaUrl)) return message.mediaUrl;
+  return null;
+}
+
 function TextMessageBody({
   content,
   editedAt,
@@ -375,9 +384,11 @@ export const ChatBubble = memo(function ChatBubble({
         },
         showAvatar ? styles.bubbleInGroup : null,
       ]}
-      onLongPress={message.messageType === 'video' ? undefined : onLongPress}
+        onLongPress={
+          message.messageType === 'video' || message.messageType === 'cap' ? undefined : onLongPress
+        }
       onPress={
-        !isAudioMessage && (canCopy || canQuote) ? handleBubblePress : undefined
+        !isAudioMessage && !isCapMessage && (canCopy || canQuote) ? handleBubblePress : undefined
       }
     >
         {isGroup && !isMine && senderLabel ? (
@@ -476,13 +487,7 @@ export const ChatBubble = memo(function ChatBubble({
                   ? message.metadata.thumbUrl ?? message.metadata.imageUrl ?? message.mediaUrl
                   : message.mediaUrl
               }
-              videoUrl={
-                isCapMessageMetadata(message.metadata)
-                  ? message.metadata.videoUrl
-                  : isVideoUrl(message.mediaUrl)
-                    ? message.mediaUrl
-                    : null
-              }
+              videoUrl={resolveCapMessageVideoUrl(message)}
               width={
                 isCapMessageMetadata(message.metadata) ? message.metadata.width : null
               }
@@ -513,7 +518,7 @@ export const ChatBubble = memo(function ChatBubble({
                       avatarUrl: message.sender?.avatar_url ?? null,
                     }
               }
-              autoplay={false}
+              onMessageLongPress={onLongPress}
             />
           </View>
         ) : null}

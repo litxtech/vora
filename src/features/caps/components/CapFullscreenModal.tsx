@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Modal, Pressable, StyleSheet, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +8,7 @@ import { CapLoopVideo } from '@/features/caps/components/CapLoopVideo';
 import { CapOverlayLayer } from '@/features/caps/components/CapOverlayLayer';
 import type { CapOverlayStyle } from '@/features/caps/types';
 import { Image } from 'expo-image';
+import { ensureVideoPlaybackAudioMode } from '@/lib/audio/safeAudioMode';
 import { spacing } from '@/constants/theme';
 
 type CapFullscreenModalProps = {
@@ -34,6 +36,11 @@ export function CapFullscreenModal({
   const size = Math.min(width - spacing.lg * 2, height * 0.72);
   const hasClip =
     Boolean(videoUrl) && startMs != null && endMs != null && endMs > startMs;
+
+  useEffect(() => {
+    if (!visible || !videoUrl) return;
+    void ensureVideoPlaybackAudioMode();
+  }, [visible, videoUrl]);
 
   return (
     <Modal

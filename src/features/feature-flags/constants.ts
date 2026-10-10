@@ -107,7 +107,7 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
     label: 'Ses Oluştur',
     group: 'social',
     kind: 'root',
-    routes: ['/sounds', '/sounds/create'],
+    routes: ['/sounds', '/sounds/create', '/sounds/ai', '/sounds/ai/new', '/sounds/ai/packages'],
   },
   {
     id: 'proximity-match',
@@ -170,11 +170,6 @@ export const APP_FEATURE_REGISTRY: AppFeatureDef[] = [
   ...FEATURE_SUB_REGISTRY,
 ];
 
-/** Kayıt yokken özelliğin kendi varsayılanı. Üst özelliğin kapalı olması ayrıca kontrol edilir. */
-export function featureOwnDefaultVisible(featureId: string): boolean {
-  return APP_FEATURE_BY_ID[featureId]?.defaultVisible !== false;
-}
-
 export const APP_FEATURE_BY_ID = Object.fromEntries(
   APP_FEATURE_REGISTRY.filter((feature): feature is AppFeatureDef => Boolean(feature?.id)).map(
     (feature) => [feature.id, feature],
@@ -195,6 +190,7 @@ export const FEATURE_GUARD_EXEMPT_PREFIXES = [
   '/u/',
   '/detail/',
   '/post-viewers/',
+  '/reel-viewers/',
   '/hashtag/',
   '/izdivac-center',
 ] as const;
@@ -207,10 +203,15 @@ export function allFeaturesByGroup(group: FeatureGroup): AppFeatureDef[] {
   return APP_FEATURE_REGISTRY.filter((feature) => feature.group === group);
 }
 
-export function resolveFeatureForPath(pathname: string): string | null {
-  const normalized = pathname.replace(/\/$/, '') || '/';
+function stripRouteGroups(path: string): string {
+  const stripped = path.replace(/\/\([^/]+\)/g, '') || '/';
+  return stripped.replace(/\/$/, '') || '/';
+}
 
-  if (FEATURE_GUARD_EXEMPT_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+export function resolveFeatureForPath(pathname: string): string | null {
+  const normalized = stripRouteGroups(pathname);
+
+  if (FEATURE_GUARD_EXEMPT_PREFIXES.some((prefix) => normalized.startsWith(stripRouteGroups(prefix)))) {
     return null;
   }
 
@@ -218,7 +219,8 @@ export function resolveFeatureForPath(pathname: string): string | null {
 
   for (const feature of APP_FEATURE_REGISTRY) {
     for (const route of feature.routes ?? []) {
-      const routeNorm = route.replace(/\/$/, '') || '/';
+      const routeNorm = stripRouteGroups(route);
+      if (routeNorm === '/') continue;
       if (normalized === routeNorm || normalized.startsWith(`${routeNorm}/`)) {
         if (!best || routeNorm.length > best.length) {
           best = { id: feature.id, length: routeNorm.length };

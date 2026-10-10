@@ -28,6 +28,8 @@ type AdminContentPreviewSheetProps = {
   onWarn: (id: string) => void;
   onHide: (id: string) => void;
   onRemove: (id: string) => void;
+  onInstantDelete?: (id: string) => void;
+  onViewers?: (kind: 'post' | 'reel', id: string, authorId: string) => void;
   busyId?: string | null;
 };
 
@@ -37,6 +39,8 @@ export function AdminContentPreviewSheet({
   onWarn,
   onHide,
   onRemove,
+  onInstantDelete,
+  onViewers,
   busyId = null,
 }: AdminContentPreviewSheetProps) {
   const { colors } = useTheme();
@@ -188,6 +192,17 @@ export function AdminContentPreviewSheet({
 
           <View style={styles.actions}>
             <AdminActionChip label="Uygulamada aç" icon="open-outline" tone="primary" compact onPress={openInApp} />
+            {!isComment && onViewers ? (
+              <AdminActionChip
+                label="Görüntüleyenler"
+                icon="people-outline"
+                compact
+                onPress={() => {
+                  onViewers(preview.type === 'reel' ? 'reel' : 'post', id, preview.item.author_id);
+                  onClose();
+                }}
+              />
+            ) : null}
             <AdminActionChip
               label="Uyar"
               icon="alert-circle-outline"
@@ -213,6 +228,16 @@ export function AdminContentPreviewSheet({
                   loading={isBusy}
                   onPress={() => onRemove(id)}
                 />
+                {onInstantDelete && status === 'published' ? (
+                  <AdminActionChip
+                    label="Anında sil"
+                    icon="flash-outline"
+                    tone="danger"
+                    compact
+                    loading={isBusy}
+                    onPress={() => onInstantDelete(id)}
+                  />
+                ) : null}
               </>
             ) : null}
           </View>

@@ -37,7 +37,7 @@ async function centerCropToAspect(uri: string, aspect: CropAspect): Promise<stri
   const result = await manipulateAsync(
     uri,
     [{ crop: { originX, originY, width: cropW, height: cropH } }],
-    { compress: 0.88, format: SaveFormat.JPEG },
+    { compress: 0.9, format: SaveFormat.WEBP },
   );
   return result.uri;
 }

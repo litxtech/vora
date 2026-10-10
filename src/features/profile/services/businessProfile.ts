@@ -133,13 +133,17 @@ export async function fetchBusinessIdentitiesByOwnerIds(
 ): Promise<Map<string, BusinessProfile>> {
   if (!ownerIds.length) return new Map();
 
-  const { data } = await supabase
+  const columns =
+    'owner_id, id, name, category, description, phone, website, address, district, logo_url, cover_url, is_verified, region_id, registration_status' as const;
+  const filtered = await supabase
     .from('businesses')
-    .select(
-      'owner_id, id, name, category, description, phone, website, address, district, logo_url, cover_url, is_verified, region_id, registration_status',
-    )
+    .select(columns)
     .in('owner_id', ownerIds)
-    .eq('registration_status', 'approved');
+    .eq('registration_status', 'approved')
+    .eq('posts_visible', true);
+  const { data } = filtered.error
+    ? await supabase.from('businesses').select(columns).in('owner_id', ownerIds).eq('registration_status', 'approved')
+    : filtered;
 
   const map = new Map<string, BusinessProfile>();
   for (const row of data ?? []) {

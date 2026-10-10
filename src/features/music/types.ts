@@ -63,6 +63,8 @@ export type MusicAttribution = {
   trackId: string;
   displayTitle: string;
   artist: string;
+  /** Parçanın içerikte çalınan süresi (saniye). */
+  durationSec?: number;
 };
 
 /** Reels / feed oynatıcısında videoyla senkron müzik */

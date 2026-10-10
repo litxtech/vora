@@ -1,11 +1,10 @@
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
-import { supabase } from '@/lib/supabase/client';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 
-function guessContentType(uri: string): string {
-  const ext = uri.split('.').pop()?.toLowerCase();
-  if (ext === 'png') return 'image/png';
-  if (ext === 'webp') return 'image/webp';
-  return 'image/jpeg';
+async function prepareWebp(localUri: string): Promise<ArrayBuffer> {
+  const prepared = await manipulateAsync(localUri, [], { compress: 0.9, format: SaveFormat.WEBP });
+  return readLocalFileBytes(prepared.uri);
 }
 
 export async function uploadLostItemImage(
@@ -14,20 +13,15 @@ export async function uploadLostItemImage(
   index: number,
 ): Promise<{ url: string | null; error: string | null }> {
   try {
-    const arrayBuffer = await readLocalFileBytes(localUri);
-    const contentType = guessContentType(localUri);
-    const ext = contentType.split('/')[1] ?? 'jpg';
-    const path = `${userId}/${Date.now()}-${index}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage.from('lost-items').upload(path, arrayBuffer, {
-      contentType,
-      upsert: false,
+    const bytes = await prepareWebp(localUri);
+    const uploaded = await uploadPublicImage({
+      folder: 'lost-items',
+      path: `${userId}/${Date.now()}-${index}.webp`,
+      bytes,
+      contentType: 'image/webp',
     });
-
-    if (uploadError) return { url: null, error: uploadError.message };
-
-    const { data } = supabase.storage.from('lost-items').getPublicUrl(path);
-    return { url: data.publicUrl, error: null };
+    if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+    return { url: uploaded.url, error: null };
   } catch (err) {
     return { url: null, error: String(err) };
   }

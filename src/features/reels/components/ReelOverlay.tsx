@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { Alert, Pressable, StyleSheet, View } from 'react-native';
+import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { shareReelLink } from '@/lib/sharing/shareContent';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withSpring } from 'react-native-reanimated';
@@ -25,10 +26,12 @@ import { NewsVerificationIndicator } from '@/features/news-verification/componen
 import { supportsNewsVerification } from '@/features/news-verification/constants';
 import { MusicAttributionBadge } from '@/features/music/components/MusicAttributionBadge';
 
+import { AdminReelActionsSheet } from '@/features/admin/components/shared/AdminReelActionsSheet';
 import { ReelCommentSheet } from '@/features/reels/components/ReelCommentSheet';
 import { ReelMenuSheet } from '@/features/reels/components/ReelMenuSheet';
 import { LikersSheet } from '@/features/feed/components/LikersSheet';
 import type { ReelItem } from '@/features/reels/types';
+import { canAdmin, canModerate } from '@/constants/roles';
 import { spacing } from '@/constants/theme';
 import { getMuxPlaybackUrl } from '@/lib/mux/client';
 import { useAuth } from '@/providers/AuthProvider';
@@ -48,7 +51,7 @@ export function ReelOverlay({ item, onUpdate, onDeleted, tabBarInset = 0 }: Reel
   const insets = useSafeAreaInsets();
   const tabBarClearance =
     tabBarInset > 0 ? tabBarInset + Math.max(insets.bottom, 12) : Math.max(insets.bottom, 12);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { requireAuth } = useRequireAuth();
   const showLike = useFeatureVisible(REELS_FEATURE.like);
   const showComment = useFeatureVisible(REELS_FEATURE.comment);
@@ -66,8 +69,11 @@ export function ReelOverlay({ item, onUpdate, onDeleted, tabBarInset = 0 }: Reel
   const [shareChatOpen, setShareChatOpen] = useState(false);
   const [likersOpen, setLikersOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
 
   const isOwner = item.author.id === user?.id;
+  const isAdmin = Boolean(profile?.role && canAdmin(profile.role));
+  const canModerateReel = Boolean(profile?.role && canModerate(profile.role) && !item.isDemo);
 
   const likeStyle = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
@@ -287,9 +293,21 @@ export function ReelOverlay({ item, onUpdate, onDeleted, tabBarInset = 0 }: Reel
 
         {item.music ? <MusicAttributionBadge music={item.music} light /> : null}
 
-        <Text variant="caption" style={styles.views}>
-          {formatCount(item.viewCount)} görüntülenme
-        </Text>
+        {(isOwner || isAdmin) && item.viewCount > 0 ? (
+          <Pressable
+            onPress={() =>
+              router.push(`/reel-viewers/${item.id}?authorId=${item.author.id}` as never)
+            }
+          >
+            <Text variant="caption" style={styles.views}>
+              {formatCount(item.viewCount)} görüntülenme
+            </Text>
+          </Pressable>
+        ) : (
+          <Text variant="caption" style={styles.views}>
+            {formatCount(item.viewCount)} görüntülenme
+          </Text>
+        )}
       </View>
 
       <ReelMenuSheet
@@ -305,7 +323,19 @@ export function ReelOverlay({ item, onUpdate, onDeleted, tabBarInset = 0 }: Reel
           setShowSafety(true);
         }}
         onDelete={handleDelete}
+        onModerate={canModerateReel && !isOwner ? () => setAdminOpen(true) : undefined}
       />
+
+      {canModerateReel && adminOpen ? (
+        <AdminReelActionsSheet
+          visible={adminOpen}
+          onClose={() => setAdminOpen(false)}
+          reelId={item.id}
+          authorId={item.author.id}
+          authorUsername={item.author.username}
+          onContentRemoved={onDeleted}
+        />
+      ) : null}
 
       <ReelCommentSheet
         visible={commentsOpen}

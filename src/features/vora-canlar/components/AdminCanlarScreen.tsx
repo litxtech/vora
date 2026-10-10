@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
-import { Pressable, TextInput } from 'react-native';
+import { Pressable } from 'react-native';
 import { Text } from '@/components/ui/Text';
-import { CanlarCard, CanlarEmpty, CanlarScaffold } from '@/features/vora-canlar/components/CanlarScaffold';
-import { CANLAR_ACCENT, CANLAR_UNCONFIGURED } from '@/features/vora-canlar/constants';
+import { CanlarButton, CanlarCard, CanlarEmpty, CanlarField, CanlarScaffold, CanlarSectionTitle } from '@/features/vora-canlar/components/CanlarScaffold';
+import { CANLAR_UNCONFIGURED } from '@/features/vora-canlar/constants';
 import {
   loadAdminQueue,
   recordCanlarPayout,
@@ -47,8 +47,8 @@ export function AdminCanlarScreen() {
       <Text secondary>{CANLAR_UNCONFIGURED.identityLiveness}</Text>
       <Text secondary>Kimlik belgeleri bu ekranda açılmaz. Finansal ayrıntı yalnızca yönetici rolündedir.</Text>
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-      <TextInput value={reason} onChangeText={setReason} placeholder="Gerekçe" placeholderTextColor={colors.textMuted} style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 12, padding: 12, color: colors.text }} />
-      <Text style={{ fontWeight: '700' }}>İhbarlar</Text>
+      <CanlarField value={reason} onChangeText={setReason} placeholder="Gerekçe" />
+      <CanlarSectionTitle title="İhbarlar" />
       {cases.length === 0 ? <CanlarEmpty label="Bekleyen ihbar yok." /> : cases.map((item) => (
         <CanlarCard key={item.id}>
           <Text>{item.public_code} · {item.city_label} · {item.status}</Text>
@@ -57,7 +57,7 @@ export function AdminCanlarScreen() {
       ))}
       {isAdmin ? (
         <>
-          <Text style={{ fontWeight: '700' }}>Kampanyalar</Text>
+          <CanlarSectionTitle title="Kampanyalar" />
           {campaigns.map((item) => (
             <CanlarCard key={item.id}>
               <Text>{item.title} · {item.status}</Text>
@@ -75,7 +75,7 @@ export function AdminCanlarScreen() {
               </Pressable>
             </CanlarCard>
           ))}
-          <Text style={{ fontWeight: '700' }}>Roller</Text>
+          <CanlarSectionTitle title="Roller" />
           {roles.map((item) => (
             <CanlarCard key={item.id}>
               <Text>{item.role_key} · {item.status}</Text>
@@ -84,18 +84,18 @@ export function AdminCanlarScreen() {
               <Pressable onPress={() => void reviewCanlarRole(item.id, 'rejected', reason).then(reload)}><Text>Reddet</Text></Pressable>
             </CanlarCard>
           ))}
-          <Text style={{ fontWeight: '700' }}>Klinikler</Text>
+          <CanlarSectionTitle title="Klinikler" />
           {clinics.map((item) => (
             <CanlarCard key={item.id}>
               <Text>{item.name} · {item.verification_status}</Text>
               <Pressable onPress={() => void reviewCanlarClinic(item.id, 'approved', reason).then(reload)}><Text>Doğrulanmış klinik</Text></Pressable>
             </CanlarCard>
           ))}
-          <Text secondary>Doğrudan klinik ödemesi referanssız “ödendi” olamaz. Stripe Connect yoktur.</Text>
+          <Text secondary>Doğrudan klinik ödemesi referanssız “ödendi” olamaz. Otomatik klinik transferi yoktur.</Text>
           <PayoutForm onDone={reload} reason={reason} />
         </>
       ) : <Text secondary>Kampanya, rol ve ödeme kararları yönetici rolüne açıktır.</Text>}
-      <Text style={{ fontWeight: '700' }}>Kanıtlar</Text>
+      <CanlarSectionTitle title="Kanıtlar" />
       {proofs.map((item) => (
         <CanlarCard key={item.id}>
           <Text>{item.kind} · {item.review_status}</Text>
@@ -109,29 +109,22 @@ export function AdminCanlarScreen() {
 }
 
 function RescueVerify({ caseId, reason, onDone }: { caseId: string; reason: string; onDone: () => void }) {
-  const { colors } = useTheme();
   const [rescuerId, setRescuerId] = useState('');
   const [message, setMessage] = useState<string | null>(null);
 
   return (
     <>
-      <TextInput
-        value={rescuerId}
-        onChangeText={setRescuerId}
-        placeholder="Onaylı kurtarıcı kullanıcı kimliği"
-        placeholderTextColor={colors.textMuted}
-        style={{ color: colors.text }}
-      />
+      <CanlarField value={rescuerId} onChangeText={setRescuerId} placeholder="Onaylı kurtarıcı kullanıcı kimliği" />
       {message ? <Text secondary>{message}</Text> : null}
-      <Pressable
+      <CanlarButton
+        label="Kurtarmayı doğrula"
+        icon="shield-checkmark-outline"
         onPress={async () => {
           const result = await verifyCanlarRescue(caseId, rescuerId.trim(), reason);
           setMessage(result.error ?? 'Doğrulama kaydı yazıldı.');
           if (!result.error) onDone();
         }}
-      >
-        <Text style={{ color: CANLAR_ACCENT }}>Kurtarmayı doğrula</Text>
-      </Pressable>
+      />
     </>
   );
 }
@@ -146,13 +139,15 @@ function PayoutForm({ onDone, reason }: { onDone: () => void; reason: string }) 
 
   return (
     <CanlarCard>
-      <Text style={{ fontWeight: '700' }}>Manuel ödeme kaydı</Text>
-      <TextInput value={campaignId} onChangeText={setCampaignId} placeholder="Kampanya kimliği" placeholderTextColor={colors.textMuted} style={{ color: colors.text }} />
-      <TextInput value={label} onChangeText={setLabel} placeholder="Klinik veya yararlanıcı" placeholderTextColor={colors.textMuted} style={{ color: colors.text }} />
-      <TextInput value={amount} onChangeText={setAmount} placeholder="Tutar kuruş" placeholderTextColor={colors.textMuted} style={{ color: colors.text }} />
-      <TextInput value={reference} onChangeText={setReference} placeholder="Ödeme referansı" placeholderTextColor={colors.textMuted} style={{ color: colors.text }} />
+      <Text style={{ fontWeight: '800' }}>Manuel ödeme kaydı</Text>
+      <CanlarField value={campaignId} onChangeText={setCampaignId} placeholder="Kampanya kimliği" />
+      <CanlarField value={label} onChangeText={setLabel} placeholder="Klinik veya yararlanıcı" />
+      <CanlarField value={amount} onChangeText={setAmount} placeholder="Tutar kuruş" />
+      <CanlarField value={reference} onChangeText={setReference} placeholder="Ödeme referansı" />
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-      <Pressable
+      <CanlarButton
+        label="Referanslı ödendi kaydı"
+        icon="cash-outline"
         onPress={async () => {
           const amountMinor = Number(amount);
           if (!Number.isInteger(amountMinor) || amountMinor <= 0 || !reference.trim()) {
@@ -172,9 +167,7 @@ function PayoutForm({ onDone, reason }: { onDone: () => void; reason: string }) 
           if (result.error) setError(result.error);
           else onDone();
         }}
-      >
-        <Text style={{ color: CANLAR_ACCENT }}>Referanslı ödendi kaydı</Text>
-      </Pressable>
+      />
     </CanlarCard>
   );
 }

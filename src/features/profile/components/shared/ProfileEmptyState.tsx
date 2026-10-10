@@ -1,8 +1,8 @@
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Text } from '@/components/ui/Text';
-import { spacing } from '@/constants/theme';
+import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 
 type ProfileEmptyStateProps = {
@@ -10,6 +10,7 @@ type ProfileEmptyStateProps = {
   title?: string;
   message?: string;
   icon?: keyof typeof Ionicons.glyphMap;
+  onRetry?: () => void;
 };
 
 export function ProfileEmptyState({
@@ -17,12 +18,16 @@ export function ProfileEmptyState({
   title = 'İçerik yok',
   message = 'Bu sekmede henüz bir şey bulunmuyor.',
   icon = 'file-tray-outline',
+  onRetry,
 }: ProfileEmptyStateProps) {
   const { colors } = useTheme();
 
-  // Spinner yok — sayfa anında açılmış gibi; içerik gelince dolar.
   if (loading) {
-    return <View style={styles.loadingShell} />;
+    return (
+      <View style={styles.loadingShell}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
   }
 
   return (
@@ -34,12 +39,30 @@ export function ProfileEmptyState({
       <Text secondary variant="caption" style={styles.message}>
         {message}
       </Text>
+      {onRetry ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={onRetry}
+          style={[styles.retry, { backgroundColor: colors.primary }]}
+        >
+          <Text variant="caption" style={styles.retryLabel}>
+            Tekrar dene
+          </Text>
+        </Pressable>
+      ) : null}
     </GlassCard>
   );
 }
 
 const styles = StyleSheet.create({
-  loadingShell: { flex: 1, minHeight: 120 },
+  loadingShell: { minHeight: 120, alignItems: 'center', justifyContent: 'center' },
+  retry: {
+    marginTop: spacing.xs,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: radius.full,
+  },
+  retryLabel: { color: '#fff', fontWeight: '700' },
   card: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
   iconWrap: {
     width: 56,

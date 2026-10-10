@@ -36,6 +36,7 @@ import { MusicMarqueeOverlay } from '@/features/music/components/MusicMarqueeOve
 import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
 import { ComposePhotoMusicEditor } from '@/features/compose/components/ComposePhotoMusicEditor';
 import { PostUploadProgressPanel } from '@/features/compose/components/PostUploadProgressPanel';
+import { useLockStackBackGesture } from '@/features/music/hooks/useLockStackBackGesture';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
 import type { MusicSelection } from '@/features/music/types';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
@@ -178,6 +179,7 @@ export function ComposeScreen() {
     : `${REGIONS.find((r) => r.id === regionId)?.name ?? regionId}${district ? ` · ${district}` : ''}`;
 
   const hasVideo = mediaUris.some((uri) => isLocalVideoUri(uri));
+  useLockStackBackGesture(Boolean(musicSelection) && !hasVideo);
   const remainingSlots = MAX_MEDIA_COUNT - mediaUris.length;
   const isBackgroundUploading = uploadStatus === 'uploading' || videoUploadActive;
   const canSubmit =
@@ -752,6 +754,7 @@ export function ComposeScreen() {
                   trackId: musicSelection.trackId,
                   displayTitle: musicSelection.displayTitle,
                   artist: musicSelection.artist,
+                  durationSec: Math.max(0, musicSelection.musicEndSec - musicSelection.musicStartSec) || musicSelection.durationSec,
                 }}
               />
               <Pressable onPress={clearMusicSelection} hitSlop={8}>

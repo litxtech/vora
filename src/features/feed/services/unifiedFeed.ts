@@ -144,19 +144,24 @@ export async function fetchUnifiedItems(
   }
 
   if (shouldFetch('business')) {
-    let businessQuery = supabase
-      .from('businesses')
-      .select(
-        `id, name, description, category, region_id, logo_url, created_at, owner_id, is_verified, registration_status,
-         profiles!businesses_owner_id_fkey (${AUTHOR_PROFILE_FIELDS})`,
-      )
-      .eq('registration_status', 'approved')
-      .order('created_at', { ascending: false })
-      .limit(20);
+    const loadBusinessCards = (onlyVisibleOnPosts: boolean) => {
+      let businessQuery = supabase
+        .from('businesses')
+        .select(
+          `id, name, description, category, region_id, logo_url, created_at, owner_id, is_verified, registration_status,
+           profiles!businesses_owner_id_fkey (${AUTHOR_PROFILE_FIELDS})`,
+        )
+        .eq('registration_status', 'approved')
+        .order('created_at', { ascending: false })
+        .limit(20);
 
-    if (regionId) businessQuery = businessQuery.eq('region_id', regionId);
+      if (onlyVisibleOnPosts) businessQuery = businessQuery.eq('posts_visible', true);
+      if (regionId) businessQuery = businessQuery.eq('region_id', regionId);
+      return businessQuery;
+    };
 
-    const { data } = await businessQuery;
+    const filteredBusinesses = await loadBusinessCards(true);
+    const data = filteredBusinesses.error ? (await loadBusinessCards(false)).data : filteredBusinesses.data;
 
     type BusinessRow = {
       id: string;

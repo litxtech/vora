@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 
 const BUCKET = 'app-appearance-media';
@@ -30,17 +31,15 @@ export async function uploadTrustVacationPromoImage(
     const arrayBuffer = await readLocalFileBytes(localUri);
     const contentType = guessImageContentType(localUri);
     const ext = fileExtension(contentType);
-    const path = `${PROMO_IMAGE_PATH}.${ext}`;
-
-    const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
+    const path = `${PROMO_IMAGE_PATH}-${Date.now()}.${ext}`;
+    const uploaded = await uploadPublicImage({
+      folder: 'app-appearance-media',
+      path,
+      bytes: arrayBuffer,
       contentType,
-      upsert: true,
     });
-
-    if (uploadError) return { url: null, error: uploadError.message };
-
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return { url: `${data.publicUrl}?t=${Date.now()}`, error: null };
+    if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+    return { url: uploaded.url, error: null };
   } catch (err) {
     return { url: null, error: String(err) };
   }

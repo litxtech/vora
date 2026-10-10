@@ -16,8 +16,9 @@ import { setAudioModeAsync } from 'expo-audio';
 import { Ionicons } from '@expo/vector-icons';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { Text } from '@/components/ui/Text';
+import { FeedMediaPreview } from '@/components/media/FeedMediaPreview';
 import { PostMusicSoundToggle } from '@/features/music/components/PostMusicSoundToggle';
-import { isVideoUrl } from '@/lib/media/isVideoUrl';
+import { isLocalVideoUri, isVideoUrl } from '@/lib/media/isVideoUrl';
 import { isProcessingVideoUrl, parseProcessingVideoId } from '@/lib/media/videoProcessingUrl';
 import { isPlayableVideoUrl, toVideoSource } from '@/lib/media/videoSource';
 import { resolvePlaybackUrl } from '@/lib/media/resolvePlaybackUrl';
@@ -33,6 +34,7 @@ type FullScreenMediaViewerProps = {
   onClose: () => void;
   musicSoundEnabled?: boolean;
   onMusicSoundToggle?: () => void;
+  kinds?: Array<'image' | 'video'>;
 };
 
 function resolveViewerUri(uri: string): string | null {
@@ -89,8 +91,8 @@ function ViewerVideoPlayer({
 
   const player = useVideoPlayer(source, (p) => {
     p.loop = true;
-    p.muted = false;
-    p.volume = 1;
+    p.muted = true;
+    p.volume = 0;
     p.timeUpdateEventInterval = 0.25;
   });
 
@@ -100,8 +102,15 @@ function ViewerVideoPlayer({
 
   useEffect(() => {
     const start = () => {
-      if (!isActive) return;
       try {
+        if (!isActive) {
+          player.pause();
+          player.muted = true;
+          player.volume = 0;
+          return;
+        }
+        player.muted = false;
+        player.volume = 1;
         player.play();
       } catch {
         // player henüz hazır değil
@@ -124,6 +133,8 @@ function ViewerVideoPlayer({
     if (!isActive) {
       try {
         player.pause();
+        player.muted = true;
+        player.volume = 0;
         player.playbackRate = 1;
       } catch {
         // released
@@ -209,12 +220,14 @@ export function FullScreenMediaViewer({
   onClose,
   musicSoundEnabled = false,
   onMusicSoundToggle,
+  kinds,
 }: FullScreenMediaViewerProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [index, setIndex] = useState(startIndex);
   const listRef = useRef<FlatList<string>>(null);
   const dismissArmedRef = useRef(false);
+  const settledRef = useRef(false);
 
   useEffect(() => {
     if (!visible) {
@@ -229,18 +242,32 @@ export function FullScreenMediaViewer({
   }, [visible]);
 
   useEffect(() => {
-    if (!visible) return;
+    if (!visible) {
+      settledRef.current = false;
+      return;
+    }
+    settledRef.current = false;
     const safeIndex = Math.min(Math.max(startIndex, 0), Math.max(urls.length - 1, 0));
     setIndex(safeIndex);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     if (safeIndex > 0) {
       requestAnimationFrame(() => {
         listRef.current?.scrollToIndex({ index: safeIndex, animated: false });
+        timer = setTimeout(() => {
+          settledRef.current = true;
+        }, 80);
       });
+    } else {
+      settledRef.current = true;
     }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
   }, [visible, startIndex, urls.length]);
 
   const onViewableItemsChanged = useCallback(
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
+      if (!settledRef.current) return;
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         setIndex(viewableItems[0].index);
       }
@@ -255,11 +282,13 @@ export function FullScreenMediaViewer({
 
   const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 80 }).current;
 
-  if (urls.length === 0) return null;
+  if (!visible || urls.length === 0) return null;
 
   const safeIndex = Math.min(index, urls.length - 1);
+  const playable = (url: string, itemIndex: number) =>
+    kinds?.[itemIndex] === 'video' || isVideoUrl(url) || isLocalVideoUri(url);
   const showMusicSoundToggle =
-    Boolean(onMusicSoundToggle) && urls.every((url) => !isVideoUrl(url));
+    Boolean(onMusicSoundToggle) && urls.every((url, itemIndex) => !playable(url, itemIndex));
 
   return (
     <Modal
@@ -284,17 +313,17 @@ export function FullScreenMediaViewer({
           renderItem={({ item, index: itemIndex }) => (
             <Pressable
               style={[styles.page, { width, height }]}
-              onPress={isVideoUrl(item) ? undefined : handleBackdropPress}
+              onPress={playable(item, itemIndex) ? undefined : handleBackdropPress}
               accessibilityLabel="Kapat"
             >
-              {isVideoUrl(item) ? (
-                <View style={styles.mediaWrap} pointerEvents="box-none">
-                  <ViewerVideo
-                    uri={item}
-                    isActive={visible && itemIndex === safeIndex}
-                    onClose={handleBackdropPress}
-                  />
-                </View>
+              {playable(item, itemIndex) ? (
+                itemIndex === safeIndex ? (
+                  <View style={styles.mediaWrap} pointerEvents="box-none">
+                    <ViewerVideo uri={item} isActive onClose={handleBackdropPress} />
+                  </View>
+                ) : (
+                  <FeedMediaPreview url={item} style={styles.media} resizeMode="contain" showPlayIcon />
+                )
               ) : (
                 <Image
                   source={{ uri: item }}

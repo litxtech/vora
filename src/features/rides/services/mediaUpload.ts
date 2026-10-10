@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 
 function guessContentType(uri: string): string {
@@ -19,15 +20,14 @@ export async function uploadRideVehiclePhotos(
       const contentType = guessContentType(uris[i]);
       const ext = contentType.split('/')[1] ?? 'jpg';
       const path = `${userId}/${Date.now()}-${i}.${ext}`;
-
-      const { error: uploadError } = await supabase.storage.from('ride-vehicles').upload(path, arrayBuffer, {
+      const uploaded = await uploadPublicImage({
+        folder: 'ride-vehicles',
+        path,
+        bytes: arrayBuffer,
         contentType,
-        upsert: false,
       });
-
-      if (uploadError) return { urls, error: uploadError.message };
-      const { data } = supabase.storage.from('ride-vehicles').getPublicUrl(path);
-      urls.push(data.publicUrl);
+      if (uploaded.error || !uploaded.url) return { urls, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      urls.push(uploaded.url);
     } catch (err) {
       return { urls, error: String(err) };
     }

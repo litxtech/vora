@@ -26,6 +26,7 @@ export const SETTINGS_FEATURE = {
   contribute: featureSectionId(PARENT, 'contribute'),
   inviteCenter: featureSectionId(PARENT, 'invite-center'),
   shareApp: featureSectionId(PARENT, 'share-app'),
+  findFriends: featureSectionId(PARENT, 'find-friends'),
 } as const;
 
 export const SETTINGS_SUB_FEATURES: AppFeatureDef[] = [
@@ -42,6 +43,16 @@ export const SETTINGS_SUB_FEATURES: AppFeatureDef[] = [
   buildSectionSubFeature(PARENT, GROUP, 'contribute', 'Uygulamaya Katkıda Bulun', 'Katkı / bağış menü satırı'),
   buildSectionSubFeature(PARENT, GROUP, 'invite-center', 'Davet Merkezi', 'Arkadaş davet menü satırı'),
   buildSectionSubFeature(PARENT, GROUP, 'share-app', 'Uygulamayı Paylaş', 'Uygulamayı paylaş menü satırı'),
+  {
+    ...buildSectionSubFeature(
+      PARENT,
+      GROUP,
+      'find-friends',
+      'Arkadaşlarını Vora’da bul',
+      'Rehber eşleştirme ekranı',
+    ),
+    routes: ['/settings/find-friends'],
+  },
 ];
 
 export const SUB_FEATURES = SETTINGS_SUB_FEATURES;

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { Text } from '@/components/ui/Text';
-import { CanlarButton, CanlarCard, CanlarField, CanlarScaffold } from '@/features/vora-canlar/components/CanlarScaffold';
+import { CanlarButton, CanlarCard, CanlarCasePicker, CanlarField, CanlarScaffold, CanlarStatusPill } from '@/features/vora-canlar/components/CanlarScaffold';
 import { CANLAR_ACCENT, CANLAR_UNCONFIGURED } from '@/features/vora-canlar/constants';
 import { radius, spacing } from '@/constants/theme';
 import {
@@ -12,6 +12,8 @@ import {
   saveCanlarNotificationPrefs,
   saveCanlarPrivacy,
 } from '@/features/vora-canlar/services/api';
+import { explainCanlarError, missingMessage } from '@/features/vora-canlar/services/plainLanguage';
+import { fetchLatestVerificationRequest } from '@/features/identity-verification/services/verificationStatus';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -27,36 +29,48 @@ const AID_TYPES = [
 
 export function CanlarAidScreen() {
   const { colors } = useTheme();
-  const [type, setType] = useState<(typeof AID_TYPES)[number][0]>('food');
-  const [caseId, setCaseId] = useState('');
+  const { user } = useAuth();
+  const params = useLocalSearchParams<{ type?: string; caseId?: string }>();
+  const initialType = AID_TYPES.some((item) => item[0] === params.type) ? params.type as (typeof AID_TYPES)[number][0] : 'food';
+  const [type, setType] = useState<(typeof AID_TYPES)[number][0]>(initialType);
+  const [caseId, setCaseId] = useState<string | null>(typeof params.caseId === 'string' ? params.caseId : null);
   const [note, setNote] = useState('');
   const [quantity, setQuantity] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
   return (
-    <CanlarScaffold title="Ayni yardım ve gönüllülük">
+    <CanlarScaffold title="Ayni yardım">
       <Text style={{ color: colors.textSecondary }}>
-        Mama, ilaç veya emek para bağışına eklenmez. Tahmini parasal değer yalnızca doğrulandığında ve ayrı gösterilir.
+        Mama, ilaç, nakil veya bakım teklifidir. Gönüllü rol başvurusu ve veteriner hizmeti ayrıdır. Para bağışına eklenmez.
       </Text>
       <ChoiceRow options={AID_TYPES} value={type} onChange={setType} />
-      <CanlarField value={caseId} onChangeText={setCaseId} placeholder="Kurtarma dosyası kimliği" />
-      <CanlarField value={note} onChangeText={setNote} placeholder="İhtiyaç ve teslim planı" multiline />
-      <CanlarField value={quantity} onChangeText={setQuantity} placeholder="Miktar" />
+      <Text secondary>İsterseniz kendi ihbarınızı seçin. Vaka numarası yazılmaz; sistem ihbar açılınca verir. Seçmezseniz teklif dosyaya bağlanmadan kaydolur.</Text>
+      <CanlarCasePicker userId={user?.id ?? null} value={caseId} onChange={setCaseId} />
+      <CanlarField value={note} onChangeText={setNote} placeholder="Neyi, nereye ve ne zaman vereceksiniz?" multiline />
+      <CanlarField value={quantity} onChangeText={setQuantity} placeholder="Miktar. Örnek: 2 kutu mama" />
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
       {done ? <Text>Teklif kaydedildi. Teslim edilmeden katkı sayılmaz.</Text> : null}
       <CanlarButton
         label="Teklifi kaydet"
         icon="gift-outline"
         onPress={async () => {
+          const problems = [
+            note.trim().length < 8 ? 'Teslim planı eksik. Neyi, nereye vereceğinizi yazın.' : '',
+          ].filter(Boolean);
+          const missing = missingMessage(problems);
+          if (missing) {
+            setError(missing);
+            return;
+          }
           const result = await offerCanlarAid({
-            caseId: caseId.trim() || null,
+            caseId,
             campaignId: null,
             type,
             note,
             quantity,
           });
-          if (result.error) setError(result.error);
+          if (result.error) setError(explainCanlarError(result.error));
           else setDone(true);
         }}
       />
@@ -95,16 +109,20 @@ export function CanlarPrivacyScreen() {
 
   const row = (label: string, help: string, value: boolean, onChange: (value: boolean) => void) => (
     <CanlarCard>
-      <Text style={{ fontWeight: '700' }}>{label}</Text>
-      <Text secondary>{help}</Text>
-      <Switch value={value} onValueChange={onChange} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.md }}>
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ fontWeight: '800' }}>{label}</Text>
+          <Text secondary>{help}</Text>
+        </View>
+        <Switch value={value} onValueChange={onChange} accessibilityLabel={label} />
+      </View>
     </CanlarCard>
   );
 
   return (
     <CanlarScaffold title="Katkı gizliliği">
       <Text style={{ color: colors.textSecondary }}>
-        Varsayılan olarak göstergeler gizlidir. Gizlenen değer başkasının profil yanıtında da yer almaz.
+        Varsayılan olarak göstergeler gizlidir. Gizlenen değer başkasının profil yanıtında da yer almaz. Ayrı bir itiraz formu yoktur; red gerekçesi yalnızca ilgili kayıtta duruyorsa görünür.
       </Text>
       {row('Desteklenen hayvan sayısı', 'Farklı hayvan sayısı. Aynı hayvana birden fazla bağış bir kez sayılır.', flags.animals, (animals) => setFlags({ ...flags, animals }))}
       {row('Doğrulanmış kurtarma', 'Yalnızca yetkili doğrulaması olan kurtarmalar.', flags.rescues, (rescues) => setFlags({ ...flags, rescues }))}
@@ -135,15 +153,40 @@ export function CanlarPrivacyScreen() {
 
 export function CanlarRoleScreen() {
   const { colors } = useTheme();
+  const { user } = useAuth();
   const [role, setRole] = useState('volunteer');
   const [note, setNote] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [identity, setIdentity] = useState<'approved' | 'pending' | 'none'>('none');
+
+  useEffect(() => {
+    if (!user) return;
+    void fetchLatestVerificationRequest(user.id).then((request) => {
+      if (!request) setIdentity('none');
+      else if (request.status === 'approved') setIdentity('approved');
+      else if (request.status === 'pending' || request.status === 'in_review') setIdentity('pending');
+      else setIdentity('none');
+    });
+  }, [user]);
 
   return (
     <CanlarScaffold title="Rol başvurusu">
-      <Text style={{ color: colors.textSecondary }}>{CANLAR_UNCONFIGURED.identityLiveness}</Text>
-      <CanlarButton label="Mevcut kimlik doğrulamasına git" icon="shield-checkmark-outline" onPress={() => router.push('/settings/identity-verification' as never)} />
+      <CanlarCard>
+        {identity === 'approved' ? (
+          <CanlarStatusPill label="Kimlik doğrulandı" tone={colors.success} />
+        ) : identity === 'pending' ? (
+          <CanlarStatusPill label="Kimlik incelemede" tone={CANLAR_ACCENT} />
+        ) : (
+          <CanlarStatusPill label="Kimlik henüz doğrulanmadı" tone={colors.textMuted} />
+        )}
+        <Text style={{ color: colors.textSecondary }}>{CANLAR_UNCONFIGURED.identityLiveness}</Text>
+        {identity === 'approved' ? (
+          <Text secondary>Kimlik belgeniz onaylı. Başvurunuz bu durumla birlikte alınır.</Text>
+        ) : (
+          <CanlarButton label="Mevcut kimlik doğrulamasına git" icon="shield-checkmark-outline" onPress={() => router.push('/settings/identity-verification' as never)} />
+        )}
+      </CanlarCard>
       <ChoiceRow
         options={[
           ['volunteer', 'Gönüllü'],

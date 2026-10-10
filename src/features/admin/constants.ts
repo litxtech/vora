@@ -188,6 +188,7 @@ export const ADMIN_MENU_SECTIONS = [
   {
     title: 'Yönetim',
     items: [
+      { id: 'sitemap', label: 'Sitemap XML', icon: 'earth-outline' as const, href: '/admin/sitemap', adminOnly: true, accent: 'accent' as const },
       { id: 'commerce-ops', label: 'Ekonomi Operasyon Merkezi', icon: 'layers-outline' as const, href: '/admin/commerce-ops', adminOnly: true, accent: 'accent' as const },
       { id: 'vora-hizmetler', label: 'Vora Hizmetler Ödemeleri', icon: 'construct-outline' as const, href: '/admin/vora-hizmetler', adminOnly: true, accent: 'primary' as const },
       { id: 'kuru', label: 'Jeton Ekonomisi', icon: 'wallet-outline' as const, href: '/admin/kuru', adminOnly: true, accent: 'warning' as const },
@@ -218,6 +219,7 @@ export const ADMIN_MENU_SECTIONS = [
       { id: 'campaigns', label: 'Kurumsal Kampanyalar', icon: 'megaphone-outline' as const, href: '/admin/campaigns', adminOnly: false, accent: 'warning' as const },
       { id: 'calls', label: 'Arama Moderasyonu', icon: 'call-outline' as const, href: '/admin/calls', adminOnly: false, accent: 'danger' as const },
       { id: 'social-safety', label: 'Engelleme & Sessiz', icon: 'ban-outline' as const, href: '/admin/social-safety', adminOnly: false, accent: 'warning' as const },
+      { id: 'contact-books', label: 'Rehber Kayıtları', icon: 'call-outline' as const, href: '/admin/contact-books', adminOnly: true, accent: 'primary' as const },
       { id: 'events', label: 'Etkinlikler', icon: 'calendar-outline' as const, href: '/admin/events', adminOnly: false, accent: 'accent' as const },
       { id: 'lost-items', label: 'Kayıp Merkezi', icon: 'search-outline' as const, href: '/admin/lost-items', adminOnly: false, accent: 'danger' as const },
       { id: 'vora-needs', label: 'İhtiyaç Ağı', icon: 'hand-left-outline' as const, href: '/admin/vora-needs', adminOnly: false, accent: 'accent' as const },
@@ -270,6 +272,7 @@ export const ADMIN_MENU_SECTIONS = [
       { id: 'operations', label: 'Operasyon', icon: 'settings-outline' as const, href: '/admin/operations', adminOnly: true, accent: 'accent' as const },
       { id: 'sounds', label: 'Bildirim Sesleri', icon: 'musical-notes-outline' as const, href: '/admin/notification-sounds', adminOnly: true, accent: 'accent' as const },
       { id: 'music-library', label: 'Müzik Kütüphanesi', icon: 'disc-outline' as const, href: '/admin/music-library', adminOnly: true, accent: 'accent' as const },
+      { id: 'ai-music-minutes', label: 'Vora Müzik Dakikası', icon: 'timer-outline' as const, href: '/admin/ai-music-minutes', adminOnly: true, accent: 'accent' as const },
       { id: 'user-sounds', label: 'Kullanıcı Sesleri', icon: 'mic-outline' as const, href: '/admin/user-sounds', adminOnly: true, accent: 'accent' as const },
       { id: 'notification-stats', label: 'Bildirim İstatistikleri', icon: 'analytics-outline' as const, href: '/admin/notification-stats', adminOnly: true, accent: 'success' as const },
     ],

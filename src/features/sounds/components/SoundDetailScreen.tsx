@@ -101,7 +101,12 @@ export function SoundDetailScreen() {
 
   const handleShare = async () => {
     if (!sound) return;
-    await Share.share({ message: `${sound.title} — Vora Ses`, url: `https://vora.app/sounds/${sound.id}` });
+    const rights = sound.tags.includes('ai-muzik') && sound.description
+      ? `\n\n${sound.description}`
+      : '';
+    await Share.share({
+      message: `${sound.title} — Vora Ses${rights}\nhttps://vora.app/sounds/${sound.id}`,
+    });
   };
 
   const handleLike = async () => {

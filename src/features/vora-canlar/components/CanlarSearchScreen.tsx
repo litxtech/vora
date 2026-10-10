@@ -1,15 +1,13 @@
-import { useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import {
   CanlarButton,
-  CanlarCard,
-  CanlarEmpty,
   CanlarField,
   CanlarScaffold,
-  CanlarStatusPill,
 } from '@/features/vora-canlar/components/CanlarScaffold';
+import { CanlarCaseVisual, CanlarEmptyState } from '@/features/vora-canlar/components/canlarUi';
 import { CANLAR_ACCENT, RESCUE_STATUS_LABELS, SPECIES_OPTIONS, TREATMENT_LABELS, URGENCY_OPTIONS } from '@/features/vora-canlar/constants';
 import { searchCanlarCases, type CanlarCaseCard } from '@/features/vora-canlar/services/api';
 import { radius, spacing } from '@/constants/theme';
@@ -28,47 +26,80 @@ export function CanlarSearchScreen() {
   const [rows, setRows] = useState<CanlarCaseCard[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const search = async () => {
+  const search = async (next?: {
+    query?: string;
+    city?: string;
+    species?: string | null;
+    urgency?: string | null;
+    status?: string | null;
+    treatment?: string | null;
+  }) => {
+    const filters = {
+      query: (next?.query ?? query).trim() || null,
+      city: (next?.city ?? city).trim() || null,
+      species: next && 'species' in next ? next.species ?? null : species,
+      urgency: next && 'urgency' in next ? next.urgency ?? null : urgency,
+      status: next && 'status' in next ? next.status ?? null : status,
+      treatment: next && 'treatment' in next ? next.treatment ?? null : treatment,
+    };
     setError(null);
-    const result = await searchCanlarCases({
-      query: query.trim() || null,
-      city: city.trim() || null,
-      species,
-      urgency,
-      status,
-      treatment,
-      limit: 20,
-      offset: 0,
-    });
+    const result = await searchCanlarCases({ ...filters, limit: 20, offset: 0 });
     if (result.error) setError(result.error);
     setRows(result.data ?? []);
   };
 
+  useEffect(() => {
+    void search();
+  }, []);
+
   return (
-    <CanlarScaffold title="Arama ve filtre">
-      <Text style={{ color: colors.textSecondary }}>
-        Tam adres ve ihbar sahibi konumu listelenmez. Şehir ve durum yeterlidir.
-      </Text>
+    <CanlarScaffold title="Vaka ara">
+      <Text secondary>Tam adres listelenmez. Filtreler sorguyu değiştirir. Mesafe sıralaması bu kayıtta yok.</Text>
       <CanlarField value={query} onChangeText={setQuery} placeholder="Ad veya açıklama" />
       <CanlarField value={city} onChangeText={setCity} placeholder="Şehir" />
-      <ChipRow options={SPECIES_OPTIONS} value={species} onChange={setSpecies} />
-      <ChipRow options={URGENCY_OPTIONS} value={urgency} onChange={setUrgency} />
-      <ChipRow options={RESCUE_FILTERS.map((id) => ({ id, label: RESCUE_STATUS_LABELS[id] }))} value={status} onChange={setStatus} />
-      <ChipRow options={Object.entries(TREATMENT_LABELS).map(([id, label]) => ({ id, label }))} value={treatment} onChange={setTreatment} />
+      <FilterGroup label="Tür">
+        <ChipRow options={SPECIES_OPTIONS} value={species} onChange={setSpecies} />
+      </FilterGroup>
+      <FilterGroup label="Aciliyet">
+        <ChipRow options={URGENCY_OPTIONS} value={urgency} onChange={setUrgency} />
+      </FilterGroup>
+      <FilterGroup label="Kurtarma durumu">
+        <ChipRow options={RESCUE_FILTERS.map((id) => ({ id, label: RESCUE_STATUS_LABELS[id] }))} value={status} onChange={setStatus} />
+      </FilterGroup>
+      <FilterGroup label="Tedavi">
+        <ChipRow options={Object.entries(TREATMENT_LABELS).map(([id, label]) => ({ id, label }))} value={treatment} onChange={setTreatment} />
+      </FilterGroup>
       <CanlarButton label="Filtrele" icon="search" onPress={() => void search()} />
+      <CanlarButton
+        quiet
+        label="Filtreleri temizle"
+        icon="refresh-outline"
+        onPress={() => {
+          setQuery('');
+          setCity('');
+          setSpecies(null);
+          setUrgency(null);
+          setStatus(null);
+          setTreatment(null);
+          void search({ query: '', city: '', species: null, urgency: null, status: null, treatment: null });
+        }}
+      />
       {error ? <Text style={{ color: colors.danger }}>{error}</Text> : null}
-      {rows === null ? <CanlarEmpty label="Filtre seçip arayın." /> : null}
-      {rows?.length === 0 ? <CanlarEmpty label="Bu filtrelere uyan kayıt yok." /> : null}
+      {rows === null ? <CanlarEmptyState title="Kayıtlar yükleniyor" body="Arama sonuçları birazdan kart olarak gelir." /> : null}
+      {rows?.length === 0 ? <CanlarEmptyState title="Sonuç yok" body="Bu ölçütlere uyan vaka yok. Filtreleri temizleyip yeniden arayın." /> : null}
       {rows?.map((row) => (
-        <Pressable key={row.id} onPress={() => router.push(`/vora-canlar/case/${row.id}` as never)}>
-          <CanlarCard>
-            <Text style={{ fontWeight: '800' }}>{row.name || row.public_code}</Text>
-            <CanlarStatusPill label={RESCUE_STATUS_LABELS[row.status ?? ''] ?? row.status ?? 'Kayıt'} />
-            <Text secondary>{row.city_label}</Text>
-          </CanlarCard>
-        </Pressable>
+        <CanlarCaseVisual key={row.id} row={row} onPress={() => router.push(`/vora-canlar/case/${row.id}` as never)} />
       ))}
     </CanlarScaffold>
+  );
+}
+
+function FilterGroup({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <View style={{ gap: 8 }}>
+      <Text variant="label">{label}</Text>
+      {children}
+    </View>
   );
 }
 

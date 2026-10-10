@@ -20,6 +20,7 @@ import { KeyboardSheetLayout, KeyboardPersistButton } from '@/components/keyboar
 import { CommentActionMenu, useCommentTapGestures, type CommentAction } from '@/components/comments';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
 import { RichText, CommentLinkAttachment, ComposerLinkPreview } from '@/features/richtext';
+import { firstUrlInText } from '@/features/richtext/utils/textSegments';
 import { Text } from '@/components/ui/Text';
 import { UserBadge } from '@/features/feed/components/UserBadge';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
@@ -37,13 +38,14 @@ import {
 } from '@/features/feed/services/commentMediaUpload';
 import type { FeedComment } from '@/features/feed/types';
 import { formatFeedTime } from '@/features/feed/utils';
-import { CapsPickerSheet, CapAttachment, CapLoopVideo } from '@/features/caps';
+import { CapsPickerSheet, CapAttachment } from '@/features/caps';
 import type { Cap } from '@/features/caps/types';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { FEED_FEATURE } from '@/features/feed/featureFlags';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
+import { useCloseModalOnRouteChange } from '@/hooks/useCloseModalOnRouteChange';
 
 type CommentSheetProps = {
   visible: boolean;
@@ -60,6 +62,7 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
   const { requireAuth } = useRequireAuth();
   const extraContentPadding = useSharedValue(0);
   const [footerOffset, setFooterOffset] = useState(96);
+  useCloseModalOnRouteChange(visible, onClose);
 
   const [comments, setComments] = useState<FeedComment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -337,20 +340,11 @@ export function CommentSheet({ visible, postId, postAuthorId, onClose, onComment
 
       {!editing && pendingCap ? (
         <View style={styles.pendingCapWrap}>
-          {pendingCap.videoUrl ? (
-            <CapLoopVideo
-              videoUrl={pendingCap.videoUrl}
-              posterUrl={pendingCap.thumbUrl ?? pendingCap.imageUrl}
-              style={styles.pendingThumb}
-              contentFit="cover"
-            />
-          ) : (
-            <Image
-              source={{ uri: pendingCap.thumbUrl ?? pendingCap.imageUrl }}
-              style={styles.pendingThumb}
-              contentFit="contain"
-            />
-          )}
+          <Image
+            source={{ uri: pendingCap.thumbUrl ?? pendingCap.imageUrl }}
+            style={styles.pendingThumb}
+            contentFit="contain"
+          />
           <Pressable
             style={styles.pendingRemove}
             onPress={() => setPendingCap(null)}
@@ -667,15 +661,18 @@ const CommentRow = memo(function CommentRow({
     actions.push({ id: 'report', label: 'Şikayet', icon: 'flag-outline', onPress: () => onReport(comment) });
   }
 
+  const hasLink = showText && Boolean(firstUrlInText(comment.content));
   const tapGestures = useCommentTapGestures({
-    onDoubleTap: canReply ? () => onReply(comment) : undefined,
-    onLongPress: isOwnComment && showMenuEdit
-      ? () => onEdit(comment)
-      : canReply && showMenuReply
-        ? () => onReply(comment)
-        : showMenuCopy && showText
-          ? () => onCopy(comment)
-          : undefined,
+    onDoubleTap: canReply && !hasLink ? () => onReply(comment) : undefined,
+    onLongPress: hasLink
+      ? undefined
+      : isOwnComment && showMenuEdit
+        ? () => onEdit(comment)
+        : canReply && showMenuReply
+          ? () => onReply(comment)
+          : showMenuCopy && showText
+            ? () => onCopy(comment)
+            : undefined,
   });
 
   return (
@@ -692,18 +689,33 @@ const CommentRow = memo(function CommentRow({
         <CommentActionMenu actions={actions} iconColor={colors.textMuted} iconSize={16} />
       </View>
       {showText ? (
-        <Pressable {...tapGestures} style={styles.commentBody}>
-          <RichText
-            content={comment.content}
-            style={styles.commentText}
-            linkColor={colors.accent}
-            enableMentions
-            enableHashtags
-            mentionColor={colors.primary}
-            hashtagColor={colors.accent}
-            onBeforeOpen={onAuthorNavigate}
-          />
-        </Pressable>
+        hasLink ? (
+          <View style={styles.commentBody}>
+            <RichText
+              content={comment.content}
+              style={styles.commentText}
+              linkColor={colors.accent}
+              enableMentions
+              enableHashtags
+              mentionColor={colors.primary}
+              hashtagColor={colors.accent}
+              onBeforeOpen={onAuthorNavigate}
+            />
+          </View>
+        ) : (
+          <Pressable {...tapGestures} style={styles.commentBody}>
+            <RichText
+              content={comment.content}
+              style={styles.commentText}
+              linkColor={colors.accent}
+              enableMentions
+              enableHashtags
+              mentionColor={colors.primary}
+              hashtagColor={colors.accent}
+              onBeforeOpen={onAuthorNavigate}
+            />
+          </Pressable>
+        )
       ) : null}
       {showText ? (
         <CommentLinkAttachment content={comment.content} onBeforeOpen={onAuthorNavigate} />

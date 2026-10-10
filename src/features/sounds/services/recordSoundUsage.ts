@@ -118,7 +118,11 @@ export async function recordAudioUsage(
     return recordSoundUsage(soundSelection, input);
   }
 
-  return recordMusicUsage(selection, input);
+  return recordMusicUsage(selection, {
+    postId: input.postId,
+    reelId: input.reelId,
+    storyItemId: input.storyItemId,
+  });
 }
 
 export function audioSelectionToDbFields(selection: MusicSelection | null) {

@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 
 const BUCKET = 'platform-guide-media';
@@ -37,7 +38,18 @@ async function uploadGuideMedia(
     const arrayBuffer = await readLocalFileBytes(localUri);
     const contentType = kind === 'video' ? guessVideoContentType(localUri) : guessImageContentType(localUri);
     const ext = fileExtension(contentType);
-    const path = `${guideId}/${kind}.${ext}`;
+    const path = `${guideId}/${kind}-${Date.now()}.${ext}`;
+
+    if (kind === 'image') {
+      const uploaded = await uploadPublicImage({
+        folder: 'platform-guide-media',
+        path,
+        bytes: arrayBuffer,
+        contentType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
 
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
       contentType,

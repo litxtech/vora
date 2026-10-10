@@ -9,6 +9,7 @@ import type {
 } from '@/features/music/types';
 import { getAudioDurationSeconds } from '@/lib/notifications/soundSync';
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 
@@ -290,26 +291,25 @@ export async function uploadMusicCover(
   originalName: string,
 ): Promise<{ url: string | null; error: string | null }> {
   const ext = originalName.split('.').pop()?.toLowerCase() ?? 'jpg';
-  const storagePath = `tracks/${trackId}/cover.${ext}`;
+  const storagePath = `tracks/${trackId}/cover-${Date.now()}.${ext}`;
 
   const buffer = await readLocalFileBytes(localUri);
-
-  const { error: uploadError } = await supabase.storage.from(MUSIC_LIBRARY_BUCKET).upload(storagePath, buffer, {
-    contentType: ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg',
-    upsert: true,
+  const contentType = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg';
+  const uploaded = await uploadPublicImage({
+    folder: 'music-covers',
+    path: storagePath,
+    bytes: buffer,
+    contentType,
   });
-
-  if (uploadError) return { url: null, error: uploadError.message };
-
-  const { data: urlData } = supabase.storage.from(MUSIC_LIBRARY_BUCKET).getPublicUrl(storagePath);
+  if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Kapak yüklenemedi.' };
 
   const { error: dbError } = await supabase
     .from('music_tracks')
-    .update({ cover_storage_path: storagePath, cover_url: urlData.publicUrl })
+    .update({ cover_storage_path: uploaded.storagePath, cover_url: uploaded.url })
     .eq('id', trackId);
 
   if (!dbError) invalidateMusicCache();
-  return { url: urlData.publicUrl, error: dbError?.message ?? null };
+  return { url: uploaded.url, error: dbError?.message ?? null };
 }
 
 export async function deleteMusicTrack(trackId: string): Promise<{ error: string | null }> {

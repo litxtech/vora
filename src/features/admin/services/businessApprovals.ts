@@ -11,6 +11,7 @@ export type BusinessApprovalRow = {
   region_id: string;
   registration_status: string;
   is_verified: boolean;
+  posts_visible: boolean;
   document_urls: string[];
   created_at: string;
   address: string | null;
@@ -28,7 +29,7 @@ export async function fetchBusinesses(filter: BusinessFilter = 'all', search = '
     .from('businesses')
     .select(`
       id, name, category, owner_id, region_id, registration_status,
-      is_verified, document_urls, created_at,
+      is_verified, posts_visible, document_urls, created_at,
       address, district, phone, tax_number, email, website, description,
       owner:profiles!businesses_owner_id_fkey(username, full_name)
     `)
@@ -72,7 +73,7 @@ export async function approveBusiness(businessId: string) {
 
   const { error } = await supabase
     .from('businesses')
-    .update({ registration_status: 'approved', is_verified: true })
+    .update({ registration_status: 'approved', is_verified: true, posts_visible: true })
     .eq('id', businessId);
 
   if (error) return { error: supabaseErrorMessage(error)! };
@@ -90,6 +91,22 @@ export async function rejectBusiness(businessId: string) {
     .from('businesses')
     .update({ registration_status: 'rejected' })
     .eq('id', businessId);
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function setBusinessPostsVisible(businessId: string, visible: boolean) {
+  const { error } = await supabase.rpc('admin_set_business_posts_visible', {
+    p_business_id: businessId,
+    p_visible: visible,
+  });
+  return { error: supabaseErrorMessage(error) };
+}
+
+export async function removeBusinessProfile(businessId: string) {
+  const { error } = await supabase.rpc('admin_remove_business_profile', {
+    p_business_id: businessId,
+    p_reason: 'Admin işletme profilini kaldırdı',
+  });
   return { error: supabaseErrorMessage(error) };
 }
 

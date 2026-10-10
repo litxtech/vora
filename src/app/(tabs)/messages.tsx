@@ -78,24 +78,26 @@ export default function MessagesScreen() {
 
   return (
     <Screen padded={false}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View>
-            <Text variant="h2">Mesajlar</Text>
-            <Text secondary>Güvenli ve gerçek zamanlı iletişim</Text>
-          </View>
-          {totalUnread > 0 ? (
-            <View style={[styles.unreadPill, { backgroundColor: colors.primary }]}>
-              <Text variant="caption" style={styles.unreadPillText}>
-                {totalUnread > 99 ? '99+' : totalUnread} yeni
-              </Text>
+      <View style={[styles.header, tab === 'contacts' && styles.headerTight]}>
+        {tab === 'contacts' ? null : (
+          <View style={styles.headerTop}>
+            <View>
+              <Text variant="h2">Mesajlar</Text>
+              <Text secondary>Güvenli ve gerçek zamanlı iletişim</Text>
             </View>
-          ) : null}
-        </View>
+            {totalUnread > 0 ? (
+              <View style={[styles.unreadPill, { backgroundColor: colors.primary }]}>
+                <Text variant="caption" style={styles.unreadPillText}>
+                  {totalUnread > 99 ? '99+' : totalUnread} yeni
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        )}
         <MessagesTabBar active={tab} onChange={setTab} unreadCount={totalUnread} />
       </View>
 
-      <View style={styles.body}>
+      <View style={[styles.body, tab === 'contacts' && styles.bodyFull]}>
         {tab === 'chats' ? <ConversationInbox /> : null}
         {tab === 'channels' ? (
           <LazyMessagesPanel>
@@ -133,6 +135,10 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     gap: spacing.sm,
   },
+  headerTight: {
+    paddingTop: 0,
+    gap: 0,
+  },
   headerTop: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -154,6 +160,10 @@ const styles = StyleSheet.create({
     minHeight: 0,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.md,
+  },
+  bodyFull: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
   },
   guestCard: {
     marginTop: spacing.lg,

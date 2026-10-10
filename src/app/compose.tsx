@@ -1,1 +1,5 @@
-export { ComposeRouteScreen as default } from '@/lib/navigation/lazyRouteScreens';
+import { ComposeScreen } from '@/features/compose/components/ComposeScreen';
+
+export default function ComposeRoute() {
+  return <ComposeScreen />;
+}

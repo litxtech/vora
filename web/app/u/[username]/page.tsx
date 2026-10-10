@@ -1,9 +1,10 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { FeedCard } from '@/components/feed-card';
 import { Breadcrumbs, CtaBand, JsonLd } from '@/components/site';
 import { cityById } from '@/lib/cities';
-import { displayName, getProfile, listPosts, postHeadline, profileSeo } from '@/lib/data';
+import { displayName, getProfile, listPosts, profileSeo } from '@/lib/data';
 import { breadcrumbLd, graph, toMetadata, trimDescription } from '@/lib/seo/engine';
 import { absoluteUrl } from '@/lib/site';
 
@@ -55,28 +56,29 @@ export default async function ProfilePage({ params }: { params: Promise<Params> 
       />
       <div className="wrap">
         <Breadcrumbs items={crumbs} />
-        {profile.avatar_url ? <img src={profile.avatar_url} alt="" width={96} height={96} /> : null}
-        <h1>{displayName(profile.full_name, profile.username)}</h1>
-        <p className="meta">@{profile.username}</p>
+        <header className="profile-head">
+          <span className="feed-avatar lg">
+            {profile.avatar_url ? <img src={profile.avatar_url} alt="" /> : displayName(profile.full_name, profile.username).slice(0, 1).toUpperCase()}
+          </span>
+          <div>
+            <h1>{displayName(profile.full_name, profile.username)}</h1>
+            <p className="meta">@{profile.username}</p>
+          </div>
+        </header>
         <p>{profile.bio || 'Herkese açık biyografi yok.'}</p>
         {city ? (
           <p>
-            Şehir: <Link href={`/city/${city.id}`}>{city.name}</Link>
+            <Link href={`/city/${city.id}`}>{city.name}</Link>
           </p>
         ) : null}
-        {profile.interests.length > 0 ? <p>İlgi alanları: {profile.interests.join(', ')}</p> : null}
-        <h2>Paylaşımlar</h2>
-        {posts.length === 0 ? (
-          <p className="empty">Listelenecek herkese açık paylaşım yok.</p>
-        ) : (
-          <ul>
-            {posts.map((post) => (
-              <li key={post.id}>
-                <Link href={`/p/${post.id}`}>{postHeadline(post)}</Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        {profile.interests.length > 0 ? <p className="feed-chips">{profile.interests.map((item) => <span key={item}>{item}</span>)}</p> : null}
+        <h2 className="app-section">Paylaşımlar</h2>
+        {posts.length === 0 ? <p className="empty">Listelenecek herkese açık paylaşım yok.</p> : null}
+        <div className="feed-list">
+          {posts.map((post) => (
+            <FeedCard key={post.id} post={post} />
+          ))}
+        </div>
       </div>
       <CtaBand />
     </article>

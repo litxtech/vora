@@ -77,6 +77,18 @@ export async function approveSpeaker(roomId: string, userId: string): Promise<vo
   if (error) throw new Error(supabaseErrorMessage(error));
 }
 
+export async function rejectSpeaker(roomId: string, userId: string): Promise<void> {
+  const { error } = await supabase.rpc('reject_city_voice_speaker', {
+    p_room_id: roomId,
+    p_user_id: userId,
+  });
+  if (error) throw new Error(supabaseErrorMessage(error));
+}
+
+export function canPublishVoiceRole(role: string | undefined | null): boolean {
+  return ['speaker', 'city_leader', 'council_member', 'moderator', 'admin'].includes(role ?? '');
+}
+
 export async function endCityVoiceRoom(roomId: string): Promise<void> {
   const { error } = await supabase.rpc('end_city_voice_room', { p_room_id: roomId });
   if (error) throw new Error(supabaseErrorMessage(error));

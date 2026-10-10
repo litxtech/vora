@@ -590,6 +590,7 @@ export type Database = {
           name: string
           owner_id: string
           phone: string | null
+          posts_visible: boolean
           region_id: string
           registration_status: Database["public"]["Enums"]["business_registration_status"]
           tax_number: string | null
@@ -613,6 +614,7 @@ export type Database = {
           name: string
           owner_id: string
           phone?: string | null
+          posts_visible?: boolean
           region_id: string
           registration_status?: Database["public"]["Enums"]["business_registration_status"]
           tax_number?: string | null
@@ -636,6 +638,7 @@ export type Database = {
           name?: string
           owner_id?: string
           phone?: string | null
+          posts_visible?: boolean
           region_id?: string
           registration_status?: Database["public"]["Enums"]["business_registration_status"]
           tax_number?: string | null
@@ -8533,6 +8536,20 @@ export type Database = {
           total_votes: number
         }[]
       }
+      admin_list_post_viewers: {
+        Args: { p_limit?: number; p_post_id: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          is_follower: boolean
+          is_verified: boolean
+          role: string
+          username: string
+          view_id: string
+          viewed_at: string
+          viewer_id: string
+        }[]
+      }
       admin_list_post_verifications: {
         Args: {
           p_limit?: number
@@ -8585,6 +8602,20 @@ export type Database = {
           profile_boosted_until: string
           user_id: string
           username: string
+        }[]
+      }
+      admin_list_reel_viewers: {
+        Args: { p_limit?: number; p_reel_id: string }
+        Returns: {
+          avatar_url: string
+          full_name: string
+          is_follower: boolean
+          is_verified: boolean
+          role: string
+          username: string
+          view_id: string
+          viewed_at: string
+          viewer_id: string
         }[]
       }
       admin_list_reporter_applications: {
@@ -8883,6 +8914,10 @@ export type Database = {
         Args: { p_reason?: string; p_user_id: string }
         Returns: Json
       }
+      admin_remove_business_profile: {
+        Args: { p_business_id: string; p_reason?: string }
+        Returns: Json
+      }
       admin_remove_close_friend: {
         Args: { p_friend_id: string; p_user_id: string }
         Returns: undefined
@@ -8998,6 +9033,10 @@ export type Database = {
           p_title: string
         }
         Returns: string
+      }
+      admin_set_business_posts_visible: {
+        Args: { p_business_id: string; p_visible: boolean }
+        Returns: undefined
       }
       admin_set_content_trust_status: {
         Args: {
@@ -9206,6 +9245,25 @@ export type Database = {
         Returns: undefined
       }
       check_in_event: { Args: { p_qr_token: string }; Returns: Json }
+      admin_contact_book_countries: {
+        Args: never
+        Returns: {
+          country_iso2: string | null
+          entry_count: number
+        }[]
+      }
+      admin_list_contact_book: {
+        Args: { p_country?: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          country_iso2: string | null
+          e164: string | null
+          id: string
+          owner_id: string
+          owner_username: string
+          raw_phone: string
+          updated_at: string
+        }[]
+      }
       check_rate_limit: {
         Args: {
           p_action: string
@@ -9214,6 +9272,59 @@ export type Database = {
           p_window_seconds?: number
         }
         Returns: boolean
+      }
+      disable_contact_discovery: { Args: never; Returns: undefined }
+      get_contact_discovery_status: {
+        Args: never
+        Returns: {
+          consented_at: string | null
+          enabled: boolean
+          phone_hint: string | null
+        }[]
+      }
+      match_contact_discovery: {
+        Args: { p_entries: Json }
+        Returns: {
+          avatar_url: string | null
+          follows_viewer: boolean
+          full_name: string | null
+          is_friend: boolean
+          is_verified: boolean
+          matched_e164: string | null
+          user_id: string
+          username: string
+          viewer_follows: boolean
+        }[]
+      }
+      sync_contact_book: {
+        Args: { p_entries: Json }
+        Returns: number
+      }
+      admin_contact_book_owners: {
+        Args: never
+        Returns: {
+          entry_count: number
+          owner_avatar_url: string | null
+          owner_full_name: string | null
+          owner_id: string
+          owner_username: string
+          updated_at: string
+        }[]
+      }
+      admin_list_owner_contact_book: {
+        Args: { p_owner_id: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          country_iso2: string | null
+          display_name: string | null
+          e164: string | null
+          id: string
+          raw_phone: string
+          updated_at: string
+        }[]
+      }
+      set_contact_discovery_phone: {
+        Args: { p_country_iso2: string; p_e164: string }
+        Returns: undefined
       }
       clear_conversation_history: {
         Args: { p_conversation_id: string }
@@ -9672,6 +9783,7 @@ export type Database = {
           username: string
         }[]
       }
+      list_my_package_purchases: { Args: never; Returns: Json }
       log_marketplace_order_event: {
         Args: {
           p_actor_id?: string
@@ -10649,6 +10761,10 @@ export type Database = {
         }
         Returns: string
       }
+      submit_package_purchase_dispute: {
+        Args: { p_reason: string; p_source: string; p_source_id: string }
+        Returns: Json
+      }
       submit_support_ticket: {
         Args: {
           p_category: string
@@ -10916,7 +11032,13 @@ export type Database = {
         | "incomplete_info"
         | "outdated"
         | "wrong_location"
-      moderation_action_type: "warn" | "hide" | "remove" | "ban"
+      moderation_action_type:
+        | "warn"
+        | "hide"
+        | "remove"
+        | "ban"
+        | "restore"
+        | "delete_permanent"
       music_license_status: "licensed" | "pending" | "unlicensed"
       music_publication_status: "active" | "hidden" | "blocked"
       news_verification_result: "correct" | "incorrect" | "unverified"
@@ -11832,7 +11954,7 @@ export const Constants = {
         "outdated",
         "wrong_location",
       ],
-      moderation_action_type: ["warn", "hide", "remove", "ban"],
+      moderation_action_type: ["warn", "hide", "remove", "ban", "restore", "delete_permanent"],
       music_license_status: ["licensed", "pending", "unlicensed"],
       music_publication_status: ["active", "hidden", "blocked"],
       news_verification_result: ["correct", "incorrect", "unverified"],

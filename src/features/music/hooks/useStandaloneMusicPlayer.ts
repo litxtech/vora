@@ -15,7 +15,7 @@ type UseStandaloneMusicPlayerInput = {
   playing: boolean;
 };
 
-const LOOP_CHECK_MS = 2_000;
+const LOOP_CHECK_MS = 250;
 
 function runOnPlayer(player: AudioPlayer | null, fn: (player: AudioPlayer) => void): boolean {
   if (!player) return false;
@@ -33,6 +33,7 @@ export function useStandaloneMusicPlayer({ config, scopeActive, playing }: UseSt
   const loadGenRef = useRef(0);
   const playingRef = useRef(playing);
   const loadingRef = useRef(false);
+  const lastLoopSeekRef = useRef(0);
 
   configRef.current = config;
   playingRef.current = playing;
@@ -101,7 +102,7 @@ export function useStandaloneMusicPlayer({ config, scopeActive, playing }: UseSt
     return () => {
       cancelled = true;
     };
-  }, [scopeActive, playing, config?.audioUrl, config?.musicVolume, config?.musicStartSec, config?.musicEndSec]);
+  }, [scopeActive, playing, config?.audioUrl, config?.musicVolume]);
 
   useEffect(() => {
     if (!shouldHoldPlayer || playing) return;
@@ -162,13 +163,19 @@ export function useStandaloneMusicPlayer({ config, scopeActive, playing }: UseSt
 
       if (!isPlaying) return;
 
-      if (currentTime >= snapshot.musicEndSec - 0.08) {
-        void boundPlayer.seekTo(snapshot.musicStartSec).then(() => {
-          if (playingRef.current) void boundPlayer.play();
-        }).catch(() => {
-          playerRef.current = null;
-        });
-      }
+      const beforeStart = currentTime < snapshot.musicStartSec - 0.12;
+      const afterEnd = currentTime >= snapshot.musicEndSec - 0.05;
+      if (!beforeStart && !afterEnd) return;
+
+      const now = Date.now();
+      if (now - lastLoopSeekRef.current < 400) return;
+      lastLoopSeekRef.current = now;
+
+      void boundPlayer.seekTo(snapshot.musicStartSec).then(() => {
+        if (playingRef.current) void boundPlayer.play();
+      }).catch(() => {
+        playerRef.current = null;
+      });
     }, LOOP_CHECK_MS);
 
     return () => clearInterval(interval);

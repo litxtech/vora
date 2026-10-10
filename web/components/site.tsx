@@ -25,10 +25,12 @@ export async function SiteHeader() {
           Menü
         </label>
         <nav className="nav-links" aria-label="Ana menü">
-          <Link href="/posts">Akış</Link>
-          <Link href="/explore">Keşfet</Link>
           <Link href="/cities">Şehirler</Link>
+          <Link href="/explore">Keşfet</Link>
           <Link href="/events">Etkinlikler</Link>
+          <Link href="/#is">İş ve fırsatlar</Link>
+          <Link href="/#hizmetler">Hizmetler</Link>
+          <Link href="/#pazar">Pazar</Link>
           <Link href="/blog">Blog</Link>
           {session ? (
             <>
@@ -45,7 +47,7 @@ export async function SiteHeader() {
             <>
               <Link href="/login">Giriş yap</Link>
               <Link className="btn" href="/register">
-                Kayıt ol
+                Vora’ya katıl
               </Link>
             </>
           )}
@@ -71,11 +73,34 @@ export function SiteFooter() {
         <div>
           <h2>Keşfet</h2>
           <ul>
-            <li><Link href="/cities">Şehirler</Link></li>
+            <li><Link href="/explore">Keşfet</Link></li>
             <li><Link href="/people">İnsanlar</Link></li>
-            <li><Link href="/posts">Herkese açık paylaşımlar</Link></li>
+            <li><Link href="/posts">Paylaşımlar</Link></li>
             <li><Link href="/events">Etkinlikler</Link></li>
             <li><Link href="/blog">Blog</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Şehirler</h2>
+          <ul>
+            {['trabzon', 'samsun', 'ordu', 'rize', 'giresun', 'zonguldak'].map((id) => {
+              const city = CITIES.find((item) => item.id === id);
+              return city ? (
+                <li key={city.id}>
+                  <Link href={`/city/${city.id}`}>{city.name}</Link>
+                </li>
+              ) : null;
+            })}
+            <li><Link href="/cities">Tüm şehirleri keşfet</Link></li>
+          </ul>
+        </div>
+        <div>
+          <h2>İş ve fırsatlar</h2>
+          <ul>
+            <li><Link href="/#is">İş ilanları</Link></li>
+            <li><Link href="/#hizmetler">Hizmetler</Link></li>
+            <li><Link href="/#pazar">Pazar</Link></li>
+            <li><Link href="/#yolculuk">Yolculuk</Link></li>
           </ul>
         </div>
         <div>
@@ -134,7 +159,7 @@ export function JsonLd({ data }: { data: Record<string, unknown> }) {
 
 export function CtaBand() {
   return (
-    <section className="block">
+    <section className="block store-cta">
       <div className="wrap panel">
         <h2>Vora’yı telefonuna indir</h2>
         <p>Karadeniz’deki şehir odalarına, herkese açık paylaşımlara ve etkinliklere uygulamadan devam et.</p>

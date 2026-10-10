@@ -26,10 +26,15 @@ export default async function MessagesPage({ searchParams }: { searchParams: Pro
       ) : (
         <div className="stack">
           {rows.map((row) => (
-            <Link className="card" key={row.conversation_id} href={`/app/messages/${row.conversation_id}`}>
-              <h2>{row.title || row.other_full_name || (row.other_username ? `@${row.other_username}` : 'Sohbet')}</h2>
-              <p className="meta">{row.last_message_preview || 'Yeni sohbet'}</p>
-              {row.unread_count ? <p>{row.unread_count} okunmamış</p> : null}
+            <Link className="person-row" key={row.conversation_id} href={`/app/messages/${row.conversation_id}`}>
+              <span className="feed-avatar">{(row.other_full_name || row.other_username || 'S').slice(0, 1).toUpperCase()}</span>
+              <span>
+                <strong>{row.title || row.other_full_name || (row.other_username ? `@${row.other_username}` : 'Sohbet')}</strong>
+                <small>
+                  {row.last_message_preview || 'Yeni sohbet'}
+                  {row.unread_count ? ` · ${row.unread_count}` : ''}
+                </small>
+              </span>
             </Link>
           ))}
         </div>

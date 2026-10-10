@@ -48,20 +48,59 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       ...(supabaseHost ? [{ protocol: 'https' as const, hostname: supabaseHost, pathname: '/storage/v1/object/public/**' }] : []),
+      { protocol: 'https', hostname: 'pub-aa2667c9888047efadb56b68647c5d1e.r2.dev' },
       { protocol: 'https', hostname: 'i.ytimg.com' },
       { protocol: 'https', hostname: 'tools.applemediaservices.com' },
       { protocol: 'https', hostname: 'play.google.com' },
     ],
   },
+  async redirects() {
+    return [
+      { source: '/app', destination: '/discover', permanent: false },
+      { source: '/app/explore', destination: '/discover', permanent: false },
+      { source: '/app/reels', destination: '/reels', permanent: false },
+      { source: '/app/profile', destination: '/profile', permanent: false },
+      { source: '/app/messages', destination: '/messages', permanent: false },
+      { source: '/app/compose', destination: '/compose', permanent: false },
+    ];
+  },
+  async rewrites() {
+    const app = '/vora-app.html';
+    const screens = [
+      '/discover',
+      '/reels',
+      '/profile',
+      '/messages',
+      '/messages/:path*',
+      '/compose',
+      '/create',
+      '/settings',
+      '/settings/:path*',
+      '/login',
+      '/register',
+      '/notifications',
+      '/chat/:path*',
+    ];
+    return {
+      beforeFiles: screens.map((source) => ({ source, destination: app })),
+    };
+  },
   async headers() {
     return [
+      {
+        source: '/sw.js',
+        headers: [
+          { key: 'Cache-Control', value: 'no-cache, no-store, must-revalidate' },
+          { key: 'Service-Worker-Allowed', value: '/' },
+        ],
+      },
       {
         source: '/:path*',
         headers: [
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          { key: 'Permissions-Policy', value: 'camera=(self), microphone=(self), geolocation=(self)' },
         ],
       },
     ];

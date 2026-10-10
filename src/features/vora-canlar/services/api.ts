@@ -26,6 +26,23 @@ export type CanlarHomeFeed = {
   aid_needs: CanlarCampaignCard[];
   followed: CanlarUpdateCard[];
   posts: CanlarPostCard[];
+  completed_campaigns: CanlarCampaignCard[];
+  delivered_aid: CanlarAidCard[];
+};
+
+export const CANLAR_EMPTY_FEED: CanlarHomeFeed = {
+  featured: [],
+  urgent: [],
+  new_reports: [],
+  in_treatment: [],
+  campaigns: [],
+  updates: [],
+  resolved: [],
+  aid_needs: [],
+  followed: [],
+  posts: [],
+  completed_campaigns: [],
+  delivered_aid: [],
 };
 
 export type CanlarPostCard = {
@@ -41,6 +58,12 @@ export type CanlarPostCard = {
   case_id?: string | null;
   campaign_id?: string | null;
   created_at?: string;
+  author_label?: string | null;
+  author_id?: string | null;
+  outcome?: 'treating' | 'recovered' | 'lost' | null;
+  donation_open?: boolean;
+  donation_note?: string | null;
+  raised_minor?: number | null;
 };
 
 export type CanlarCaseCard = {
@@ -56,6 +79,13 @@ export type CanlarCaseCard = {
   cover_url?: string | null;
   outcome_note?: string | null;
   created_at?: string;
+  updated_at?: string;
+  public_update_count?: number;
+  latest_note?: string | null;
+  campaign_id?: string | null;
+  campaign_target_minor?: number | null;
+  campaign_raised_minor?: number | null;
+  campaign_currency?: string | null;
 };
 
 export type CanlarCampaignCard = {
@@ -69,6 +99,23 @@ export type CanlarCampaignCard = {
   target_minor?: number;
   currency?: string;
   payout_model?: string;
+  cover_url?: string | null;
+  animal_name?: string | null;
+  city_label?: string | null;
+  raised_minor?: number | null;
+  created_at?: string;
+};
+
+export type CanlarAidCard = {
+  id: string;
+  aid_type: string;
+  quantity_note?: string | null;
+  delivery_status?: string;
+  created_at?: string;
+  case_id?: string | null;
+  city_label?: string | null;
+  name?: string | null;
+  cover_url?: string | null;
 };
 
 export type CanlarUpdateCard = {
@@ -81,6 +128,9 @@ export type CanlarUpdateCard = {
   note?: string | null;
   status?: string;
   created_at?: string;
+  cover_url?: string | null;
+  species?: string | null;
+  treatment_status?: string | null;
 };
 
 export type CanlarMoney = {
@@ -125,6 +175,7 @@ export function createCanlarCase(input: {
   latitude: number | null;
   longitude: number | null;
   addressNote: string;
+  coverUrl?: string | null;
 }) {
   return rpc<string>('canlar_create_case', {
     p_species: input.species,
@@ -137,6 +188,7 @@ export function createCanlarCase(input: {
     p_latitude: input.latitude,
     p_longitude: input.longitude,
     p_address_note: input.addressNote,
+    ...(input.coverUrl ? { p_cover: input.coverUrl } : {}),
   });
 }
 
@@ -185,12 +237,73 @@ export function toggleCanlarLike(postId: string) {
   return rpc<boolean>('canlar_toggle_like', { p_post_id: postId });
 }
 
-export function addCanlarComment(postId: string, body: string) {
-  return rpc<string>('canlar_add_comment', { p_post_id: postId, p_body: body });
+export function addCanlarComment(postId: string, body: string, parentId?: string | null) {
+  return rpc<string>('canlar_add_comment', { p_post_id: postId, p_body: body, p_parent: parentId ?? null });
+}
+
+export function editCanlarComment(commentId: string, body: string) {
+  return rpc<null>('canlar_edit_comment', { p_id: commentId, p_body: body });
+}
+
+export function deleteCanlarComment(commentId: string) {
+  return rpc<null>('canlar_delete_comment', { p_id: commentId });
+}
+
+export function toggleCanlarCommentLike(commentId: string) {
+  return rpc<boolean>('canlar_toggle_comment_like', { p_id: commentId });
 }
 
 export function toggleCanlarSave(postId: string) {
   return rpc<boolean>('canlar_toggle_save', { p_post_id: postId });
+}
+
+export function deleteCanlarPost(postId: string) {
+  return rpc<null>('canlar_delete_post', { p_id: postId });
+}
+
+export function withdrawCanlarCase(caseId: string) {
+  return rpc<null>('canlar_withdraw_case', { p_id: caseId });
+}
+
+export function openListingDonation(postId: string, note?: string | null) {
+  return rpc<string>('canlar_open_listing_donation', { p_post_id: postId, p_note: note ?? null });
+}
+
+export function updateCanlarListing(input: {
+  postId: string;
+  body: string;
+  city: string;
+  media: { url: string; kind: string }[];
+  donation: boolean;
+  note: string;
+}) {
+  return rpc<null>('canlar_update_listing', {
+    p_post_id: input.postId,
+    p_body: input.body,
+    p_city: input.city,
+    p_media: input.media,
+    p_donation: input.donation,
+    p_note: input.note,
+  });
+}
+
+export function setListingOutcome(postId: string, outcome: 'treating' | 'recovered' | 'lost') {
+  return rpc<null>('canlar_set_listing_outcome', { p_post_id: postId, p_outcome: outcome });
+}
+
+export type CanlarListingFlag = {
+  id: string;
+  outcome: 'treating' | 'recovered' | 'lost' | null;
+  donation_open: boolean;
+  campaign_id: string | null;
+  author_id: string | null;
+  donation_note: string | null;
+  raised_minor: number;
+};
+
+export function loadListingState(ids: string[]) {
+  if (ids.length === 0) return Promise.resolve({ data: [] as CanlarListingFlag[], error: null });
+  return rpc<CanlarListingFlag[]>('canlar_listing_state', { p_ids: ids });
 }
 
 export function followCanlarCase(caseId: string) {

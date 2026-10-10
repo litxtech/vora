@@ -21,6 +21,9 @@ import { shouldUseSilentListRefresh } from '@/lib/ui/listRefresh';
 import { isVideoUrl } from '@/lib/media/isVideoUrl';
 import { useTheme } from '@/providers/ThemeProvider';
 
+/** Akış sohbet değil — MVCP açıkken yukarı kaydırma, ölçülen kartlara karşı ofset düzeltip titretir. */
+const FEED_FLASH_LIST_MVCP = { disabled: true } as const;
+
 type FeedListProps = {
   items: FeedItem[];
   loading: boolean;
@@ -360,11 +363,15 @@ export function FeedList({
   );
 
   if (isAndroid()) {
+    // removeClippedSubviews FlashList geri dönüşümüne eklenince yukarı kaydırınca hücreler sökülüp titrer.
+    const { removeClippedSubviews: _removeClippedSubviews, ...flashListProps } = sharedListProps;
+
     return (
       <FlashList
         ref={listRef}
-        {...sharedListProps}
+        {...flashListProps}
         drawDistance={drawDistance}
+        maintainVisibleContentPosition={FEED_FLASH_LIST_MVCP}
       />
     );
   }

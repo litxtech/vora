@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, permanentRedirect, redirect } from 'next/navigation';
+import { OfflineTools } from '@/components/offline/offline-tools';
 import { Breadcrumbs, CtaBand, JsonLd, ShareBar } from '@/components/site';
 import { cityById } from '@/lib/cities';
 import { findRedirect, getBlogPost, listBlogPosts, listBlogTranslations } from '@/lib/data';
@@ -95,6 +96,7 @@ export default async function BlogPostPage({ params }: { params: Promise<Params>
       <div className="wrap prose">
         <Breadcrumbs items={crumbs} />
         <h1>{post.title}</h1>
+        <OfflineTools kind="blog" title={post.title} href={`/blog/${post.slug}`} />
         <p className="meta">
           {post.author_name}
           {post.published_at ? ` · ${new Date(post.published_at).toLocaleDateString('tr-TR')}` : ''}

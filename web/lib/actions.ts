@@ -91,11 +91,15 @@ export async function saveBlogPost(formData: FormData) {
     const { error } = await supabase.from('web_blog_posts').update(payload).eq('id', id);
     if (error) redirect(`/admin/blog/${id}?error=1`);
     revalidatePath(`/blog/${payload.slug}`);
+    revalidatePath('/sitemap.xml');
+    revalidatePath('/sitemaps/blog.xml');
     redirect(`/admin/blog/${id}`);
   }
   const { data, error } = await supabase.from('web_blog_posts').insert(payload).select('id').single();
   if (error || !data) redirect('/admin/blog/new?error=1');
   revalidatePath('/blog');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/sitemaps/blog.xml');
   redirect(`/admin/blog/${data.id}`);
 }
 
@@ -121,5 +125,26 @@ export async function savePage(formData: FormData) {
     updated_at: new Date().toISOString(),
   });
   if (error) redirect('/admin?error=1');
-  redirect('/admin');
+  revalidatePath('/sitemap.xml');
+  revalidatePath('/sitemaps/pages.xml');
+  redirect('/admin/seo');
+}
+
+export async function setSitemapExclusion(formData: FormData) {
+  const supabase = await requireAdmin();
+  const path = String(formData.get('path') ?? '').trim();
+  const excluded = String(formData.get('excluded') ?? '') === '1';
+  if (!path.startsWith('/') || path.includes('?') || path.includes('//') || path.length > 200) {
+    redirect('/admin/seo?error=path');
+  }
+  const { error } = excluded
+    ? await supabase.from('web_sitemap_exclusions').upsert({ path })
+    : await supabase.from('web_sitemap_exclusions').delete().eq('path', path);
+  if (error) redirect('/admin/seo?error=1');
+  revalidatePath('/sitemap.xml');
+  for (const name of ['pages', 'cities', 'blog', 'posts', 'profiles', 'events']) {
+    revalidatePath(`/sitemaps/${name}.xml`);
+  }
+  revalidatePath('/admin/seo');
+  redirect('/admin/seo');
 }

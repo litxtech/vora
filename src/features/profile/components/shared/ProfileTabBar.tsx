@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
@@ -24,10 +24,33 @@ type ProfileTabBarProps = {
 
 export function ProfileTabBar({ tabs, value, onChange, counts, trailing }: ProfileTabBarProps) {
   const { colors } = useTheme();
+  const scrollRef = useRef<ScrollView>(null);
+  const chipX = useRef<Partial<Record<ProfileTab, number>>>({});
+  const shouldReveal = useRef(true);
+
+  useEffect(() => {
+    shouldReveal.current = true;
+    const x = chipX.current[value];
+    if (x == null) return;
+    shouldReveal.current = false;
+    scrollRef.current?.scrollTo({ x: Math.max(0, x - spacing.md), animated: true });
+  }, [value, tabs]);
+
+  const reveal = (tab: ProfileTab) => {
+    if (!shouldReveal.current || tab !== value) return;
+    const x = chipX.current[tab];
+    if (x == null) return;
+    shouldReveal.current = false;
+    scrollRef.current?.scrollTo({ x: Math.max(0, x - spacing.md), animated: true });
+  };
 
   return (
+    <View style={styles.clip}>
     <ScrollView
+      ref={scrollRef}
       horizontal
+      nestedScrollEnabled
+      directionalLockEnabled
       showsHorizontalScrollIndicator={false}
       style={styles.scroll}
       contentContainerStyle={styles.row}
@@ -35,20 +58,27 @@ export function ProfileTabBar({ tabs, value, onChange, counts, trailing }: Profi
       {tabs.map((tab) => {
         const active = value === tab.id;
         const count = counts?.[tab.id];
-        const showCount = typeof count === 'number' && count > 0;
+        const showCount = typeof count === 'number';
         return (
           <Pressable
             key={tab.id}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={showCount ? `${tab.label}, ${count}` : tab.label}
             onPress={() => onChange(tab.id)}
+            onLayout={(event) => {
+              chipX.current[tab.id] = event.nativeEvent.layout.x;
+              if (active) reveal(tab.id);
+            }}
             style={[
               styles.chip,
               {
                 borderColor: active ? colors.primary : colors.border,
-                backgroundColor: active ? `${colors.primary}22` : `${colors.surface}88`,
+                backgroundColor: active ? `${colors.primary}24` : colors.surfaceElevated,
               },
             ]}
           >
-            <Ionicons name={tab.icon} size={14} color={active ? colors.primary : colors.textMuted} />
+            <Ionicons name={tab.icon} size={15} color={active ? colors.primary : colors.textMuted} />
             <Text
               variant="caption"
               style={{
@@ -59,56 +89,60 @@ export function ProfileTabBar({ tabs, value, onChange, counts, trailing }: Profi
               {tab.label}
             </Text>
             {showCount ? (
-              <View
-                style={[
-                  styles.countPill,
-                  { backgroundColor: active ? `${colors.primary}2E` : `${colors.textMuted}1F` },
-                ]}
+              <Text
+                variant="caption"
+                style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: active ? colors.primary : colors.textMuted,
+                }}
               >
-                <Text
-                  variant="caption"
-                  style={{
-                    fontSize: 11,
-                    fontWeight: '700',
-                    color: active ? colors.primary : colors.textSecondary,
-                  }}
-                >
-                  {formatCount(count)}
-                </Text>
-              </View>
+                {formatCount(count)}
+              </Text>
             ) : null}
           </Pressable>
         );
       })}
       {trailing ? <View style={styles.trailing}>{trailing}</View> : null}
     </ScrollView>
+    </View>
   );
 }
 
+const TAB_BAR_HEIGHT = 52;
+
 const styles = StyleSheet.create({
-  scroll: { marginHorizontal: -spacing.lg },
+  clip: {
+    height: TAB_BAR_HEIGHT,
+    maxHeight: TAB_BAR_HEIGHT,
+    overflow: 'hidden',
+    alignSelf: 'stretch',
+    flexGrow: 0,
+    flexShrink: 0,
+  },
+  scroll: {
+    height: TAB_BAR_HEIGHT,
+    maxHeight: TAB_BAR_HEIGHT,
+    flexGrow: 0,
+    flexShrink: 0,
+  },
   row: {
     gap: spacing.sm,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.lg,
+    height: TAB_BAR_HEIGHT,
+    paddingRight: spacing.sm,
     alignItems: 'center',
+    flexGrow: 0,
   },
-  trailing: { justifyContent: 'center' },
+  trailing: { justifyContent: 'center', flexShrink: 0 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.xs,
+    flexShrink: 0,
+    gap: 6,
     borderWidth: 1,
     borderRadius: radius.full,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  countPill: {
-    minWidth: 18,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 36,
   },
 });

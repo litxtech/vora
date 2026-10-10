@@ -6,12 +6,22 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default async function LoginPage({ searchParams }: { searchParams: Promise<{ reset?: string }> }) {
-  const { reset } = await searchParams;
+const ACCESS_MESSAGE: Record<string, string> = {
+  banned: 'Hesabınız askıya alındı. Oturumunuz sonlandırıldı.',
+  frozen: 'Hesabınız donduruldu. Oturumunuz sonlandırıldı.',
+  deleted: 'Bu hesap silinmiştir. Oturumunuz sonlandırıldı.',
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string; access?: string }>;
+}) {
+  const { reset, access } = await searchParams;
   return (
     <section className="block">
       <div className="wrap auth-wrap">
-        <LoginForm reset={reset === '1'} />
+        <LoginForm reset={reset === '1'} accessMessage={access ? ACCESS_MESSAGE[access] : undefined} />
       </div>
     </section>
   );

@@ -17,8 +17,33 @@ port = 54323
 
 [auth]
 enabled = true
-site_url = "karadeniz://"
-additional_redirect_urls = ["karadeniz://**"]
+site_url = "https://vora.app"
+additional_redirect_urls = [
+  "https://vora.app/**",
+  "https://www.vora.app/**",
+  "https://vora.app/auth/callback",
+  "https://vora.app/p/**",
+  "https://vora.app/r/**",
+  "https://vora.app/v/**",
+  "https://vora.app/u/**",
+  "https://vora.app/m/**",
+  "https://vora.app/s/**",
+  "https://vora.app/city/**",
+  "https://vora.app/room/**",
+  "https://vora.app/council/**",
+  "https://vora.app/election/**",
+  "https://vora.app/leader-line/**",
+  "https://vora.app/events/**",
+  "vora://**",
+  "http://litxtech.com",
+  "http://litxtech.com/**",
+  "https://litxtech.com/**",
+  "https://www.litxtech.com/**",
+  "https://voraweb-litxtechcom.vercel.app/",
+  "https://voraweb-litxtechcom.vercel.app/**",
+  "https://voraweb-*-litxtechcom.vercel.app",
+  "https://voraweb-*-litxtechcom.vercel.app/**",
+]
 
 [realtime]
 enabled = true
@@ -61,3 +86,15 @@ verify_jwt = true
 
 [functions.vora-presence]
 verify_jwt = false
+
+[functions.image-upload]
+verify_jwt = true
+
+[functions.elevenlabs-music]
+verify_jwt = true
+
+[functions.stripe-create-ai-music-checkout]
+verify_jwt = true
+
+[functions.stripe-confirm-ai-music-checkout]
+verify_jwt = true

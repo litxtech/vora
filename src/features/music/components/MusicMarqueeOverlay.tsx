@@ -13,6 +13,7 @@ import { router } from 'expo-router';
 import { Text } from '@/components/ui/Text';
 import { SpinningVinylIcon } from '@/features/music/components/SpinningVinylIcon';
 import type { MusicAttribution } from '@/features/music/types';
+import { formatMusicDuration } from '@/features/music/utils/formatMusicTime';
 import { radius, spacing } from '@/constants/theme';
 
 type MusicMarqueeOverlayProps = {
@@ -26,10 +27,10 @@ const PAUSE_MS = 1200;
 const MAX_LABEL_WIDTH = 200;
 
 export function MusicMarqueeOverlay({ music, maxWidth = MAX_LABEL_WIDTH, animating = false }: MusicMarqueeOverlayProps) {
-  const label = useMemo(
-    () => (music.artist ? `${music.artist} · ${music.displayTitle}` : music.displayTitle),
-    [music.artist, music.displayTitle],
-  );
+  const label = useMemo(() => {
+    const clock = music.durationSec && music.durationSec > 0 ? formatMusicDuration(music.durationSec) : '';
+    return [music.artist, music.displayTitle, clock].filter(Boolean).join(' · ');
+  }, [music.artist, music.displayTitle, music.durationSec]);
 
   const [viewportWidth, setViewportWidth] = useState(0);
   const [textWidth, setTextWidth] = useState(0);

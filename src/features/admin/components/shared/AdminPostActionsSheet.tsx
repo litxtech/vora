@@ -166,6 +166,40 @@ export function AdminPostActionsSheet({
               disabled={busy}
               onPress={() => handleModerate('remove', 'Kaldır')}
             />
+            {isAdmin ? (
+              <ActionRow
+                icon="flash-outline"
+                label="Anında sil"
+                tone="danger"
+                disabled={busy}
+                onPress={() => {
+                  if (!user) return;
+                  Alert.alert('Anında sil', 'Gönderi hemen silinsin mi? Akıştan kalkar.', [
+                    { text: 'Vazgeç', style: 'cancel' },
+                    {
+                      text: 'Sil',
+                      style: 'destructive',
+                      onPress: () =>
+                        void runAction(
+                          () => moderateContent(user.id, 'post', postId, 'delete_permanent', 'Admin anında silme'),
+                          'Gönderi silindi.',
+                        ).then(onContentRemoved),
+                    },
+                  ]);
+                }}
+              />
+            ) : null}
+            {isAdmin ? (
+              <ActionRow
+                icon="people-outline"
+                label="Görüntüleyenler"
+                disabled={busy}
+                onPress={() => {
+                  onClose();
+                  router.push(`/post-viewers/${postId}?authorId=${authorId}` as never);
+                }}
+              />
+            ) : null}
 
             <SectionLabel label="Kullanıcı" />
             <ActionRow

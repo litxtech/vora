@@ -178,12 +178,14 @@ const ANDROID_TABLET_FLAT_LIST_PERF: ListPerfProps = {
   removeClippedSubviews: true,
 };
 
+// Tam ekran sayfa: komşu kare kaydırma başlamadan boyanmış olmalı.
+// removeClippedSubviews sayfa sınırında yüzeyi söküp titreme yapıyor.
 const ANDROID_REELS_FLAT_LIST_PERF: ListPerfProps = {
-  initialNumToRender: 1,
-  maxToRenderPerBatch: 1,
-  windowSize: 3,
-  updateCellsBatchingPeriod: 100,
-  removeClippedSubviews: true,
+  initialNumToRender: 2,
+  maxToRenderPerBatch: 2,
+  windowSize: 5,
+  updateCellsBatchingPeriod: 16,
+  removeClippedSubviews: false,
 };
 
 // iOS feed: varsayılan windowSize (21) çok geniş — uzun feed'de onlarca kart +

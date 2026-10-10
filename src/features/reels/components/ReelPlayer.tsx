@@ -1,5 +1,12 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Dimensions, LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import {
+  Dimensions,
+  type GestureResponderEvent,
+  LayoutChangeEvent,
+  Platform,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { Image } from 'expo-image';
 import { ensureReelFeedAudioMode } from '@/features/music/services/audioPreview';
 import { VideoView, type VideoPlayer } from 'expo-video';
@@ -15,6 +22,7 @@ import { prepareReelMusicInPool, attachReelMusic, detachReelMusicIfOwner, ensure
 import { useReelVideoPlayer } from '@/features/reels/hooks/useReelVideoPlayer';
 import { useReelHoldToSpeed } from '@/features/reels/hooks/useReelHoldToSpeed';
 import { REEL_HOLD_SPEED_DELAY_MS } from '@/features/reels/constants';
+import { useReelsPlaybackStore } from '@/features/reels/store/reelsPlaybackStore';
 import { markReelWarmed, isReelWarmed } from '@/features/reels/services/reelWarmup';
 import {
   isVideoPlayerAlive,
@@ -31,6 +39,8 @@ import type { ReelItem } from '@/features/reels/types';
 const { height: SCREEN_HEIGHT, width: SCREEN_WIDTH } = Dimensions.get('window');
 const OVERLAY_TICK_MS = 1000;
 const COMPLETE_VIEW_THRESHOLD = 0.9;
+/** Bu kadar hareket kaydırmadır; basılı tutarak hızlandırma iptal olur. */
+const HOLD_SPEED_MOVE_SLOP_PX = 12;
 
 function safePausePlayer(player: VideoPlayer) {
   runIfVideoPlayerAlive(player, (p) => {
@@ -151,6 +161,49 @@ function ReelPlayerVideo({
     reelId: item.id,
     enabled: isActive && shouldPlay,
   });
+  const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const holdOriginRef = useRef({ x: 0, y: 0 });
+
+  const clearHoldTimer = useCallback(() => {
+    if (holdTimerRef.current) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+  }, []);
+
+  const onSpeedTouchStart = useCallback(
+    (event: GestureResponderEvent) => {
+      holdOriginRef.current = {
+        x: event.nativeEvent.pageX,
+        y: event.nativeEvent.pageY,
+      };
+      clearHoldTimer();
+      holdTimerRef.current = setTimeout(() => {
+        holdTimerRef.current = null;
+        if (useReelsPlaybackStore.getState().isScrolling) return;
+        beginBoost();
+      }, REEL_HOLD_SPEED_DELAY_MS);
+    },
+    [beginBoost, clearHoldTimer],
+  );
+
+  const onSpeedTouchMove = useCallback(
+    (event: GestureResponderEvent) => {
+      const dx = event.nativeEvent.pageX - holdOriginRef.current.x;
+      const dy = event.nativeEvent.pageY - holdOriginRef.current.y;
+      if (dx * dx + dy * dy < HOLD_SPEED_MOVE_SLOP_PX * HOLD_SPEED_MOVE_SLOP_PX) return;
+      clearHoldTimer();
+      endBoost();
+    },
+    [clearHoldTimer, endBoost],
+  );
+
+  const onSpeedTouchEnd = useCallback(() => {
+    clearHoldTimer();
+    endBoost();
+  }, [clearHoldTimer, endBoost]);
+
+  useEffect(() => clearHoldTimer, [clearHoldTimer]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -476,7 +529,7 @@ function ReelPlayerVideo({
           style={styles.videoLayer}
           contentFit="cover"
           nativeControls={false}
-          surfaceType="surfaceView"
+          {...(Platform.OS === 'android' ? { surfaceType: 'textureView' as const } : {})}
           onFirstFrameRender={hidePoster}
         />
       ) : null}
@@ -503,11 +556,13 @@ function ReelPlayerVideo({
       ) : null}
 
       {isActive && shouldPlay ? (
-        <Pressable
+        <View
           style={styles.speedTouchLayer}
-          onPressIn={beginBoost}
-          onPressOut={endBoost}
-          delayPressIn={REEL_HOLD_SPEED_DELAY_MS}
+          onTouchStart={onSpeedTouchStart}
+          onTouchMove={onSpeedTouchMove}
+          onTouchEnd={onSpeedTouchEnd}
+          onTouchCancel={onSpeedTouchEnd}
+          accessible
           accessibilityLabel="Basılı tutarak hızlandır"
           accessibilityHint="Videoyu iki kat hızda izlemek için basılı tutun"
         />

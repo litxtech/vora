@@ -30,7 +30,7 @@ export function extractShareLinkPath(raw: string): string | null {
         if (path) return path + url.search;
         const kind = url.searchParams.get('kind') ?? url.searchParams.get('type');
         const id = url.searchParams.get('id');
-        if (kind && id && /^[prvums]$/.test(kind)) {
+        if (kind && id && /^[prvumsc]$/.test(kind)) {
           return `${kind}/${id}${url.search}`;
         }
       }
@@ -47,7 +47,7 @@ export function extractShareLinkPath(raw: string): string | null {
 
   const bare = trimmed.replace(/^\/+/, '');
   if (bare.includes('://')) return null;
-  if (/^(p|r|v|u|m|s)\//.test(bare)) return bare;
+  if (/^(p|r|v|u|m|s|c)\//.test(bare)) return bare;
   return null;
 }
 

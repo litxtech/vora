@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import type { AnnouncementMediaItem, AnnouncementMediaType, DraftMediaItem } from '@/features/announcements/types';
 
@@ -48,6 +49,17 @@ export async function uploadAnnouncementMedia(
     const contentType = guessContentType(localUri, mediaType);
     const ext = fileExtension(contentType);
     const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+    if (mediaType !== 'video' && contentType.startsWith('image/')) {
+      const uploaded = await uploadPublicImage({
+        folder: 'announcements',
+        path,
+        bytes: arrayBuffer,
+        contentType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
 
     const { error: uploadError } = await supabase.storage.from(BUCKET).upload(path, arrayBuffer, {
       contentType,

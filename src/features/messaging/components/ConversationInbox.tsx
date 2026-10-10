@@ -21,6 +21,28 @@ import { deferBackgroundWork } from '@/lib/ui/deferUntilUiIdle';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { MESSAGING_FEATURE } from '@/features/messaging/featureFlags';
 
+function InboxListPlaceholder() {
+  const { colors } = useTheme();
+  const chat = useChatTheme();
+
+  return (
+    <View style={styles.placeholderList}>
+      {Array.from({ length: 8 }, (_, index) => (
+        <View
+          key={index}
+          style={[styles.placeholderRow, { backgroundColor: chat.rowBg, borderColor: chat.rowBorder }]}
+        >
+          <View style={[styles.placeholderAvatar, { backgroundColor: colors.surfaceElevated }]} />
+          <View style={styles.placeholderCopy}>
+            <View style={[styles.placeholderLine, styles.placeholderTitle, { backgroundColor: colors.surfaceElevated }]} />
+            <View style={[styles.placeholderLine, { backgroundColor: colors.surfaceElevated }]} />
+          </View>
+        </View>
+      ))}
+    </View>
+  );
+}
+
 export function ConversationInbox() {
   const isScreenActive = useMainTabPrefetchActive('messages');
   const { colors } = useTheme();
@@ -31,7 +53,10 @@ export function ConversationInbox() {
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
   const [showArchived, setShowArchived] = useState(false);
-  const { conversations, refresh, refreshSilent } = useConversationList(isScreenActive, showArchived);
+  const { conversations, ready, refresh, refreshSilent } = useConversationList(
+    isScreenActive,
+    showArchived,
+  );
   const draftByConversationId = useMessagingStore((s) => s.draftByConversationId);
   useMessageDrafts(user?.id);
   const [query, setQuery] = useState('');
@@ -222,19 +247,23 @@ export function ConversationInbox() {
         showsVerticalScrollIndicator={false}
         {...getAndroidFlatListPerfProps()}
         ListEmptyComponent={
-          <View style={styles.emptyWrap}>
-            <View style={[styles.emptyIcon, { backgroundColor: `${colors.primary}12` }]}>
-              <Ionicons name="chatbubbles-outline" size={28} color={colors.primary} />
+          ready ? (
+            <View style={styles.emptyWrap}>
+              <View style={[styles.emptyIcon, { backgroundColor: `${colors.primary}12` }]}>
+                <Ionicons name="chatbubbles-outline" size={28} color={colors.primary} />
+              </View>
+              <Text variant="label">
+                {showArchived ? 'Arşiv boş' : 'Henüz sohbet yok'}
+              </Text>
+              <Text secondary style={styles.empty}>
+                {showArchived
+                  ? 'Arşivlenmiş sohbet bulunmuyor.'
+                  : 'Yeni mesaj göndermek için yukarıdaki kalem simgesine dokunun.'}
+              </Text>
             </View>
-            <Text variant="label">
-              {showArchived ? 'Arşiv boş' : 'Henüz sohbet yok'}
-            </Text>
-            <Text secondary style={styles.empty}>
-              {showArchived
-                ? 'Arşivlenmiş sohbet bulunmuyor.'
-                : 'Yeni mesaj göndermek için yukarıdaki kalem simgesine dokunun.'}
-            </Text>
-          </View>
+          ) : (
+            <InboxListPlaceholder />
+          )
         }
       />
     </View>
@@ -338,5 +367,35 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
     fontSize: 13,
+  },
+  placeholderList: {
+    gap: 6,
+  },
+  placeholderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 10,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  placeholderAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+  },
+  placeholderCopy: {
+    flex: 1,
+    gap: 8,
+  },
+  placeholderLine: {
+    height: 10,
+    borderRadius: 5,
+    width: '72%',
+  },
+  placeholderTitle: {
+    width: '42%',
+    height: 12,
   },
 });

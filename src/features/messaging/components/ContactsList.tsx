@@ -1,155 +1,48 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, View } from 'react-native';
-import {
-  openChat as navigateToChat,
-  prefetchChatNavigation,
-} from '../services/messagingNavigation';
-import { Ionicons } from '@expo/vector-icons';
-import { Text } from '@/components/ui/Text';
-import { CallAvatar } from '@/features/calls/components/CallAvatar';
+import { Alert, View } from 'react-native';
+import { PhoneBookList, usePhoneBook, type PhoneBookContact } from '@/features/contact-discovery';
 import { PremiumCallGateSheet } from '@/features/calls/components/PremiumCallGateSheet';
-import { fetchCallableProfiles } from '@/features/calls/services/callService';
 import { usePremiumOutgoingCall } from '@/features/calls/hooks/usePremiumOutgoingCall';
-import type { CallParticipant } from '@/features/calls/types';
-import { useAuth } from '@/providers/AuthProvider';
 import { useRequireAuth } from '@/features/auth/hooks/useRequireAuth';
-import { radius, spacing } from '@/constants/theme';
-import { useTheme } from '@/providers/ThemeProvider';
-import { getAndroidFlatListPerfProps } from '@/lib/device/androidPerfProfile';
+import { useAuth } from '@/providers/AuthProvider';
 import { getOrCreateDirectConversation } from '../services/conversationData';
+import { openChat, prefetchChatNavigation } from '../services/messagingNavigation';
 
 export function ContactsList() {
+  const book = usePhoneBook();
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
-  const { colors } = useTheme();
-  const { initiateOutgoingCall, calling, gateVisible, gateCallType, closeGate } = usePremiumOutgoingCall();
-  const [contacts, setContacts] = useState<CallParticipant[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busyId, setBusyId] = useState<string | null>(null);
+  const { initiateOutgoingCall, gateVisible, gateCallType, closeGate } = usePremiumOutgoingCall();
 
-  useEffect(() => {
-    if (!user?.id) return;
-    fetchCallableProfiles(user.id)
-      .then(setContacts)
-      .finally(() => setLoading(false));
-  }, [user?.id]);
-
-  const openChat = async (contact: CallParticipant) => {
+  const openContact = async (contact: PhoneBookContact) => {
+    if (!contact.match) return;
     prefetchChatNavigation();
     if (!(await requireAuth('Mesaj'))) return;
-    setBusyId(contact.id);
-    const { conversationId, error } = await getOrCreateDirectConversation(contact.id);
-    setBusyId(null);
+    const { conversationId, error } = await getOrCreateDirectConversation(contact.match.userId);
     if (error) {
       Alert.alert('Sohbet başlatılamadı', error);
       return;
     }
-    if (conversationId) navigateToChat(conversationId, { userId: user?.id });
+    if (conversationId) openChat(conversationId, { userId: user?.id });
   };
-
-  const handleCall = async (contact: CallParticipant, callType: 'audio' | 'video') => {
-    setBusyId(contact.id);
-    await initiateOutgoingCall(contact.id, callType);
-    setBusyId(null);
-  };
-
-  const renderItem = useCallback(
-    ({ item: contact }: { item: CallParticipant }) => (
-      <View
-        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-      >
-        <Pressable style={styles.contactInfo} onPress={() => openChat(contact)}>
-          <CallAvatar participant={contact} size={48} showName={false} />
-          <View>
-            <Text variant="label">{contact.full_name?.trim() || contact.username}</Text>
-            <Text muted>@{contact.username}</Text>
-          </View>
-        </Pressable>
-
-        <View style={styles.actions}>
-          <Pressable
-            style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-            onPress={() => openChat(contact)}
-            disabled={busyId === contact.id || calling}
-          >
-            <Ionicons name="chatbubble-outline" size={20} color={colors.textSecondary} />
-          </Pressable>
-          <Pressable
-            style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-            onPress={() => void handleCall(contact, 'audio')}
-            disabled={busyId === contact.id || calling}
-          >
-            <Ionicons name="call" size={20} color={colors.primary} />
-          </Pressable>
-          <Pressable
-            style={[styles.iconButton, { backgroundColor: colors.surfaceElevated }]}
-            onPress={() => void handleCall(contact, 'video')}
-            disabled={busyId === contact.id || calling}
-          >
-            <Ionicons name="videocam" size={20} color={colors.accent} />
-          </Pressable>
-        </View>
-      </View>
-    ),
-    [busyId, calling, colors.accent, colors.border, colors.primary, colors.surface, colors.surfaceElevated, colors.textSecondary],
-  );
-
-  const keyExtractor = useCallback((item: CallParticipant) => item.id, []);
-
-  if (loading) {
-    return <View style={styles.loader} />;
-  }
 
   return (
-    <>
-      <FlatList
-        style={styles.listFlex}
-        data={contacts}
-        keyExtractor={keyExtractor}
-        renderItem={renderItem}
-        contentContainerStyle={styles.list}
-        showsVerticalScrollIndicator={false}
-        {...getAndroidFlatListPerfProps()}
+    <View style={{ flex: 1, minHeight: 0 }}>
+      <PhoneBookList
+        phase={book.phase}
+        contacts={book.contacts}
+        notice={book.notice}
+        refreshing={book.refreshing}
+        showTitle
+        onRequestAccess={() => void book.requestAccess()}
+        onOpenSettings={book.openSettings}
+        onRefresh={() => void book.refresh()}
+        onOpenContact={(contact) => void openContact(contact)}
+        onCallContact={(contact) => {
+          if (!contact.match) return;
+          void initiateOutgoingCall(contact.match.userId, 'audio');
+        }}
       />
       <PremiumCallGateSheet visible={gateVisible} callType={gateCallType} onClose={closeGate} />
-    </>
+    </View>
   );
 }
-
-const styles = StyleSheet.create({
-  loader: {
-    marginTop: spacing.xl,
-  },
-  listFlex: {
-    flex: 1,
-  },
-  list: {
-    gap: spacing.sm,
-    paddingBottom: spacing.xl,
-  },
-  row: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  contactInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-    flex: 1,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: spacing.xs,
-  },
-  iconButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});

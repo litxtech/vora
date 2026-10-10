@@ -1,0 +1,11 @@
+name = "vora-images"
+main = "src/index.js"
+compatibility_date = "2026-10-10"
+account_id = "8fe491d1d43b559fbbf2eeac63bfe79a"
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "vora-images"
+
+[images]
+binding = "IMAGES"

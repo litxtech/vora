@@ -42,6 +42,19 @@ import {
   feedDrawerWidthPx,
 } from '@/features/feed/store/feedDrawerProgress';
 import { useFeedDrawerStore } from '@/features/feed/store/feedDrawerStore';
+import {
+  PROFILE_DRAWER_ACTIVATE_TX_PX,
+  PROFILE_DRAWER_HAPTIC_PROGRESS,
+  PROFILE_DRAWER_OPEN_PROGRESS,
+  PROFILE_DRAWER_OPEN_VELOCITY_X,
+  PROFILE_DRAWER_WIDTH_RATIO,
+} from '@/features/profile/constants/drawer';
+import {
+  profileDrawerExternallyOwned,
+  profileDrawerProgress,
+  profileDrawerWidthPx,
+} from '@/features/profile/store/profileDrawerProgress';
+import { useProfileDrawerStore } from '@/features/profile/store/profileDrawerStore';
 import { shouldUseMainTabSwipeGesture } from '@/lib/device/androidPerfProfile';
 import { useTheme } from '@/providers/ThemeProvider';
 
@@ -83,15 +96,18 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
   const isFocused = useIsFocused();
   const visibleTabs = useVisibleMainTabs();
   const feedDrawerOpen = useFeedDrawerStore((s) => s.open);
+  const profileDrawerOpen = useProfileDrawerStore((s) => s.open);
   const activeRoute = useMainTabSwipeStore((s) => s.activeRoute);
   const setActiveRoute = useMainTabSwipeStore((s) => s.setActiveRoute);
   const setWarmRoutes = useMainTabSwipeStore((s) => s.setWarmRoutes);
 
   const drawerHapticFired = useSharedValue(false);
   const drawerDragActive = useSharedValue(false);
+  const profileDragActive = useSharedValue(false);
   const hasPrevSv = useSharedValue(0);
   const hasNextSv = useSharedValue(0);
   const isFeedSv = useSharedValue(0);
+  const isProfileSv = useSharedValue(0);
   const widthSv = useSharedValue(width);
   const isSwipeDriverSv = useSharedValue(0);
 
@@ -100,6 +116,7 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
   );
 
   const isFeedTab = routeName === 'index';
+  const isProfileTab = routeName === 'profile';
   // Drawer açıkken jest kapalı olsa da aynı wrapper kalmalı — ağaç değişince
   // feed remount olup hamburger aç/kapa titremesi yaratıyordu.
   const routeSupportsSwipe =
@@ -108,7 +125,10 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
     !MAIN_TAB_SWIPE_DISABLED_ROUTES.has(routeName);
 
   const swipeEnabled =
-    isFocused && routeSupportsSwipe && !(isFeedTab && feedDrawerOpen);
+    isFocused &&
+    routeSupportsSwipe &&
+    !(isFeedTab && feedDrawerOpen) &&
+    !(isProfileTab && profileDrawerOpen);
 
   const currentRoute = routeName as MainTabRoute;
   const currentIndex = visibleTabs.indexOf(currentRoute);
@@ -142,7 +162,8 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
     hasPrevSv.value = prevRoute ? 1 : 0;
     hasNextSv.value = nextRoute ? 1 : 0;
     isFeedSv.value = isFeedTab ? 1 : 0;
-  }, [hasNextSv, hasPrevSv, isFeedSv, isFeedTab, nextRoute, prevRoute]);
+    isProfileSv.value = isProfileTab ? 1 : 0;
+  }, [hasNextSv, hasPrevSv, isFeedSv, isFeedTab, isProfileSv, isProfileTab, nextRoute, prevRoute]);
 
   // Progress sıfırlamayı boyamadan önce yap — finishTabSwitch içinde sıfırlamak
   // eski sekmeyi bir kareliğine geri getirip boş/yanlış flash yaratıyordu.
@@ -202,6 +223,16 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
     }
   }, []);
 
+  const cancelProfileDrawerReveal = useCallback(() => {
+    profileDrawerExternallyOwned.value = false;
+  }, []);
+
+  const commitProfileDrawerOpen = useCallback(() => {
+    if (!useProfileDrawerStore.getState().open) {
+      useProfileDrawerStore.getState().openDrawer();
+    }
+  }, []);
+
   const fireDrawerHaptic = useCallback(() => {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   }, []);
@@ -232,8 +263,9 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
         .enabled(swipeEnabled)
         .maxPointers(1)
         // Dikey scroll kazanır: X eşiği yüksek, Y fail eşiği düşük.
+        // Reels sayfa sayfa kayar; dikey jesti daha erken bırakmak snap titremesini keser.
         .activeOffsetX([-28, 28])
-        .failOffsetY([-14, 14])
+        .failOffsetY(routeName === 'reels' ? [-6, 6] : [-14, 14])
         .onStart(() => {
           if (mainTabSwipeAnimating == null || mainTabSwipeProgress == null) return;
           if (mainTabSwipeAnimating.value) {
@@ -242,6 +274,7 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
           }
           drawerHapticFired.value = false;
           drawerDragActive.value = false;
+          profileDragActive.value = false;
         })
         .onUpdate((event) => {
           if (mainTabSwipeAnimating == null || mainTabSwipeProgress == null) return;
@@ -310,6 +343,58 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
             return;
           }
 
+          const profile = isProfileSv.value === 1;
+          if (profile && event.translationX < 0 && !profileDragActive.value && !horizontalDominant) {
+            mainTabSwipeProgress.value = 0;
+            return;
+          }
+
+          // Profil: sola kaydırınca sağ menü. Sağa kaydırma sekme değiştirir.
+          if (profile && event.translationX < 0 && (profileDragActive.value || horizontalDominant)) {
+            if (!profileDragActive.value && event.translationX > -PROFILE_DRAWER_ACTIVATE_TX_PX) {
+              return;
+            }
+
+            const profileWidth = Math.max(
+              profileDrawerWidthPx.value,
+              screenW * PROFILE_DRAWER_WIDTH_RATIO,
+            );
+            const drag = -event.translationX;
+            let nextProgress = drag / profileWidth;
+            if (nextProgress > 1) {
+              nextProgress =
+                1 +
+                rubberBand(drag - profileWidth, profileWidth * 0.1, screenW, 0.55) / profileWidth;
+              nextProgress = Math.min(nextProgress, 1.06);
+            }
+            nextProgress = Math.max(0, nextProgress);
+
+            if (!profileDragActive.value) {
+              profileDragActive.value = true;
+              profileDrawerExternallyOwned.value = true;
+              cancelAnimation(profileDrawerProgress);
+            }
+
+            profileDrawerProgress.value = Math.min(nextProgress, 1);
+            mainTabSwipeProgress.value = 0;
+
+            if (!drawerHapticFired.value && nextProgress >= PROFILE_DRAWER_HAPTIC_PROGRESS) {
+              drawerHapticFired.value = true;
+              runOnJS(fireDrawerHaptic)();
+            }
+            return;
+          }
+
+          if (profileDragActive.value && event.translationX >= 0) {
+            profileDragActive.value = false;
+            profileDrawerExternallyOwned.value = true;
+            profileDrawerProgress.value = withTiming(0, {
+              duration: 140,
+              easing: Easing.out(Easing.cubic),
+            });
+            runOnJS(cancelProfileDrawerReveal)();
+          }
+
           let next = event.translationX;
           const canPrev = hasPrevSv.value === 1;
           const canNext = hasNextSv.value === 1;
@@ -333,6 +418,7 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
           const screenW = widthSv.value;
           const feed = isFeedSv.value === 1;
           const wasDrawer = drawerDragActive.value;
+          const wasProfileDrawer = profileDragActive.value;
           const tx = event.translationX;
           const vx = event.velocityX;
           const snapDistance = screenW * MAIN_TAB_SWIPE_SNAP_RATIO;
@@ -374,6 +460,50 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
                 (finished) => {
                   if (!finished) return;
                   runOnJS(cancelFeedDrawerReveal)();
+                },
+              );
+            }
+            return;
+          }
+
+          if (wasProfileDrawer) {
+            profileDragActive.value = false;
+            const profileWidth = Math.max(
+              profileDrawerWidthPx.value,
+              screenW * PROFILE_DRAWER_WIDTH_RATIO,
+            );
+            const opened = Math.min(1, Math.max(0, -tx / profileWidth));
+            const shouldOpen =
+              opened >= PROFILE_DRAWER_OPEN_PROGRESS || vx <= PROFILE_DRAWER_OPEN_VELOCITY_X;
+
+            mainTabSwipeProgress.value = 0;
+            mainTabSwipeAnimating.value = false;
+            profileDrawerExternallyOwned.value = true;
+
+            if (shouldOpen) {
+              const speed = Math.min(Math.abs(vx / profileWidth), 2.2);
+              runOnJS(commitProfileDrawerOpen)();
+              profileDrawerProgress.value = withTiming(
+                1,
+                {
+                  duration: Math.max(180, 280 - speed * 40),
+                  easing: TAB_COMPLETE_EASING,
+                },
+                (finished) => {
+                  if (!finished && profileDrawerProgress.value < 0.98) return;
+                  profileDrawerExternallyOwned.value = false;
+                },
+              );
+            } else {
+              profileDrawerProgress.value = withTiming(
+                0,
+                {
+                  duration: Math.max(160, 240 - Math.min(Math.abs(vx / profileWidth), 2) * 35),
+                  easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+                },
+                (finished) => {
+                  if (!finished && profileDrawerProgress.value > 0.02) return;
+                  profileDrawerExternallyOwned.value = false;
                 },
               );
             }
@@ -432,6 +562,19 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
         })
         .onFinalize((_, success) => {
           if (success) return;
+          if (profileDragActive.value) {
+            profileDragActive.value = false;
+            profileDrawerExternallyOwned.value = true;
+            profileDrawerProgress.value = withTiming(
+              0,
+              { duration: 220, easing: Easing.bezier(0.25, 0.1, 0.25, 1) },
+              (finished) => {
+                if (!finished && profileDrawerProgress.value > 0.02) return;
+                profileDrawerExternallyOwned.value = false;
+              },
+            );
+            return;
+          }
           if (!drawerDragActive.value) return;
           drawerDragActive.value = false;
           feedDrawerExternallyOwned.value = true;
@@ -446,10 +589,13 @@ export function TabSwipeShell({ routeName, navigation, children }: TabSwipeShell
         }),
     [
       cancelFeedDrawerReveal,
+      cancelProfileDrawerReveal,
+      commitProfileDrawerOpen,
       finishTabSwitch,
       fireDrawerHaptic,
       openFeedDrawer,
       resetDrag,
+      routeName,
       swipeEnabled,
     ],
   );

@@ -8,8 +8,12 @@ export function resolveSharePath(path: string): string | null {
   const pathPart = queryIndex >= 0 ? normalized.slice(0, queryIndex) : normalized;
   const query = queryIndex >= 0 ? normalized.slice(queryIndex + 1) : '';
 
-  const match = pathPart.match(/^(p|r|v|u|m|s)\/([^/?#]+)/);
-  if (!match) return null;
+  const match = pathPart.match(/^(p|r|v|u|m|s|c)\/([^/?#]+)/);
+  if (!match) {
+    const canlar = pathPart.match(/^vora-canlar\/post\/([^/?#]+)/);
+    if (!canlar) return null;
+    return `/vora-canlar/post/${decodeURIComponent(canlar[1])}${query ? `?${query}` : ''}`;
+  }
 
   const [, kind, id] = match;
   const decoded = decodeURIComponent(id);
@@ -28,6 +32,8 @@ export function resolveSharePath(path: string): string | null {
       return `/detail/marketplace/${decoded}${querySuffix}`;
     case 's':
       return `/business-center/shop/${decoded}${querySuffix}`;
+    case 'c':
+      return `/vora-canlar/post/${decoded}${querySuffix}`;
     default:
       return null;
   }

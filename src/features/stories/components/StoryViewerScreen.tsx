@@ -881,6 +881,7 @@ export function StoryViewerScreen({ userId }: StoryViewerScreenProps) {
                 <StoryMusicBadge
                   title={activeItem.music.displayTitle}
                   artist={activeItem.music.artist}
+                  durationSec={Math.max(0, activeItem.music.musicEndSec - activeItem.music.musicStartSec)}
                   stacked={shouldStackStoryMusicAboveLocation(activeItem.location)}
                   onPress={() => {
                     setIsPaused(true);

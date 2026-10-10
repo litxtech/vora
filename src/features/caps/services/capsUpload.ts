@@ -4,6 +4,7 @@ import { getVideoMetaData } from 'react-native-compressor';
 import { getLocalFileSize, normalizeLocalFileUri, readLocalFileBytes } from '@/lib/files/readLocalFile';
 import { compressVideoForUpload } from '@/lib/video/compress';
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 import {
@@ -33,6 +34,11 @@ async function uploadBytes(
   bytes: ArrayBuffer,
   contentType: string,
 ): Promise<{ url: string | null; error: string | null }> {
+  if (contentType.startsWith('image/')) {
+    const uploaded = await uploadPublicImage({ folder: 'caps', path, bytes, contentType });
+    if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+    return { url: uploaded.url, error: null };
+  }
   const { error } = await supabase.storage.from(CAPS_BUCKET).upload(path, bytes, {
     contentType,
     upsert: false,
@@ -52,12 +58,12 @@ export async function uploadCapImage(
     const square = await manipulateAsync(
       localUri,
       [{ resize: { width: CAP_IMAGE_MAX_SIZE } }],
-      { compress: 0.88, format: SaveFormat.JPEG },
+      { compress: 0.9, format: SaveFormat.WEBP },
     );
 
     const bytes = await readLocalFileBytes(square.uri);
-    const path = `${userId}/${Date.now()}.jpg`;
-    const uploaded = await uploadBytes(path, bytes, 'image/jpeg');
+    const path = `${userId}/${Date.now()}.webp`;
+    const uploaded = await uploadBytes(path, bytes, 'image/webp');
     if (uploaded.error || !uploaded.url) {
       return {
         url: null,
@@ -195,13 +201,13 @@ export async function uploadCapVideo(
       const resized = await manipulateAsync(
         thumb.uri,
         [{ resize: { width: CAP_IMAGE_MAX_SIZE } }],
-        { compress: 0.88, format: SaveFormat.JPEG },
+        { compress: 0.9, format: SaveFormat.WEBP },
       );
       width = resized.width ?? width;
       height = resized.height ?? height;
-      const thumbPath = `${userId}/${stamp}_thumb.jpg`;
+      const thumbPath = `${userId}/${stamp}_thumb.webp`;
       const thumbBytes = await readLocalFileBytes(resized.uri);
-      const thumbUploaded = await uploadBytes(thumbPath, thumbBytes, 'image/jpeg');
+      const thumbUploaded = await uploadBytes(thumbPath, thumbBytes, 'image/webp');
       thumbUrl = thumbUploaded.url;
     } catch {
       // poster opsiyonel; video_url yeterli

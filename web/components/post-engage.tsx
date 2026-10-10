@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { addComment } from '@/lib/app-actions';
+import { OfflineCommentForm } from '@/components/offline/offline-engage';
 import { currentUser } from '@/lib/session';
 import { createSessionClient } from '@/lib/supabase';
 
@@ -46,14 +46,7 @@ export async function PostEngage({ postId }: { postId: string }) {
         ))}
       </ul>
       {user ? (
-        <form className="stack" action={addComment}>
-          <input type="hidden" name="post_id" value={postId} />
-          <label htmlFor="comment">Yorum yaz</label>
-          <textarea id="comment" name="content" required maxLength={1000} />
-          <button className="btn" type="submit">
-            Gönder
-          </button>
-        </form>
+        <OfflineCommentForm postId={postId} />
       ) : (
         <p>
           Yorum yazmak için <Link href="/login">giriş yap</Link>.

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useState } from 'react';
-import { LayoutChangeEvent, Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { FeedMediaPreview } from '@/components/media/FeedMediaPreview';
@@ -14,6 +14,7 @@ import {
   ProfileGridTextCell,
 } from '@/features/profile/components/ProfileGridTextCell';
 import { useProfileGridLayout } from '@/features/profile/hooks/useProfileGridLayout';
+import { chunkProfileGridItems } from '@/features/profile/services/profileGridMetrics';
 import {
   getProfileGridInitialBatch,
   getProfileGridLoadMoreBatch,
@@ -88,7 +89,7 @@ const ProfileGridCell = memo(function ProfileGridCell({
 }: GridCellProps) {
   const hasMedia = postHasGridMedia(item);
   const primaryMedia = item.mediaUrls.find((url) => url?.trim()) ?? null;
-  const sizeStyle = cellSize > 0 ? { width: cellSize, height: cellSize } : styles.cellFallback;
+  const sizeStyle = { width: cellSize, height: cellSize };
 
   return (
     <Pressable
@@ -138,7 +139,7 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
   const [viewerIndex, setViewerIndex] = useState<number | null>(null);
   const [visibleCount, setVisibleCount] = useState(() => getProfileGridInitialBatch());
   const dismissToken = useFeedMediaViewerStore((s) => s.dismissToken);
-  const { cellSize, pagePadding, containerWidth, onGridLayout } = useProfileGridLayout(GAP, {
+  const { columns, cellSize, pagePadding, containerWidth } = useProfileGridLayout(GAP, {
     fullBleed: true,
   });
 
@@ -151,6 +152,7 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
   }, [items]);
 
   const visibleItems = items.slice(0, visibleCount);
+  const rows = chunkProfileGridItems(visibleItems, columns);
   const hasMore = visibleCount < items.length;
 
   const handleUpdate = (id: string, patch: Partial<FeedItem>) => {
@@ -164,10 +166,6 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
     } else if (viewerIndex !== null && viewerIndex >= items.length - 1) {
       setViewerIndex(Math.max(0, items.length - 2));
     }
-  };
-
-  const handleGridLayout = (event: LayoutChangeEvent) => {
-    onGridLayout(event.nativeEvent.layout.width);
   };
 
   const openViewer = useCallback((index: number) => {
@@ -184,29 +182,37 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
 
   return (
     <>
-      <View
-        style={[
-          styles.grid,
-          {
-            gap: GAP,
-            marginHorizontal: -pagePadding,
-            width: containerWidth > 0 ? containerWidth : undefined,
-          },
-        ]}
-        onLayout={handleGridLayout}
-      >
-        {visibleItems.map((item, index) => (
-          <ProfileGridCell
-            key={item.id}
-            item={item}
-            index={index}
-            cellSize={cellSize}
-            isDark={isDark}
-            userId={user?.id ?? null}
-            onOpenViewer={openViewer}
-          />
-        ))}
-      </View>
+      {cellSize > 0 ? (
+        <View
+          style={[
+            styles.grid,
+            {
+              width: containerWidth,
+              maxWidth: containerWidth,
+              marginHorizontal: -pagePadding,
+            },
+          ]}
+        >
+          {rows.map((row, rowIndex) => (
+            <View
+              key={row[0]?.id ?? `row-${rowIndex}`}
+              style={[styles.row, { gap: GAP, marginTop: rowIndex > 0 ? GAP : 0, height: cellSize }]}
+            >
+              {row.map((item, columnIndex) => (
+                <ProfileGridCell
+                  key={item.id}
+                  item={item}
+                  index={rowIndex * columns + columnIndex}
+                  cellSize={cellSize}
+                  isDark={isDark}
+                  userId={user?.id ?? null}
+                  onOpenViewer={openViewer}
+                />
+              ))}
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       {hasMore ? (
         <Button
@@ -232,15 +238,24 @@ export function ProfilePostGrid({ items, onUpdate, onDeleted }: ProfilePostGridP
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
+  grid: {
+    alignSelf: 'flex-start',
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
+    width: '100%',
+  },
   cell: {
     overflow: 'hidden',
-    backgroundColor: '#0A0E14',
+    backgroundColor: '#1A2230',
     position: 'relative',
-  },
-  cellFallback: {
-    width: '33.333%',
-    aspectRatio: 1,
   },
   thumb: {
     ...StyleSheet.absoluteFillObject,

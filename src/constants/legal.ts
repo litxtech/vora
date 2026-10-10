@@ -168,6 +168,10 @@ export const LEGAL_DOCUMENTS = {
         body: 'Hesabınız aktif olduğu sürece verileriniz saklanır. Hesap silme talebinden sonra yasal saklama yükümlülükleri hariç verileriniz makul süre içinde silinir veya anonimleştirilir.',
       },
       {
+        heading: 'Rehber Eşleştirme',
+        body: 'Rehber izni uygulama açılışında, kayıtta veya girişte istenmez. İzni Mesajlar içindeki Kişiler sekmesinde veya “Arkadaşlarını Vora’da bul” ekranında siz başlatınca değerlendiririz. İzin vermemeniz diğer özelliklerin kullanılmasını engellemez. İzin verdiğinizde rehberinizdeki adlar ve numaralar, telefonda kayıtlı biçimleriyle güvenlik ve eşleştirme amacıyla sunucuda saklanır. Vora kullanmayan kişilere mesaj gönderilmez. Hesap silme işlemi tamamlandığında bu kayıtlar silinir.',
+      },
+      {
         heading: 'Veri Paylaşımı',
         body: 'Kişisel verileriniz, açık rızanız veya yasal zorunluluk olmadıkça üçüncü taraflarla paylaşılmaz. Altyapı, analitik, bildirim ve güvenlik hizmetleri yalnızca hizmetin sunulması için gerekli ölçüde ve sözleşmesel güvencelerle kullanılabilir.',
       },
@@ -273,7 +277,7 @@ export const LEGAL_DOCUMENTS = {
       },
       {
         heading: 'Paranın kime gittiği',
-        body: 'Kampanyanın yayınlanması para çekme yetkisi vermez. Ödeme, kampanya incelemesinden ayrı açılır. Stripe üzerinden tahsilat, paranın kliniğe veya yararlanıcıya geçtiği anlamına gelmez. Bu hesapta Stripe Connect yapılandırılmamıştır. Kliniğe veya tedarikçiye ödeme, referanslı ve denetimli kayıtla izlenir; otomatik transfer vaat edilmez.',
+        body: 'Kampanyanın yayınlanması para çekme yetkisi vermez. Ödeme, kampanya incelemesinden ayrı açılır. Tahsilat, paranın kliniğe veya yararlanıcıya geçtiği anlamına gelmez. Kliniğe veya tedarikçiye ödeme, referanslı ve denetimli kayıtla izlenir; otomatik transfer vaat edilmez.',
       },
       {
         heading: 'Kanıt ve şeffaflık',

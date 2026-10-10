@@ -357,6 +357,17 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
         />
       </View>
 
+      {Platform.OS === 'web' ? (
+        <Animated.View
+          style={[shellStyles.feed, { backgroundColor }, feedStyle]}
+          collapsable={false}
+        >
+          <View ref={feedInnerRef} style={shellStyles.feedInner} collapsable={false} pointerEvents="box-none">
+            {children}
+          </View>
+          <Animated.View pointerEvents="none" style={[shellStyles.scrim, scrimStyle]} />
+        </Animated.View>
+      ) : (
       <GestureDetector gesture={feedDismissGesture}>
         <Animated.View
           style={[shellStyles.feed, { backgroundColor }, feedStyle]}
@@ -368,6 +379,7 @@ const FeedDrawerAnimator = memo(function FeedDrawerAnimator({
           <Animated.View pointerEvents="none" style={[shellStyles.scrim, scrimStyle]} />
         </Animated.View>
       </GestureDetector>
+      )}
     </>
   );
 });

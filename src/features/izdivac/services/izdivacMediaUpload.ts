@@ -11,6 +11,7 @@ import { compressVideoForUpload, shouldSkipVideoCompression } from '@/lib/video/
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 import { supabase } from '@/lib/supabase/client';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabaseErrorMessage, toUserFacingError } from '@/lib/errors';
 
 const BUCKET = 'izdivac-media';
@@ -38,14 +39,14 @@ async function compressImageForUpload(localUri: string, maxWidth: number): Promi
     const compressed = await manipulateAsync(
       localUri,
       [{ resize: { width: maxWidth } }],
-      { compress: 0.82, format: SaveFormat.JPEG },
+      { compress: 0.9, format: SaveFormat.WEBP },
     );
     return compressed.uri;
   } catch {
     try {
       const normalized = await manipulateAsync(localUri, [], {
-        compress: 0.82,
-        format: SaveFormat.JPEG,
+        compress: 0.9,
+        format: SaveFormat.WEBP,
       });
       return normalized.uri;
     } catch {
@@ -70,7 +71,12 @@ async function prepareImageBytes(
   const maxWidth = isAndroidTablet() ? 1600 : Platform.OS === 'android' ? 1920 : 2048;
   const compressedUri = await compressImageForUpload(stableUri, maxWidth);
   const bytes = await readLocalFileBytes(compressedUri);
-  return { bytes, contentType: 'image/jpeg', ext: 'jpg' };
+  const encoded = compressedUri !== stableUri;
+  return {
+    bytes,
+    contentType: encoded ? 'image/webp' : contentType,
+    ext: encoded ? 'webp' : (contentType.split('/')[1] ?? 'jpg'),
+  };
 }
 
 async function uploadVideoStream(
@@ -106,15 +112,14 @@ async function uploadIzdivacWallImage(
     const guessedType = guessContentType(localUri, mimeType);
     const { bytes, contentType, ext } = await prepareImageBytes(localUri, guessedType, mimeType);
     const path = `${userId}/${Date.now()}_${index}.${ext}`;
-
-    const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
+    const uploaded = await uploadPublicImage({
+      folder: 'izdivac-media',
+      path,
+      bytes,
       contentType,
-      upsert: false,
     });
-    if (error) return { url: null, error: supabaseErrorMessage(error) };
-
-    const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
-    return { url: data.publicUrl, error: null };
+    if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Fotoğraf yüklenemedi.' };
+    return { url: uploaded.url, error: null };
   } catch (err) {
     return { url: null, error: toUserFacingError(String(err), { fallback: 'Fotoğraf yüklenemedi.' }) };
   }

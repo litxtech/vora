@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { OfflineTools } from '@/components/offline/offline-tools';
 import { Breadcrumbs, CtaBand, JsonLd, ShareBar } from '@/components/site';
 import { cityById } from '@/lib/cities';
 import { getEvent } from '@/lib/data';
@@ -66,6 +67,7 @@ export default async function EventPage({ params }: { params: Promise<Params> })
       <div className="wrap prose">
         <Breadcrumbs items={crumbs} />
         <h1>{event.title}</h1>
+        <OfflineTools kind="event" title={event.title} href={`/events/${event.id}`} />
         <p className="meta">
           <time dateTime={event.starts_at}>{new Date(event.starts_at).toLocaleString('tr-TR')}</time>
           {city ? (

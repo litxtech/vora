@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { OfflineSearchForm } from '@/components/offline/offline-search';
 import { CITIES } from '@/lib/cities';
 import { listPosts, postHeadline } from '@/lib/data';
 import { toMetadata } from '@/lib/seo/engine';
@@ -22,13 +23,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     <section className="block">
       <div className="wrap">
         <h1>Arama</h1>
-        <form action="/search">
-          <label htmlFor="q">Ara</label>
-          <input id="q" name="q" defaultValue={q ?? ''} />
-          <button className="btn" type="submit">
-            Ara
-          </button>
-        </form>
+        <OfflineSearchForm initial={q ?? ''} />
         <ul>
           {cities.map((city) => (
             <li key={city.id}>

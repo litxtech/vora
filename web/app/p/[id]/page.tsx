@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { FeedCard } from '@/components/feed-card';
+import { OfflineTools } from '@/components/offline/offline-tools';
 import { PostEngage } from '@/components/post-engage';
-import { Breadcrumbs, CtaBand, JsonLd, ShareBar } from '@/components/site';
+import { Breadcrumbs, CtaBand, JsonLd } from '@/components/site';
 import { cityById } from '@/lib/cities';
 import { displayName, getPost, listPosts, postHeadline, postSeo } from '@/lib/data';
 import { breadcrumbLd, graph, toMetadata, trimDescription } from '@/lib/seo/engine';
@@ -65,39 +66,15 @@ export default async function PostPage({ params }: { params: Promise<Params> }) 
   return (
     <article className="block">
       <JsonLd data={jsonLd} />
-      <div className="wrap prose">
+      <div className="wrap feed-list">
         <Breadcrumbs items={crumbs} />
-        <h1>{postHeadline(post)}</h1>
-        <p className="meta">
-          <Link href={`/u/${post.author_username}`}>{displayName(post.author_name, post.author_username)}</Link>
-          {' · '}
-          {city ? <Link href={`/city/${city.id}`}>{city.name}</Link> : post.region_id}
-          {' · '}
-          <time dateTime={post.created_at}>{new Date(post.created_at).toLocaleDateString('tr-TR')}</time>
-          {' · '}
-          {post.category}
-        </p>
-        {post.media_urls.map((url) => (
-          <p key={url}>
-            <img className="media" src={url} alt="" />
-          </p>
-        ))}
-        {post.content.split('\n').map((line) => (
-          <p key={line}>{line}</p>
-        ))}
-        <ShareBar path={absoluteUrl(`/p/${post.id}`)} title={postHeadline(post)} />
+        <OfflineTools kind="post" title={postHeadline(post)} href={`/p/${post.id}`} />
+        <FeedCard post={post} heading="h1" />
         <PostEngage postId={post.id} />
-        <h2>{city?.name ?? 'Şehir'}’deki diğer paylaşımlar</h2>
-        <ul>
-          {related.map((item) => (
-            <li key={item.id}>
-              <Link href={`/p/${item.id}`}>{postHeadline(item)}</Link>
-            </li>
-          ))}
-        </ul>
-        <p>
-          <Link href={`/u/${post.author_username}`}>{displayName(post.author_name, post.author_username)} profilini görüntüle</Link>
-        </p>
+        {related.length > 0 ? <h2 className="app-section">{city?.name ?? 'Şehir'}’deki diğer paylaşımlar</h2> : null}
+        {related.map((item) => (
+          <FeedCard key={item.id} post={item} />
+        ))}
       </div>
       <CtaBand />
     </article>

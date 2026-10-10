@@ -12,6 +12,7 @@ import { compressVideoForUpload, shouldSkipVideoCompression } from '@/lib/video/
 import { prepareLocalVideoUri } from '@/lib/video/prepareLocalVideo';
 import { isAndroidTablet } from '@/lib/device/isAndroidTablet';
 import { supabase } from '@/lib/supabase/client';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabaseErrorMessage, toUserFacingError } from '@/lib/errors';
 
 const BUCKET = INCIDENT_MEDIA_BUCKET;
@@ -39,14 +40,14 @@ async function compressImageForUpload(localUri: string, maxWidth: number): Promi
     const compressed = await manipulateAsync(
       localUri,
       [{ resize: { width: maxWidth } }],
-      { compress: 0.82, format: SaveFormat.JPEG },
+      { compress: 0.9, format: SaveFormat.WEBP },
     );
     return compressed.uri;
   } catch {
     try {
       const normalized = await manipulateAsync(localUri, [], {
-        compress: 0.82,
-        format: SaveFormat.JPEG,
+        compress: 0.9,
+        format: SaveFormat.WEBP,
       });
       return normalized.uri;
     } catch {
@@ -74,13 +75,25 @@ async function uploadImage(
       const maxWidth = isAndroidTablet() ? 1600 : Platform.OS === 'android' ? 1920 : 2048;
       const compressedUri = await compressImageForUpload(stableUri, maxWidth);
       bytes = await readLocalFileBytes(compressedUri);
-      uploadType = 'image/jpeg';
-      ext = 'jpg';
+      const encoded = compressedUri !== stableUri;
+      uploadType = encoded ? 'image/webp' : contentType;
+      ext = encoded ? 'webp' : ext;
     } else {
       bytes = await readLocalFileBytes(localUri);
     }
 
     const path = `${userId}/${Date.now()}_${index}.${ext}`;
+    if (uploadType.startsWith('image/')) {
+      const uploaded = await uploadPublicImage({
+        folder: 'incident-media',
+        path,
+        bytes,
+        contentType: uploadType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Fotoğraf yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
+
     const { error } = await supabase.storage.from(BUCKET).upload(path, bytes, {
       contentType: uploadType,
       upsert: false,

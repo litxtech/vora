@@ -94,7 +94,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     let activeRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     let pushInitialized = false;
 
-    const syncPush = () => registerPushTokens(userId).catch(() => undefined);
+    const syncPush = () => {
+      if (Platform.OS === 'web') return;
+      registerPushTokens(userId).catch(() => undefined);
+    };
 
     const tearDownRealtime = () => {
       if (notifChannel) {
@@ -184,7 +187,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }, 500);
     };
 
-    const received = Notifications.addNotificationReceivedListener((notification) => {
+    const received =
+      Platform.OS === 'web'
+        ? { remove() {} }
+        : Notifications.addNotificationReceivedListener((notification) => {
       const content = notification.request.content;
       const data = content.data as Record<string, unknown>;
       const eventType = data?.eventType as NotificationEventType | undefined;
@@ -227,7 +233,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    const response = Notifications.addNotificationResponseReceivedListener((event) => {
+    const response =
+      Platform.OS === 'web'
+        ? { remove() {} }
+        : Notifications.addNotificationResponseReceivedListener((event) => {
       refreshUnread();
       const data = event.notification.request.content.data as Record<string, unknown>;
       handleNotificationResponse(data, {
@@ -244,7 +253,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       if (!pushInitialized) {
         pushInitialized = true;
         syncPush();
-        unsubscribePushTokenRefresh = subscribePushTokenRefresh(userId);
+        if (Platform.OS !== 'web') {
+          unsubscribePushTokenRefresh = subscribePushTokenRefresh(userId);
+        }
         loadAndSyncSounds().catch(() => undefined);
         void import('@/lib/notifications/soundPlayer').then(({ prepareNotificationAudioMode }) =>
           prepareNotificationAudioMode().catch(() => undefined),

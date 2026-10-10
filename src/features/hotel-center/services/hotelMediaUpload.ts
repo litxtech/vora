@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 
 function guessImageContentType(uri: string): string {
@@ -38,6 +39,17 @@ async function uploadHotelMedia(
     const ext = fileExtension(contentType);
     const folder = kind === 'video' ? 'videos' : 'images';
     const path = `${userId}/${folder}/${Date.now()}-${index}.${ext}`;
+
+    if (kind === 'image') {
+      const uploaded = await uploadPublicImage({
+        folder: 'hotel-listings',
+        path,
+        bytes: arrayBuffer,
+        contentType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
 
     const { error: uploadError } = await supabase.storage.from('hotel-listings').upload(path, arrayBuffer, {
       contentType,

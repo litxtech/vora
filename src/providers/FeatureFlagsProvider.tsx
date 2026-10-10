@@ -9,9 +9,9 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
-import { featureOwnDefaultVisible } from '@/features/feature-flags/constants';
-import { fetchFeatureVisibility } from '@/features/feature-flags/services/featureFlags';
+import { featureOwnDefaultVisible } from '@/features/feature-flags/services/featureDefaultVisible';
 import { isFeatureForcedHidden } from '@/features/feature-flags/services/featureFlagsCore';
+import { fetchFeatureVisibility } from '@/features/feature-flags/services/featureFlags';
 import { getFeatureAncestors, isEffectivelyVisible } from '@/features/feature-flags/services/featureTree';
 import type { FeatureId, FeatureVisibilityMap } from '@/features/feature-flags/types';
 import { getHeavyFeatureBootDelayMs } from '@/lib/boot/heavyFeatureDelay';

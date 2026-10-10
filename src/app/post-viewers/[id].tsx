@@ -8,6 +8,7 @@ import { UserBadge } from '@/features/feed/components/UserBadge';
 import { fetchPostViewers, type ViewerFilter } from '@/features/feed/services/viewers';
 import type { PostViewer } from '@/features/feed/services/viewers';
 import { formatFeedTime } from '@/features/feed/utils';
+import { canAdmin } from '@/constants/roles';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
@@ -20,7 +21,7 @@ const FILTERS: { id: ViewerFilter; label: string }[] = [
 
 export default function PostViewersScreen() {
   const { colors } = useTheme();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { id, authorId } = useLocalSearchParams<{ id: string; authorId: string }>();
 
   const [filter, setFilter] = useState<ViewerFilter>('recent');
@@ -28,21 +29,22 @@ export default function PostViewersScreen() {
   const [loading, setLoading] = useState(true);
 
   const isOwner = user?.id === authorId;
+  const isAdmin = Boolean(profile?.role && canAdmin(profile.role));
 
   useEffect(() => {
     if (!id || !authorId) return;
     setLoading(true);
-    fetchPostViewers(id, authorId, filter)
+    fetchPostViewers(id, authorId, filter, isAdmin)
       .then(setViewers)
       .finally(() => setLoading(false));
-  }, [id, authorId, filter]);
+  }, [id, authorId, filter, isAdmin]);
 
-  if (!isOwner && !id?.startsWith('demo-')) {
+  if (!isOwner && !isAdmin && !id?.startsWith('demo-')) {
     return (
       <GradientBackground>
         <View style={styles.page}>
           <AuthHeader title="Görüntüleyenler" subtitle="Erişim yok" />
-          <Text secondary>Bu listeyi yalnızca gönderi sahibi görebilir.</Text>
+          <Text secondary>Bu listeyi gönderi sahibi ve admin hesapları görebilir.</Text>
         </View>
       </GradientBackground>
     );

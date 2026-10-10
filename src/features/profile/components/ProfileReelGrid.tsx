@@ -1,7 +1,8 @@
-import { LayoutChangeEvent, Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { useProfileGridLayout } from '@/features/profile/hooks/useProfileGridLayout';
+import { chunkProfileGridItems } from '@/features/profile/services/profileGridMetrics';
 import { formatCount } from '@/features/profile/constants';
 import type { ReelItem } from '@/features/reels/types';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -17,7 +18,7 @@ type ProfileReelGridProps = {
 
 export function ProfileReelGrid({ reels, showStats = false, onPressReel }: ProfileReelGridProps) {
   const { colors } = useTheme();
-  const { cellSize, pagePadding, containerWidth, onGridLayout } = useProfileGridLayout(GAP, {
+  const { columns, cellSize, pagePadding, containerWidth } = useProfileGridLayout(GAP, {
     fullBleed: true,
   });
 
@@ -25,71 +26,80 @@ export function ProfileReelGrid({ reels, showStats = false, onPressReel }: Profi
     return <Text secondary style={styles.empty}>Henüz reel yok.</Text>;
   }
 
-  const handleGridLayout = (event: LayoutChangeEvent) => {
-    onGridLayout(event.nativeEvent.layout.width);
-  };
+  if (cellSize <= 0) return null;
+
+  const rowHeight = Math.round(cellSize * 1.25);
+  const rows = chunkProfileGridItems(reels, columns);
 
   return (
     <View
       style={[
         styles.grid,
         {
-          gap: GAP,
+          width: containerWidth,
+          maxWidth: containerWidth,
           marginHorizontal: -pagePadding,
-          width: containerWidth > 0 ? containerWidth : undefined,
         },
       ]}
-      onLayout={handleGridLayout}
     >
-      {reels.map((reel) => (
-        <Pressable
-          key={reel.id}
-          style={[
-            styles.cell,
-            cellSize > 0
-              ? { width: cellSize, height: Math.round(cellSize * 1.25) }
-              : styles.cellFallback,
-            { backgroundColor: colors.surfaceElevated },
-          ]}
-          onPress={() => onPressReel?.(reel)}
+      {rows.map((row, rowIndex) => (
+        <View
+          key={row[0]?.id ?? `row-${rowIndex}`}
+          style={[styles.row, { gap: GAP, marginTop: rowIndex > 0 ? GAP : 0, height: rowHeight }]}
         >
-          {reel.thumbnailUrl ? (
-            <Image
-              source={{ uri: reel.thumbnailUrl }}
-              style={styles.thumb}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={[styles.thumb, styles.thumbPlaceholder]}>
-              <Ionicons name="play-circle" size={32} color={colors.textMuted} />
-            </View>
-          )}
-          <View style={styles.overlay}>
-            <Ionicons name="play" size={12} color="#fff" />
-            <Text variant="caption" style={styles.viewCount}>
-              {formatCount(reel.viewCount)}
-            </Text>
-          </View>
-          {showStats && reel.completionRate > 0 ? (
-            <View style={styles.statsBadge}>
-              <Text variant="caption" style={styles.statsText}>
-                %{Math.round(reel.completionRate * 100)}
-              </Text>
-            </View>
-          ) : null}
-        </Pressable>
+          {row.map((reel) => (
+            <Pressable
+              key={reel.id}
+              style={[
+                styles.cell,
+                { width: cellSize, height: rowHeight, backgroundColor: colors.surfaceElevated },
+              ]}
+              onPress={() => onPressReel?.(reel)}
+            >
+              {reel.thumbnailUrl ? (
+                <Image source={{ uri: reel.thumbnailUrl }} style={styles.thumb} resizeMode="cover" />
+              ) : (
+                <View style={[styles.thumb, styles.thumbPlaceholder]}>
+                  <Ionicons name="play-circle" size={32} color={colors.textMuted} />
+                </View>
+              )}
+              <View style={styles.overlay}>
+                <Ionicons name="play" size={12} color="#fff" />
+                <Text variant="caption" style={styles.viewCount}>
+                  {formatCount(reel.viewCount)}
+                </Text>
+              </View>
+              {showStats && reel.completionRate > 0 ? (
+                <View style={styles.statsBadge}>
+                  <Text variant="caption" style={styles.statsText}>
+                    %{Math.round(reel.completionRate * 100)}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          ))}
+        </View>
       ))}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  grid: { flexDirection: 'row', flexWrap: 'wrap' },
-  cell: { overflow: 'hidden', position: 'relative' },
-  cellFallback: {
-    width: '33.333%',
-    aspectRatio: 1 / 1.25,
+  grid: {
+    alignSelf: 'flex-start',
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
   },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    flexGrow: 0,
+    flexShrink: 0,
+    minWidth: 0,
+    width: '100%',
+  },
+  cell: { overflow: 'hidden', position: 'relative' },
   thumb: {
     ...StyleSheet.absoluteFillObject,
     width: '100%',

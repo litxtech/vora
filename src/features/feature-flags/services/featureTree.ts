@@ -1,4 +1,5 @@
-import { APP_FEATURE_BY_ID, APP_FEATURE_REGISTRY, featureOwnDefaultVisible } from '@/features/feature-flags/constants';
+import { APP_FEATURE_BY_ID, APP_FEATURE_REGISTRY } from '@/features/feature-flags/constants';
+import { featureOwnDefaultVisible } from '@/features/feature-flags/services/featureDefaultVisible';
 import type { AppFeatureDef, FeatureGroup, FeatureVisibilityMap } from '@/features/feature-flags/types';
 
 export function getChildFeatures(parentId: string): AppFeatureDef[] {

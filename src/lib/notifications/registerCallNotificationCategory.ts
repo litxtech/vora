@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import {
   INCOMING_CALL_ACTION_ACCEPT,
@@ -7,6 +8,7 @@ import {
 
 /** Kilit ekranı / banner üzerinde Cevapla–Reddet aksiyonları (CallKit kullanılmaz). */
 export async function registerIncomingCallNotificationCategory(): Promise<void> {
+  if (Platform.OS === 'web') return;
   if (typeof Notifications.setNotificationCategoryAsync !== 'function') return;
 
   await Notifications.setNotificationCategoryAsync(INCOMING_CALL_NOTIFICATION_CATEGORY, [

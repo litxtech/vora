@@ -29,6 +29,7 @@ import { saveUriToGallery } from '@/features/compose/services/saveMediaToGallery
 import { AudioPickerSheet } from '@/features/sounds/components/AudioPickerSheet';
 import type { MusicSelection } from '@/features/music/types';
 import { MediaEditorMusicPanel } from '@/features/compose/components/MediaEditorMusicPanel';
+import { useLockStackBackGesture } from '@/features/music/hooks/useLockStackBackGesture';
 import { useMusicSelectionStore } from '@/features/music/store/musicSelectionStore';
 import { photoPostMusicEndSec } from '@/features/music/utils/formatMusicTime';
 import { probeVideoDuration } from '@/features/vora-studio/services/exportStudioVideo';
@@ -125,6 +126,9 @@ export function MediaEditorScreen() {
   const [musicOpen, setMusicOpen] = useState(false);
   const [musicPreviewPlaying, setMusicPreviewPlaying] = useState(false);
   const [locationPinSelected, setLocationPinSelected] = useState(false);
+
+  const musicCardOpen = activePanel === 'music' && !musicOpen && Boolean(musicSelection);
+  useLockStackBackGesture(musicCardOpen);
 
   const regionId = (profile?.region_id ?? 'trabzon') as RegionId;
   const slide = slides[currentIndex] ?? null;
@@ -286,7 +290,7 @@ export function MediaEditorScreen() {
     }
     if (tool === 'music') {
       setLocationOpen(false);
-      if (musicSelection && !slide?.isVideo) {
+      if (musicSelection) {
         setMusicOpen(false);
         setActivePanel('music');
         return;
@@ -605,8 +609,18 @@ export function MediaEditorScreen() {
         onDismiss={() => setSelectedTextOverlayId(null)}
       />
 
+      {activePanel === 'music' && !musicOpen && musicSelection ? (
+        <Pressable
+          style={styles.musicDismiss}
+          onPress={() => {
+            setMusicPreviewPlaying(false);
+            setActivePanel('none');
+          }}
+        />
+      ) : null}
+
       <MediaEditorRail
-        visible={!locationOpen && !textEditing && !isDraggingOverlay}
+        visible={!locationOpen && !textEditing && !isDraggingOverlay && activePanel !== 'music'}
         isVideo={isVideo}
         activeTool={activeTool}
         hasLocation={!!selectedLocation}
@@ -721,7 +735,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: spacing.md,
-    zIndex: 5,
+    zIndex: 50,
+  },
+  musicDismiss: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 12,
   },
   topBtn: {
     width: 44,

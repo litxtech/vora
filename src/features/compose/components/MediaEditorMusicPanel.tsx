@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    zIndex: 14,
+    zIndex: 40,
     backgroundColor: 'rgba(12,12,16,0.96)',
     borderTopLeftRadius: radius.xl,
     borderTopRightRadius: radius.xl,

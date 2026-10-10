@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { logoutAction } from '@/lib/auth-actions';
 
 const LINKS = [
+  { href: '/app/offline', label: 'Çevrimdışı Kullanım' },
   { href: '/app/profile', label: 'Profili düzenle' },
   { href: '/forgot-password', label: 'Şifreyi sıfırla' },
   { href: '/privacy', label: 'Gizlilik' },

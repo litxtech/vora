@@ -1,0 +1,13 @@
+{
+  "name": "Vora",
+  "short_name": "Vora",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0a0e14",
+  "theme_color": "#0a0e14",
+  "lang": "tr",
+  "icons": [
+    { "src": "/vora-logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" }
+  ]
+}

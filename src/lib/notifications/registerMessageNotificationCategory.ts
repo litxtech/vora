@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import {
   MESSAGE_NOTIFICATION_CATEGORY,
@@ -6,6 +7,7 @@ import {
 
 /** Mesaj bildirimlerinde "Yanıtla" metin kutusu (WhatsApp tarzı). */
 export async function registerMessageNotificationCategory(): Promise<void> {
+  if (Platform.OS === 'web') return;
   if (typeof Notifications.setNotificationCategoryAsync !== 'function') return;
 
   await Notifications.setNotificationCategoryAsync(MESSAGE_NOTIFICATION_CATEGORY, [

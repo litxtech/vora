@@ -30,6 +30,7 @@ import { formatFeedTime } from '@/features/feed/utils';
 import { radius, spacing } from '@/constants/theme';
 import { useTheme } from '@/providers/ThemeProvider';
 import { useAuth } from '@/providers/AuthProvider';
+import { useCloseModalOnRouteChange } from '@/hooks/useCloseModalOnRouteChange';
 
 type ReelCommentSheetProps = {
   visible: boolean;
@@ -55,6 +56,7 @@ export function ReelCommentSheet({
   const { requireAuth } = useRequireAuth();
   const extraContentPadding = useSharedValue(0);
   const [footerOffset, setFooterOffset] = useState(96);
+  useCloseModalOnRouteChange(visible, onClose);
 
   const [comments, setComments] = useState<ReelComment[]>([]);
   const [loading, setLoading] = useState(false);

@@ -9,7 +9,8 @@ export type InternalShareKind =
   | 'verify'
   | 'profile'
   | 'marketplace'
-  | 'shop';
+  | 'shop'
+  | 'canlar';
 
 export type InternalShareRef = {
   kind: InternalShareKind;
@@ -25,6 +26,7 @@ const KIND_BY_SEGMENT: Record<string, InternalShareKind> = {
   u: 'profile',
   m: 'marketplace',
   s: 'shop',
+  c: 'canlar',
 };
 
 const KIND_LABEL: Record<InternalShareKind, string> = {
@@ -34,6 +36,7 @@ const KIND_LABEL: Record<InternalShareKind, string> = {
   profile: 'Profil',
   marketplace: 'İlan',
   shop: 'Mağaza',
+  canlar: 'Canlar',
 };
 
 const KIND_ICON: Record<InternalShareKind, string> = {
@@ -43,6 +46,7 @@ const KIND_ICON: Record<InternalShareKind, string> = {
   profile: 'person-circle-outline',
   marketplace: 'pricetag-outline',
   shop: 'storefront-outline',
+  canlar: 'paw-outline',
 };
 
 /** Bir URL Vora paylaşım linki mi? Öyleyse tür/kimlik/route döndürür. */
@@ -50,7 +54,7 @@ export function resolveInternalShare(url: string): InternalShareRef | null {
   const path = extractShareLinkPath(url);
   if (!path) return null;
 
-  const match = path.match(/^(p|r|v|u|m|s)\/([^/?#]+)/);
+  const match = path.match(/^(p|r|v|u|m|s|c)\/([^/?#]+)/);
   if (!match) return null;
 
   const kind = KIND_BY_SEGMENT[match[1]];

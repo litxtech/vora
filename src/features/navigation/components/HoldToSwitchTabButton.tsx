@@ -16,6 +16,7 @@ import {
 } from '@/features/navigation/constants';
 import { useVisibleMainTabs } from '@/features/navigation/hooks/useVisibleMainTabs';
 import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
+import { pressTabWithoutReload } from '@/lib/navigation/pressTabWithoutReload';
 
 type TabJumpNavigation = {
   jumpTo: (name: string) => void;
@@ -77,7 +78,7 @@ export function HoldToSwitchTabButton({
   const handleLongPress = useCallback(
     (event: GestureResponderEvent) => {
       if (!focused) {
-        onPress?.(event);
+        pressTabWithoutReload(event, onPress);
         return;
       }
       cycleNext();
@@ -93,7 +94,7 @@ export function HoldToSwitchTabButton({
       accessibilityRole="button"
       accessibilityState={accessibilityState}
       accessibilityHint={focused ? 'Basılı tutarak sonraki sekmeye geç' : undefined}
-      onPress={onPress}
+      onPress={(event) => pressTabWithoutReload(event, onPress)}
       onLongPress={handleLongPress}
       onPressOut={clearHold}
       delayLongPress={MAIN_TAB_HOLD_SWITCH_DELAY_MS}

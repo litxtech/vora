@@ -19,6 +19,7 @@ import { useMessagingStore } from '@/features/messaging/store/messagingStore';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
 import { createFloatingTabBarStyle, TabBarBackgroundView } from '@/components/navigation/floatingTabBar';
 import { resolveDefaultTabHref } from '@/features/feature-flags/resolveDefaultTabHref';
+import { pressTabWithoutReload } from '@/lib/navigation/pressTabWithoutReload';
 import { useFeatureFlags } from '@/providers/FeatureFlagsProvider';
 import { CreateTabButton } from '@/features/compose/components/CreateTabButton';
 import { ProfileTabButton } from '@/features/account-switch/components/ProfileTabButton';
@@ -82,7 +83,11 @@ export default function TabsLayout() {
 
   const tabBarButton = useMemo(
     () => (props: BottomTabBarButtonProps) => (
-      <Pressable {...props} {...getAndroidInstantPressableProps()} />
+      <Pressable
+        {...props}
+        {...getAndroidInstantPressableProps()}
+        onPress={(event) => pressTabWithoutReload(event, props.onPress)}
+      />
     ),
     [],
   );
@@ -180,7 +185,7 @@ export default function TabsLayout() {
       screenLayout={({ children, route, navigation }) => {
         // Web: kaydırma kabuğu tıklamayı yutup sekmeyi akışa geri atıyor.
         // Tablet: jest yok. Android telefon: yalnızca Akış (menü + sekme kaydırma).
-        // iOS: tüm ana sekmeler — en solda sağa çekince hamburger menü.
+        // iOS: tüm ana sekmeler — akışta sağa çekince sol menü, profilde sola çekince sağ menü.
         if (Platform.OS === 'web' || isAndroidTablet() || (isAndroid() && route.name !== 'index')) {
           return children;
         }

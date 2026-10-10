@@ -1,4 +1,5 @@
 import { readLocalFileBytes } from '@/lib/files/readLocalFile';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { supabaseErrorMessage } from '@/lib/errors';
 
@@ -41,6 +42,17 @@ export async function uploadCompletionProofMedia(
 
     const ext = fileExtension(contentType);
     const path = `${userId}/completion-proof/${requestId}/${Date.now()}.${ext}`;
+
+    if (kind === 'image') {
+      const uploaded = await uploadPublicImage({
+        folder: 'vora-hizmetler',
+        path,
+        bytes: arrayBuffer,
+        contentType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
 
     const { error: uploadError } = await supabase.storage.from('vora-hizmetler').upload(path, arrayBuffer, {
       contentType,

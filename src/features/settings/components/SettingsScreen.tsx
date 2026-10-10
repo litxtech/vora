@@ -14,6 +14,7 @@ import { STORY_ARCHIVE_ACCENT } from '@/features/stories/constants';
 import { subscriptionsCommerceEnabled } from '@/features/profile/services/premiumAccess';
 import { FeatureGate } from '@/features/feature-flags/components/FeatureGate';
 import { SETTINGS_FEATURE } from '@/features/settings/featureFlags';
+import { FIND_FRIENDS_ROUTE } from '@/features/contact-discovery/constants';
 import { BUSINESS_FEATURE } from '@/features/business-center/featureFlags';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAccountSwitch } from '@/features/account-switch/providers/AccountSwitchProvider';
@@ -175,6 +176,13 @@ export function SettingsScreen() {
                 icon="ribbon-outline"
                 label="Tik Görünürlüğü"
                 onPress={() => router.push('/settings/badge-visibility' as Href)}
+              />
+            </FeatureGate>
+            <FeatureGate featureId={SETTINGS_FEATURE.findFriends}>
+              <SettingsRow
+                icon="people-outline"
+                label="Rehberindeki kişileri bul"
+                onPress={() => router.push(FIND_FRIENDS_ROUTE as Href)}
               />
             </FeatureGate>
           </GlassCard>

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, ActivityIndicator, FlatList, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Alert, ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
+import { FlatList, ScrollView } from 'react-native-gesture-handler';
 import { router, type Href, useIsFocused, useFocusEffect } from 'expo-router';
 import { useMainTabPrefetchActive } from '@/features/navigation/hooks/useMainTabScreenActive';
 import { Ionicons } from '@expo/vector-icons';
@@ -23,8 +24,7 @@ import { BoostCampaignDisplay } from '@/features/profile/components/BoostCampaig
 import { ProfileHeader } from '@/features/profile/components/ProfileHeader';
 import { ProfileReelGrid } from '@/features/profile/components/ProfileReelGrid';
 import { ProfileHeaderDetails } from '@/features/profile/components/ProfileHeaderDetails';
-import { ProfileOwnActionsBar } from '@/features/profile/components/ProfileOwnActionsBar';
-import { CanlarContributionCard } from '@/features/vora-canlar/components/CanlarContributionCard';
+import { ProfileDrawerShell } from '@/features/profile/components/ProfileRightDrawer';
 import { TrustStatsCard } from '@/features/profile/components/TrustStatsCard';
 import { SoundProfileStats } from '@/features/sounds/components/SoundProfileStats';
 import { ProfileVerifyAccountNudge } from '@/features/profile/components/ProfileVerifyAccountNudge';
@@ -32,7 +32,12 @@ import { hasPremiumEntitlement } from '@/features/profile/services/premiumAccess
 import { ProfileShopSection } from '@/features/profile/components/ProfileShopSection';
 import { ProfileVisitTopBar } from '@/features/profile/components/shared/ProfileVisitTopBar';
 import { ProfilePostGrid } from '@/features/profile/components/ProfilePostGrid';
-import { PROFILE_TABS } from '@/features/profile/constants';
+import {
+  profileTabCounts,
+  profileTabEmptyCopy,
+  resolveActiveProfileTab,
+  selectVisibleProfileTabs,
+} from '@/features/profile/services/profileTabs';
 import {
   buildOwnProfileSkeleton,
   isProfileSeedBundle,
@@ -79,10 +84,10 @@ import type {
   ProfileLink,
 } from '@/features/profile/types';
 import { getFloatingTabBarReserve } from '@/constants/tabBar';
-import { radius, spacing } from '@/constants/theme';
+import { PROFILE_GRID_MAX_WIDTH } from '@/features/profile/services/profileGridMetrics';
+import { spacing } from '@/constants/theme';
 import { useStableTabBarInset } from '@/hooks/useStableTabBarInset';
 import { useAuth } from '@/providers/AuthProvider';
-import { AccountSwitchBar } from '@/features/account-switch/components/AccountSwitchBar';
 import { useAccountSwitch } from '@/features/account-switch/providers/AccountSwitchProvider';
 import { resolveActingProfile } from '@/features/account-switch/services/resolveActingProfile';
 import { useTheme } from '@/providers/ThemeProvider';
@@ -144,11 +149,10 @@ export function ProfileScreen({
   const isFocused = useIsFocused();
   const isScreenActive = useMainTabPrefetchActive('profile');
   const { user, profile: authProfile, isGuest, isLoading: authLoading } = useAuth();
-  const { actingAs, refreshSwitchState, linkedSibling, outgoingPendingUsername } = useAccountSwitch();
+  const { actingAs, refreshSwitchState } = useAccountSwitch();
   const { colors } = useTheme();
   const showFollow = useFeatureVisible(PROFILE_FEATURE.follow);
   const showMessage = useFeatureVisible(PROFILE_FEATURE.message);
-  const showSettingsGear = useFeatureVisible(PROFILE_FEATURE.settingsGear);
   const tabBarBottomInset = useStableTabBarInset();
   const scrollBottomInset = reserveTabBarInset
     ? getFloatingTabBarReserve(tabBarBottomInset) + spacing.md
@@ -167,6 +171,8 @@ export function ProfileScreen({
     () => warmEntry?.bundle?.relationship?.isFollowing ?? false,
   );
   const [tab, setTab] = useState<ProfileTab>('posts');
+  const [tabError, setTabError] = useState(false);
+  const [tabReloadKey, setTabReloadKey] = useState(0);
   const [tabItems, setTabItems] = useState<FeedItem[]>(() => warmEntry?.tabItems ?? []);
   const [reelItems, setReelItems] = useState<ReelItem[]>([]);
   const [business, setBusiness] = useState<BusinessProfile | null>(() => warmEntry?.bundle.business ?? null);
@@ -186,6 +192,8 @@ export function ProfileScreen({
   const savedCollections = useSavedCollections(userId, { enabled: isOwnProfile });
   const tabRef = useRef(tab);
   tabRef.current = tab;
+  const forceTabLoadRef = useRef(false);
+  const profileUserRef = useRef(userId);
   const authProfileRef = useRef(authProfile);
   authProfileRef.current = authProfile;
   const bundleFingerprintRef = useRef<string | null>(
@@ -223,12 +231,10 @@ export function ProfileScreen({
       let showedInstantData = false;
 
       const applyPosts = (posts: { kind: 'posts' | 'reels'; items: FeedItem[] | ReelItem[] }) => {
-        if (posts.kind === 'posts') {
-          setTabItems(posts.items as FeedItem[]);
-          if (tabRef.current === 'posts' || tabRef.current === 'media' || tabRef.current === 'quotes' || tabRef.current === 'liked') {
-            setTabLoading(false);
-          }
-        }
+        if (posts.kind !== 'posts' || tabRef.current !== 'posts') return;
+        setTabItems(posts.items as FeedItem[]);
+        setTabError(false);
+        setTabLoading(false);
       };
 
       if (!force) {
@@ -335,55 +341,96 @@ export function ProfileScreen({
   }, [authLoading, isScreenActive, userId, viewerId, isOwnProfile, authProfile?.id]);
 
   useEffect(() => {
+    if (profileUserRef.current === userId) return;
+    profileUserRef.current = userId;
+    setTab('posts');
+    setTabItems([]);
+    setReelItems([]);
+    setTabError(false);
+    setTabLoading(true);
+  }, [userId]);
+
+  useEffect(() => {
     if (!profile?.id || authLoading || !isScreenActive) return;
-    if (tab === 'badges' || (tab === 'saved' && isOwnProfile)) return;
+    const likesHidden = tab === 'liked' && !isOwnProfile && !profile.showLikedPosts;
+    const savesHidden = tab === 'saved' && !isOwnProfile;
+    if (tab === 'badges' || likesHidden || savesHidden || (tab === 'saved' && isOwnProfile)) return;
 
     const viewerId = user?.id ?? null;
+    const force = forceTabLoadRef.current;
+    forceTabLoadRef.current = false;
     let cancelled = false;
 
     void (async () => {
-      if (tab === 'reels') {
-        const cachedReels = getCachedTabReels(userId, viewerId);
-        if (cachedReels) {
-          setReelItems(cachedReels);
-          setTabLoading(false);
-          void revalidateProfileTabInBackground(userId, tab, viewerId, (items, kind) => {
-            if (!cancelled && kind === 'reels') setReelItems(items as ReelItem[]);
-          });
-          return;
+      try {
+        if (!force && tab === 'reels') {
+          const cachedReels = getCachedTabReels(userId, viewerId);
+          if (cachedReels) {
+            setReelItems(cachedReels);
+            setTabError(false);
+            setTabLoading(false);
+            void revalidateProfileTabInBackground(userId, tab, viewerId, (items, kind) => {
+              if (!cancelled && kind === 'reels' && tabRef.current === 'reels') setReelItems(items as ReelItem[]);
+            }).catch(() => undefined);
+            return;
+          }
+        } else if (!force) {
+          const cachedPosts = getCachedTabPosts(userId, tab, viewerId);
+          if (cachedPosts) {
+            setTabItems(cachedPosts);
+            setTabError(false);
+            setTabLoading(false);
+            void revalidateProfileTabInBackground(userId, tab, viewerId, (items, kind) => {
+              if (!cancelled && kind === 'posts' && tabRef.current === tab) setTabItems(items as FeedItem[]);
+            }).catch(() => undefined);
+            return;
+          }
         }
-      } else {
-        const cachedPosts = getCachedTabPosts(userId, tab, viewerId);
-        if (cachedPosts) {
-          setTabItems(cachedPosts);
-          setTabLoading(false);
-          void revalidateProfileTabInBackground(userId, tab, viewerId, (items, kind) => {
-            if (!cancelled && kind === 'posts') setTabItems(items as FeedItem[]);
-          });
-          return;
-        }
+
+        setTabError(false);
+        setTabLoading(true);
+        if (tab === 'reels') setReelItems([]);
+        else setTabItems([]);
+
+        const result = await loadProfileTabContent(userId, tab, viewerId, { force });
+        if (cancelled || tabRef.current !== tab) return;
+
+        if (result.kind === 'reels') setReelItems(result.items);
+        else setTabItems(result.items);
+        setTabLoading(false);
+      } catch {
+        if (cancelled || tabRef.current !== tab) return;
+        setTabLoading(false);
+        setTabError(true);
       }
-
-      setTabLoading(true);
-
-      const result = await loadProfileTabContent(userId, tab, viewerId);
-      if (cancelled) return;
-
-      if (result.kind === 'reels') setReelItems(result.items);
-      else setTabItems(result.items);
-      setTabLoading(false);
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [tab, userId, user?.id, profile?.id, isOwnProfile, authLoading, isScreenActive]);
+  }, [tab, tabReloadKey, userId, user?.id, profile?.id, profile?.showLikedPosts, isOwnProfile, authLoading, isScreenActive]);
 
-  const visibleTabs = PROFILE_TABS.filter((t) => {
-    if (t.privateOnly && !isOwnProfile) return false;
-    if (t.id === 'liked' && !isOwnProfile && !profile?.showLikedPosts) return false;
-    return true;
+  const visibleTabs = selectVisibleProfileTabs({
+    isOwnProfile,
+    showLikedPosts: Boolean(profile?.showLikedPosts),
   });
+  const activeTab = resolveActiveProfileTab(tab, visibleTabs);
+
+  useEffect(() => {
+    if (activeTab === tab) return;
+    setTabItems([]);
+    setReelItems([]);
+    setTabError(false);
+    setTabLoading(true);
+    setTab(activeTab);
+  }, [activeTab, tab]);
+
+  const retryActiveTab = () => {
+    forceTabLoadRef.current = true;
+    setTabError(false);
+    setTabLoading(true);
+    setTabReloadKey((key) => key + 1);
+  };
 
   const handleReport = () => {
     if (!user || !profile) return;
@@ -470,9 +517,27 @@ export function ProfileScreen({
     }
   };
 
-  const handleViewersPress = () => {
+  const handleViewersPress = useCallback(() => {
     router.push('/settings/insights' as Href);
-  };
+  }, []);
+
+  const toggleSoundStats = useCallback(() => {
+    setSoundStatsOpen((current) => !current);
+  }, []);
+
+  const renderOwnProfile = (node: ReactNode) =>
+    isOwnProfile ? (
+      <ProfileDrawerShell
+        isPremium={Boolean(profile?.isPremium)}
+        onInsightsPress={handleViewersPress}
+        onSoundStatsPress={toggleSoundStats}
+        soundStatsActive={soundStatsOpen}
+      >
+        {node}
+      </ProfileDrawerShell>
+    ) : (
+      node
+    );
 
   const handleMessage = async () => {
     if (!user || !profile || relationship?.isBlocked) return;
@@ -501,11 +566,11 @@ export function ProfileScreen({
   );
 
   if (loading) {
-    return <DetailLoadingShell gradient showBack={!isOwnProfile} />;
+    return renderOwnProfile(<DetailLoadingShell gradient showBack={!isOwnProfile} />);
   }
 
   if (!profile || !stats) {
-    return (
+    return renderOwnProfile(
       <GradientBackground>
         <View style={styles.centered}>
           <ProfileEmptyState
@@ -517,7 +582,7 @@ export function ProfileScreen({
             <Button title="Yeniden Dene" onPress={() => void loadProfile(true)} style={{ marginTop: spacing.md }} />
           ) : null}
         </View>
-      </GradientBackground>
+      </GradientBackground>,
     );
   }
 
@@ -544,17 +609,16 @@ export function ProfileScreen({
     profile.accountType === 'personal' &&
     !profile.isVerified;
 
-  const showProfileAccountSwitch =
-    isOwnProfile && !isDeletedProfile && Boolean(linkedSibling || outgoingPendingUsername);
-
   const displayProfile = isOwnProfile
     ? resolveActingProfile(profile, business, actingAs)
     : profile;
 
   const access = checkProfileAccess(displayProfile, user?.id ?? null, isGuest, relationshipState, isOwnProfile);
+  const showRestrictedFollow =
+    !isOwnProfile && profile.profileVisibility === 'friends' && showFollow;
 
   if (!access.allowed) {
-    return (
+    return renderOwnProfile(
       <GradientBackground>
         {!isOwnProfile ? (
           <View style={styles.restrictedTopBar}>
@@ -570,7 +634,7 @@ export function ProfileScreen({
             <Text secondary style={styles.restrictedText}>
               {access.reason}
             </Text>
-            {!isOwnProfile && profile.profileVisibility === 'friends' && showFollow ? (
+            {showRestrictedFollow ? (
               <FollowButton
                 authorId={profile.id}
                 businessId={profile.businessId}
@@ -581,7 +645,7 @@ export function ProfileScreen({
             ) : null}
           </GlassCard>
         </View>
-      </GradientBackground>
+      </GradientBackground>,
     );
   }
 
@@ -589,27 +653,7 @@ export function ProfileScreen({
     <>
       {!isOwnProfile ? <ProfileVisitTopBar onMenuPress={openSafetyMenu} /> : null}
 
-      {isOwnProfile && !isDeletedProfile ? (
-        <View style={styles.ownTopActions}>
-          {showProfileAccountSwitch ? <AccountSwitchBar /> : null}
-          {showSettingsGear ? (
-            <Pressable
-              onPress={() => router.push('/settings' as Href)}
-              hitSlop={8}
-              style={({ pressed }) => [
-                styles.settingsButton,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-            >
-              <Ionicons name="settings-outline" size={20} color={colors.text} />
-            </Pressable>
-          ) : null}
-        </View>
-      ) : null}
+      {isOwnProfile && !isDeletedProfile ? <View style={styles.menuSpacer} /> : null}
 
       <ProfileHeader
         profile={displayProfile}
@@ -621,17 +665,6 @@ export function ProfileScreen({
         onViewersPress={isOwnProfile ? handleViewersPress : undefined}
       />
 
-      {isOwnProfile && !isDeletedProfile ? (
-        <View style={styles.ownActions}>
-          <ProfileOwnActionsBar
-            isPremium={profile.isPremium}
-            onInsightsPress={handleViewersPress}
-            onSoundStatsPress={() => setSoundStatsOpen((open) => !open)}
-            soundStatsActive={soundStatsOpen}
-          />
-        </View>
-      ) : null}
-
       {isOwnProfile && !isDeletedProfile && soundStatsOpen ? (
         <SoundProfileStats userId={profile.id} />
       ) : null}
@@ -640,10 +673,6 @@ export function ProfileScreen({
 
       {isOwnProfile && !isDeletedProfile ? (
         <ProfileHeaderDetails profile={displayProfile} badges={badges} />
-      ) : null}
-
-      {!isDeletedProfile ? (
-        <CanlarContributionCard userId={profile.id} isOwnProfile={isOwnProfile} />
       ) : null}
 
       {!isDeletedProfile &&
@@ -741,13 +770,14 @@ export function ProfileScreen({
       {!isDeletedProfile ? (
         <ProfileTabBar
           tabs={visibleTabs}
-          value={tab}
+          value={activeTab}
           onChange={setTab}
-          counts={{
-            posts: stats.postCount,
-            reels: stats.reelCount,
-            quotes: stats.totalQuotes,
-          }}
+          counts={profileTabCounts({
+            stats,
+            isOwnProfile,
+            showLikedPosts: profile.showLikedPosts,
+            badgeCount: badges.length + achievements.length,
+          })}
           trailing={
             isOwnProfile ? (
               <View style={styles.tabTrailing}>
@@ -767,17 +797,19 @@ export function ProfileScreen({
     </>
   );
 
-  if (isOwnProfile && !isDeletedProfile && tab === 'saved') {
-    return (
+  if (isOwnProfile && !isDeletedProfile && activeTab === 'saved') {
+    return renderOwnProfile(
       <GradientBackground>
         <FlatList
+          style={styles.scroller}
           data={savedCollections.posts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
             <FeedPostCard item={item} onUpdate={(patch) => savedCollections.updatePost(item.id, patch)} />
           )}
-          contentContainerStyle={[styles.page, { paddingBottom: scrollBottomInset }]}
+          contentContainerStyle={[styles.page, { paddingBottom: scrollBottomInset, flexGrow: 0 }]}
           showsVerticalScrollIndicator={false}
+          directionalLockEnabled
           initialNumToRender={5}
           windowSize={9}
           removeClippedSubviews
@@ -810,27 +842,36 @@ export function ProfileScreen({
             )
           }
         />
-      </GradientBackground>
+      </GradientBackground>,
     );
   }
 
-  return (
+  return renderOwnProfile(
     <GradientBackground>
     <ScrollView
-      contentContainerStyle={[styles.page, { paddingBottom: scrollBottomInset }]}
+      style={styles.scroller}
+      contentContainerStyle={[styles.page, { paddingBottom: scrollBottomInset, flexGrow: 0 }]}
       showsVerticalScrollIndicator={false}
+      directionalLockEnabled
     >
       {profileHeader}
 
       {!isDeletedProfile ? (
       <View style={styles.tabContent}>
-        {tab === 'badges' ? (
+        {activeTab !== tab || tabLoading ? (
+          <ProfileEmptyState loading />
+        ) : tabError ? (
+          <ProfileEmptyState
+            title="İçerik yüklenemedi"
+            message="Bağlantını kontrol edip tekrar dene."
+            icon="cloud-offline-outline"
+            onRetry={retryActiveTab}
+          />
+        ) : activeTab === 'badges' ? (
           <BadgeGrid badges={badges} achievements={achievements} />
-        ) : tab === 'reels' ? (
-          tabLoading ? (
-            <ProfileEmptyState loading />
-          ) : reelItems.length === 0 ? (
-            <ProfileEmptyState title="Reel yok" message="Henüz paylaşılmış reel bulunmuyor." icon="play-circle-outline" />
+        ) : activeTab === 'reels' ? (
+          reelItems.length === 0 ? (
+            <ProfileEmptyState {...profileTabEmptyCopy('reels', isOwnProfile)} />
           ) : (
             <ProfileReelGrid
               reels={reelItems}
@@ -841,14 +882,8 @@ export function ProfileScreen({
               }}
             />
           )
-        ) : tabLoading ? (
-          <ProfileEmptyState loading />
         ) : tabItems.length === 0 ? (
-          <ProfileEmptyState
-            title="İçerik yok"
-            message="Bu sekmede henüz paylaşım bulunmuyor."
-            icon="documents-outline"
-          />
+          <ProfileEmptyState {...profileTabEmptyCopy(activeTab, isOwnProfile)} />
         ) : (
           <ProfilePostGrid
             items={tabItems}
@@ -869,29 +904,26 @@ export function ProfileScreen({
         />
       ) : null}
     </ScrollView>
-    </GradientBackground>
+    </GradientBackground>,
   );
 }
 
 const styles = StyleSheet.create({
-  page: { padding: spacing.lg, gap: spacing.md },
+  scroller: { flex: 1 },
+  page: {
+    padding: spacing.lg,
+    gap: spacing.md,
+    width: '100%',
+    maxWidth: PROFILE_GRID_MAX_WIDTH,
+    alignSelf: 'center',
+    flexGrow: 0,
+  },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.xl },
   restrictedTopBar: { paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
   actions: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' },
-  ownActions: { gap: spacing.sm },
-  ownTopActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  settingsButton: {
-    marginLeft: 'auto',
-    width: 40,
+  menuSpacer: {
     height: 40,
-    borderRadius: radius.full,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: StyleSheet.hairlineWidth,
+    marginBottom: spacing.xs,
   },
   tabContent: { gap: spacing.md, minHeight: 120 },
   tabTrailing: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },

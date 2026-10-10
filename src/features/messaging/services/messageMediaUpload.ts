@@ -1,5 +1,6 @@
 import { readLocalFileBytes, normalizeLocalFileUri } from '@/lib/files/readLocalFile';
 import { uploadAsync, FileSystemUploadType } from 'expo-file-system/legacy';
+import { uploadPublicImage } from '@/lib/media-cloud/uploadPublicImage';
 import { supabase } from '@/lib/supabase/client';
 import { toUserFacingError } from '@/lib/errors';
 
@@ -95,6 +96,17 @@ export async function uploadMessageMedia(
     }
 
     const path = `${userId}/${Date.now()}_${kind}.${ext}`;
+
+    if (kind === 'image') {
+      const uploaded = await uploadPublicImage({
+        folder: 'message-media',
+        path,
+        bytes: await readLocalFileBytes(localUri),
+        contentType,
+      });
+      if (uploaded.error || !uploaded.url) return { url: null, error: uploaded.error ?? 'Görsel yüklenemedi.' };
+      return { url: uploaded.url, error: null };
+    }
 
     if (kind === 'video') {
       const streamError = await uploadVideoStream(path, localUri, contentType);

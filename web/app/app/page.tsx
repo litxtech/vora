@@ -38,35 +38,38 @@ export default async function AppHomePage() {
 
   return (
     <>
-      <div className="app-head">
-        <h1>Akış</h1>
-        <Link className="btn" href="/app/compose">
-          Yeni paylaşım
-        </Link>
-      </div>
+      <h1 className="sr-only">Akış</h1>
       {posts.length === 0 ? (
         <p className="empty">Henüz paylaşım yok. İlk gönderini sen yaz.</p>
       ) : (
-        <div className="stack">
-          {posts.map((post) => (
-            <article className="card" key={post.id}>
-              <p className="meta">
-                {names.get(post.author_id) ?? 'Üye'}
-                {post.region_id ? ` · ${cityById(post.region_id)?.name ?? post.region_id}` : ''}
-                {post.audience === 'friends' ? ' · Arkadaşlar' : ''}
-              </p>
-              <p>{post.content}</p>
-              <div className="row-actions">
-                <form action={likePost}>
-                  <input type="hidden" name="post_id" value={post.id} />
-                  <button className="btn ghost" type="submit">
-                    Beğen{post.like_count ? ` ${post.like_count}` : ''}
-                  </button>
-                </form>
-                <Link href={`/p/${post.id}`}>Yorum{post.comment_count ? ` ${post.comment_count}` : ''}</Link>
-              </div>
-            </article>
-          ))}
+        <div className="feed-list">
+          {posts.map((post) => {
+            const name = names.get(post.author_id) ?? 'Üye';
+            return (
+              <article className="feed-card" key={post.id}>
+                <span className="feed-avatar">{name.slice(0, 1).toUpperCase()}</span>
+                <div className="feed-main">
+                  <header className="feed-head">
+                    <span className="feed-name">{name}</span>
+                    <span className="feed-meta">
+                      {post.region_id ? cityById(post.region_id)?.name : ''}
+                      {post.audience === 'friends' ? ' · Arkadaşlar' : ''}
+                    </span>
+                  </header>
+                  <p className="feed-copy">{post.content}</p>
+                  <div className="feed-actions">
+                    <Link href={`/p/${post.id}`} aria-label="Yorum">
+                      Yorum{post.comment_count ? ` ${post.comment_count}` : ''}
+                    </Link>
+                    <form action={likePost}>
+                      <input type="hidden" name="post_id" value={post.id} />
+                      <button type="submit">Beğen{post.like_count ? ` ${post.like_count}` : ''}</button>
+                    </form>
+                  </div>
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
     </>

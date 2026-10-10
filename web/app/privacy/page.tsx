@@ -21,6 +21,10 @@ export default function PrivacyPage() {
         <p>Kayıt bilgileri, profil, izin verilirse konum, paylaşımlar, mesajlar ve cihaz oturumu uygulama içinde işlenebilir. Web’in herkese açık sayfaları e-posta, telefon, IBAN, tam koordinat ve özel mesaj içermez.</p>
         <h2>Amaç</h2>
         <p>Hesap, güvenlik, hizmetin sunulması ve yasal yükümlülükler. Konum ve bildirim cihaz iznine bağlıdır.</p>
+        <h2>Rehber eşleştirme</h2>
+        <p>
+          Rehber izni açılışta, kayıtta veya girişte istenmez. İzin yalnızca kullanıcı “Rehberimi eşleştir” dediğinde sorulur ve diğer özellikleri kullanmak için zorunlu değildir. Eşleştirme başlatıldığında rehber numaraları, telefonda kayıtlı biçimleriyle güvenlik ve eşleştirme için sunucuda saklanır. Vora’da olmayan kişilere mesaj gönderilmez. Hesap silme tamamlanınca bu kayıtlar silinir.
+        </p>
         <h2>Haklar</h2>
         <p>Erişim, düzeltme, silme ve itiraz talepleri support@litxtech.com adresine yazılır.</p>
         <h2>Web dizini</h2>

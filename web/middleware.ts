@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { authCookieOptions } from '@/lib/auth-cookie';
 
 export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
@@ -8,19 +9,24 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(redirect.to_path, request.url), redirect.status_code);
   }
 
-  let response = NextResponse.next({ request });
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-vora-path', path);
+  let response = NextResponse.next({ request: { headers: requestHeaders } });
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   if (url && key) {
     const supabase = createServerClient(url, key, {
+      cookieOptions: authCookieOptions,
       cookies: {
         getAll() {
           return request.cookies.getAll();
         },
         setAll(cookiesToSet) {
           for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options);
+          response = NextResponse.next({ request: { headers: requestHeaders } });
+          for (const { name, value, options } of cookiesToSet) {
+            response.cookies.set(name, value, { ...authCookieOptions, ...options });
+          }
         },
       },
     });
@@ -76,5 +82,5 @@ async function lookupRedirect(path: string): Promise<{ to_path: string; status_c
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|vora-logo.png).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|vora-logo.png|sw.js|offline.html|offline-boot.js|manifest.webmanifest).*)'],
 };

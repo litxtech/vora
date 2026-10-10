@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import { useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { MIN_PHOTO_MUSIC_CLIP_SEC } from '@/features/music/constants';
 import { clampMusicRange, formatMusicDuration } from '@/features/music/utils/formatMusicTime';
@@ -22,6 +20,9 @@ function snapSec(value: number): number {
 const HANDLE_TOUCH = 48;
 const HANDLE_VISUAL = 20;
 const TRACK_HEIGHT = 44;
+const HANDLE_SLOP = 36;
+
+type DragMode = 'start' | 'end' | 'window';
 
 export function MusicRangeTrimSlider({
   trackDurationSec,
@@ -35,91 +36,106 @@ export function MusicRangeTrimSlider({
   const trackWidthRef = useRef(0);
   const startSecRef = useRef(startSec);
   const endSecRef = useRef(endSec);
+  const durationRef = useRef(trackDurationSec);
+  const onChangeRef = useRef(onRangeChange);
+  const modeRef = useRef<DragMode>('window');
   const grantSecRef = useRef(0);
   const grantWindowRef = useRef({ start: 0, end: 0 });
 
-  useEffect(() => {
-    startSecRef.current = startSec;
-  }, [startSec]);
-
-  useEffect(() => {
-    endSecRef.current = endSec;
-  }, [endSec]);
-
-  useEffect(() => {
-    trackWidthRef.current = trackWidth;
-  }, [trackWidth]);
+  startSecRef.current = startSec;
+  endSecRef.current = endSec;
+  durationRef.current = trackDurationSec;
+  onChangeRef.current = onRangeChange;
 
   const onLayout = (e: LayoutChangeEvent) => {
-    setTrackWidth(e.nativeEvent.layout.width);
+    const width = e.nativeEvent.layout.width;
+    trackWidthRef.current = width;
+    setTrackWidth(width);
   };
 
-  const commitRange = useCallback(
-    (nextStart: number, nextEnd: number) => {
-      onRangeChange(nextStart, nextEnd);
-    },
-    [onRangeChange],
-  );
-
-  const makeHandlePan = useCallback(
-    (edge: 'start' | 'end') =>
-      Gesture.Pan()
-        .hitSlop({ left: 14, right: 14, top: 18, bottom: 18 })
-        .activeOffsetX([-3, 3])
-        .failOffsetY([-14, 14])
-        .onStart(() => {
-          grantSecRef.current = edge === 'start' ? startSecRef.current : endSecRef.current;
-        })
-        .onUpdate((event) => {
+  const pan = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: (event) => {
           const width = trackWidthRef.current;
-          if (width <= 0 || trackDurationSec <= 0) return;
-          const deltaSec = (event.translationX / width) * trackDurationSec;
-          if (edge === 'start') {
+          const duration = durationRef.current;
+          const start = startSecRef.current;
+          const end = endSecRef.current;
+          if (width <= 0 || duration <= 0) return;
+
+          const x = event.nativeEvent.locationX;
+          const startX = (start / duration) * width;
+          const endX = (end / duration) * width;
+          const distStart = Math.abs(x - startX);
+          const distEnd = Math.abs(x - endX);
+
+          if (distStart <= HANDLE_SLOP && distStart <= distEnd) {
+            modeRef.current = 'start';
+            grantSecRef.current = start;
+            return;
+          }
+          if (distEnd <= HANDLE_SLOP) {
+            modeRef.current = 'end';
+            grantSecRef.current = end;
+            return;
+          }
+
+          modeRef.current = 'window';
+          const clipLen = Math.max(MIN_PHOTO_MUSIC_CLIP_SEC, end - start);
+          if (x >= Math.min(startX, endX) && x <= Math.max(startX, endX)) {
+            grantWindowRef.current = { start, end };
+            return;
+          }
+
+          const tappedSec = (x / width) * duration;
+          const maxStart = Math.max(0, duration - clipLen);
+          const nextStart = snapSec(clampMusicRange(tappedSec - clipLen / 2, 0, maxStart));
+          const nextEnd = snapSec(Math.min(duration, nextStart + clipLen));
+          grantWindowRef.current = { start: nextStart, end: nextEnd };
+          onChangeRef.current(nextStart, nextEnd);
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const width = trackWidthRef.current;
+          const duration = durationRef.current;
+          if (width <= 0 || duration <= 0) return;
+          const deltaSec = (gesture.dx / width) * duration;
+
+          if (modeRef.current === 'start') {
             const maxStart = Math.max(0, endSecRef.current - MIN_PHOTO_MUSIC_CLIP_SEC);
             const nextStart = snapSec(
               clampMusicRange(grantSecRef.current + deltaSec, 0, maxStart),
             );
-            runOnJS(commitRange)(nextStart, endSecRef.current);
-          } else {
+            onChangeRef.current(nextStart, endSecRef.current);
+            return;
+          }
+
+          if (modeRef.current === 'end') {
             const minEnd = Math.min(
-              trackDurationSec,
+              duration,
               startSecRef.current + MIN_PHOTO_MUSIC_CLIP_SEC,
             );
             const nextEnd = snapSec(
-              clampMusicRange(grantSecRef.current + deltaSec, minEnd, trackDurationSec),
+              clampMusicRange(grantSecRef.current + deltaSec, minEnd, duration),
             );
-            runOnJS(commitRange)(startSecRef.current, nextEnd);
+            onChangeRef.current(startSecRef.current, nextEnd);
+            return;
           }
-        }),
-    [commitRange, trackDurationSec],
-  );
 
-  const startPan = useMemo(() => makeHandlePan('start'), [makeHandlePan]);
-  const endPan = useMemo(() => makeHandlePan('end'), [makeHandlePan]);
-
-  const windowPan = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetX([-4, 4])
-        .failOffsetY([-12, 12])
-        .onStart(() => {
-          grantWindowRef.current = {
-            start: startSecRef.current,
-            end: endSecRef.current,
-          };
-        })
-        .onUpdate((event) => {
-          const width = trackWidthRef.current;
-          if (width <= 0 || trackDurationSec <= 0) return;
           const clipLen = grantWindowRef.current.end - grantWindowRef.current.start;
-          const deltaSec = (event.translationX / width) * trackDurationSec;
-          const maxStart = Math.max(0, trackDurationSec - clipLen);
+          const maxStart = Math.max(0, duration - clipLen);
           const nextStart = snapSec(
             clampMusicRange(grantWindowRef.current.start + deltaSec, 0, maxStart),
           );
-          runOnJS(commitRange)(nextStart, snapSec(nextStart + clipLen));
-        }),
-    [commitRange, trackDurationSec],
+          onChangeRef.current(nextStart, snapSec(Math.min(duration, nextStart + clipLen)));
+        },
+      }),
+    [],
   );
 
   const selectionLeft = trackDurationSec > 0 ? (startSec / trackDurationSec) * 100 : 0;
@@ -149,47 +165,43 @@ export function MusicRangeTrimSlider({
         style={[styles.track, { backgroundColor: `${colors.textMuted}20` }]}
         onLayout={onLayout}
         collapsable={false}
+        {...pan.panHandlers}
       >
-        <GestureDetector gesture={windowPan}>
+        <View
+          pointerEvents="none"
+          style={[
+            styles.selection,
+            {
+              left: `${selectionLeft}%`,
+              width: `${selectionWidth}%`,
+              backgroundColor: colors.accent,
+            },
+          ]}
+        />
+
+        <View
+          pointerEvents="none"
+          style={[styles.handleTouch, { left: secToX(startSec) - HANDLE_TOUCH / 2 }]}
+        >
           <View
             style={[
-              styles.selection,
-              {
-                left: `${selectionLeft}%`,
-                width: `${selectionWidth}%`,
-                backgroundColor: colors.accent,
-              },
+              styles.handleVisual,
+              { borderColor: colors.accent, backgroundColor: colors.background },
             ]}
           />
-        </GestureDetector>
+        </View>
 
-        <GestureDetector gesture={startPan}>
+        <View
+          pointerEvents="none"
+          style={[styles.handleTouch, { left: secToX(endSec) - HANDLE_TOUCH / 2 }]}
+        >
           <View
-            style={[styles.handleTouch, { left: secToX(startSec) - HANDLE_TOUCH / 2 }]}
-            collapsable={false}
-          >
-            <View
-              style={[
-                styles.handleVisual,
-                { borderColor: colors.accent, backgroundColor: colors.background },
-              ]}
-            />
-          </View>
-        </GestureDetector>
-
-        <GestureDetector gesture={endPan}>
-          <View
-            style={[styles.handleTouch, { left: secToX(endSec) - HANDLE_TOUCH / 2 }]}
-            collapsable={false}
-          >
-            <View
-              style={[
-                styles.handleVisual,
-                { borderColor: colors.accent, backgroundColor: colors.background },
-              ]}
-            />
-          </View>
-        </GestureDetector>
+            style={[
+              styles.handleVisual,
+              { borderColor: colors.accent, backgroundColor: colors.background },
+            ]}
+          />
+        </View>
       </View>
 
       <Text secondary variant="caption" style={styles.hint}>

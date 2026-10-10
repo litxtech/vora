@@ -10,6 +10,7 @@ type CentersDrawerLinkRowProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
   href: Href;
+  hint?: string;
   onNavigate?: () => void;
   badge?: number;
   accentIcon?: boolean;
@@ -19,6 +20,7 @@ export function CentersDrawerLinkRow({
   icon,
   label,
   href,
+  hint,
   onNavigate,
   badge,
   accentIcon = false,
@@ -40,6 +42,11 @@ export function CentersDrawerLinkRow({
       <Text variant="body" style={[styles.label, { color: colors.text }]} numberOfLines={1}>
         {label}
       </Text>
+      {hint ? (
+        <Text variant="caption" style={{ color: colors.accent, fontWeight: '700' }} numberOfLines={1}>
+          {hint}
+        </Text>
+      ) : null}
       {badge != null && badge > 0 ? (
         <View style={[styles.badge, { backgroundColor: colors.primary }]}>
           <Text variant="caption" style={styles.badgeText}>

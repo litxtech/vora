@@ -14,6 +14,7 @@ import { applyBusinessFollowStateToFeedItems } from '@/features/profile/services
 import { supabase } from '@/lib/supabase/client';
 import type { MusicAttribution, MusicPlaybackConfig } from '@/features/music/types';
 import { isMusicTrackPlayable } from '@/features/music/constants';
+import { musicClipDurationSec } from '@/features/music/utils/formatMusicTime';
 import { resolvePlayableMusicUrl } from '@/features/music/constants/demoTracks';
 import type { PublishedEditManifest } from '@/features/vora-studio/types';
 import type { GenderId } from '@/constants/registration';
@@ -37,6 +38,8 @@ const REEL_SELECT = `
 
 function mapMusic(row: {
   music_track_id: string | null;
+  music_start_sec?: number | null;
+  music_end_sec?: number | null;
   music_tracks:
     | { id: string; display_title: string; artist: string; audio_url?: string; duration_seconds?: number }
     | { id: string; display_title: string; artist: string; audio_url?: string; duration_seconds?: number }[]
@@ -49,6 +52,7 @@ function mapMusic(row: {
     trackId: track.id,
     displayTitle: track.display_title,
     artist: track.artist,
+    durationSec: musicClipDurationSec(row.music_start_sec, row.music_end_sec, track.duration_seconds),
   };
 }
 

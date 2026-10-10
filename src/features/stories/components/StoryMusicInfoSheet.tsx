@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { navigateToPublicProfile } from '@/features/profile/services/profileNavigation';
 import { fetchMusicTrackById } from '@/features/music/services/musicData';
+import { formatMusicDuration } from '@/features/music/utils/formatMusicTime';
 import { isPersistableMusicTrackId } from '@/features/music/utils/trackId';
 import { fetchSoundById } from '@/features/sounds/services/soundData';
 import type { StoryMusicAddedBy } from '@/features/stories/types/storyMusic';
@@ -104,6 +105,7 @@ export function StoryMusicInfoSheet({
   }, [visible, music.trackId, music.artist]);
 
   const displayArtist = info?.artist || music.artist;
+  const clipSec = Math.max(0, music.musicEndSec - music.musicStartSec);
   const usageLabel = info?.isSound ? 'kullanım' : 'paylaşımda kullanıldı';
 
   return (
@@ -157,7 +159,7 @@ export function StoryMusicInfoSheet({
                     {music.displayTitle}
                   </Text>
                   <Text secondary variant="caption" numberOfLines={1}>
-                    {displayArtist}
+                    {[displayArtist, clipSec > 0 ? formatMusicDuration(clipSec) : null].filter(Boolean).join(' · ')}
                   </Text>
                 </View>
               </View>

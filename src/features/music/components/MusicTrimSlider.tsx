@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LayoutChangeEvent, StyleSheet, View } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { runOnJS } from 'react-native-reanimated';
+import { useMemo, useRef, useState } from 'react';
+import { LayoutChangeEvent, PanResponder, StyleSheet, View } from 'react-native';
 import { Text } from '@/components/ui/Text';
 import { clampMusicRange, formatMusicDuration } from '@/features/music/utils/formatMusicTime';
 import { radius, spacing } from '@/constants/theme';
@@ -35,44 +33,59 @@ export function MusicTrimSlider({
   const trackWidthRef = useRef(0);
   const startSecRef = useRef(startSec);
   const grantStartRef = useRef(0);
+  const maxStartRef = useRef(maxStart);
+  const durationRef = useRef(trackDurationSec);
+  const clipRef = useRef(clipDurationSec);
+  const onChangeRef = useRef(onStartChange);
 
-  useEffect(() => {
-    startSecRef.current = startSec;
-  }, [startSec]);
-
-  useEffect(() => {
-    trackWidthRef.current = trackWidth;
-  }, [trackWidth]);
-
-  const commitStart = useCallback(
-    (sec: number) => {
-      onStartChange(sec);
-    },
-    [onStartChange],
-  );
+  startSecRef.current = startSec;
+  maxStartRef.current = maxStart;
+  durationRef.current = trackDurationSec;
+  clipRef.current = clipDurationSec;
+  onChangeRef.current = onStartChange;
 
   const onLayout = (e: LayoutChangeEvent) => {
-    setTrackWidth(e.nativeEvent.layout.width);
+    const width = e.nativeEvent.layout.width;
+    trackWidthRef.current = width;
+    setTrackWidth(width);
   };
 
-  const trackPan = useMemo(
+  const pan = useMemo(
     () =>
-      Gesture.Pan()
-        .activeOffsetX([-4, 4])
-        .failOffsetY([-12, 12])
-        .onStart(() => {
-          grantStartRef.current = startSecRef.current;
-        })
-        .onUpdate((event) => {
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => true,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderTerminationRequest: () => false,
+        onShouldBlockNativeResponder: () => true,
+        onPanResponderGrant: (event) => {
           const width = trackWidthRef.current;
-          if (width <= 0 || trackDurationSec <= 0) return;
-          const deltaSec = (event.translationX / width) * trackDurationSec;
+          const duration = durationRef.current;
+          const clip = clipRef.current;
+          if (width <= 0 || duration <= 0) {
+            grantStartRef.current = startSecRef.current;
+            return;
+          }
+          const tappedSec = (event.nativeEvent.locationX / width) * duration;
           const next = snapSec(
-            clampMusicRange(grantStartRef.current + deltaSec, 0, maxStart),
+            clampMusicRange(tappedSec - clip / 2, 0, maxStartRef.current),
           );
-          runOnJS(commitStart)(next);
-        }),
-    [commitStart, maxStart, trackDurationSec],
+          grantStartRef.current = next;
+          onChangeRef.current(next);
+        },
+        onPanResponderMove: (_event, gesture) => {
+          const width = trackWidthRef.current;
+          const duration = durationRef.current;
+          if (width <= 0 || duration <= 0) return;
+          const deltaSec = (gesture.dx / width) * duration;
+          const next = snapSec(
+            clampMusicRange(grantStartRef.current + deltaSec, 0, maxStartRef.current),
+          );
+          onChangeRef.current(next);
+        },
+      }),
+    [],
   );
 
   const selectionLeft = trackDurationSec > 0 ? (startSec / trackDurationSec) * 100 : 0;
@@ -96,43 +109,43 @@ export function MusicTrimSlider({
         </Text>
       </View>
 
-      <GestureDetector gesture={trackPan}>
+      <View
+        style={[styles.track, { backgroundColor: `${colors.textMuted}20` }]}
+        onLayout={onLayout}
+        collapsable={false}
+        {...pan.panHandlers}
+      >
         <View
-          style={[styles.track, { backgroundColor: `${colors.textMuted}20` }]}
-          onLayout={onLayout}
-          collapsable={false}
+          pointerEvents="none"
+          style={[
+            styles.selection,
+            {
+              left: `${selectionLeft}%`,
+              width: `${Math.min(selectionWidth, 100 - selectionLeft)}%`,
+              backgroundColor: colors.accent,
+            },
+          ]}
+        />
+        <View
+          pointerEvents="none"
+          style={[
+            styles.handleTouch,
+            {
+              left: handleCenterX - HANDLE_TOUCH / 2,
+            },
+          ]}
         >
           <View
             style={[
-              styles.selection,
+              styles.handleVisual,
               {
-                left: `${selectionLeft}%`,
-                width: `${Math.min(selectionWidth, 100 - selectionLeft)}%`,
-                backgroundColor: colors.accent,
+                borderColor: colors.accent,
+                backgroundColor: colors.background,
               },
             ]}
           />
-          <View
-            style={[
-              styles.handleTouch,
-              {
-                left: handleCenterX - HANDLE_TOUCH / 2,
-              },
-            ]}
-            pointerEvents="none"
-          >
-            <View
-              style={[
-                styles.handleVisual,
-                {
-                  borderColor: colors.accent,
-                  backgroundColor: colors.background,
-                },
-              ]}
-            />
-          </View>
         </View>
-      </GestureDetector>
+      </View>
     </View>
   );
 }

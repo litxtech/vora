@@ -63,7 +63,7 @@ export function AdminBusinessesScreen() {
     <>
       <AdminShell
         title="Kurumsal Hesaplar"
-        subtitle="Başvuru inceleme — belgeleri ve işletme bilgilerini görüntüleyin"
+        subtitle="Başvuru, profil kaldırma ve gönderilerde gizleme"
         requireAdmin
         refreshing={refreshing}
         onRefresh={() => load(true)}

@@ -32,7 +32,7 @@ function normalizeMusicSelection(selection: MusicSelection): MusicSelection {
 
 export async function recordMusicUsage(
   selection: MusicSelection,
-  input: { postId?: string | null; reelId?: string | null },
+  input: { postId?: string | null; reelId?: string | null; storyItemId?: string | null },
 ): Promise<{ error: string | null }> {
   if (!isPersistableMusicTrackId(selection.trackId)) {
     return { error: null };
@@ -43,6 +43,7 @@ export async function recordMusicUsage(
     p_track_id: normalized.trackId,
     p_post_id: input.postId ?? null,
     p_reel_id: input.reelId ?? null,
+    p_story_item_id: input.storyItemId ?? null,
     p_music_start_sec: normalized.musicStartSec,
     p_music_end_sec: normalized.musicEndSec,
     p_music_volume: normalized.musicVolume,

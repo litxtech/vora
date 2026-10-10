@@ -5,7 +5,7 @@ import { router } from 'expo-router';
 import { FullScreenMediaViewer } from '@/components/media/FullScreenMediaViewer';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeLinearGradient } from '@/components/ui/SafeLinearGradient';
-import { asGradientColors, themedAlphaHex } from '@/lib/ui/gradientColors';
+import { themedAlphaHex } from '@/lib/ui/gradientColors';
 import { shouldUsePlainScreenBackground } from '@/lib/device/androidPerfProfile';
 import { Text } from '@/components/ui/Text';
 import { isDeletedAccount } from '@/features/account-deletion/utils';
@@ -73,42 +73,39 @@ export function ProfileHeader({
   };
 
   const avatarPressable = !deleted && (profile.avatarUrl || isOwnProfile);
+  const hasCover = Boolean(profile.coverUrl);
+
+  const avatar = (
+    <ProfileAvatar
+      username={profile.username}
+      avatarUrl={profile.avatarUrl}
+      size={96}
+      isPremium={deleted ? false : premiumBadge}
+      isVerified={deleted ? false : profile.isVerified}
+      isBusinessVerified={deleted ? false : profile.isBusinessVerified}
+      displayInitial={profile.displayName}
+      isDeleted={deleted}
+      onPress={avatarPressable ? handleAvatarPress : undefined}
+    />
+  );
 
   return (
     <View style={styles.container}>
+      {hasCover ? (
       <View style={styles.coverWrap}>
-        {profile.coverUrl ? (
-          <>
-            <Pressable onPress={() => setViewerUrls([profile.coverUrl!])}>
-              <Image source={{ uri: profile.coverUrl }} style={styles.cover} contentFit="cover" cachePolicy="memory-disk" recyclingKey={profile.coverUrl} />
-            </Pressable>
-            {shouldUsePlainScreenBackground() ? (
-              <View
-                style={[styles.coverOverlay, { backgroundColor: themedAlphaHex(colors.background, 'D9') }]}
-                pointerEvents="none"
-              />
-            ) : (
-              <SafeLinearGradient
-                colors={['transparent', themedAlphaHex(colors.background, 'D9')]}
-                style={styles.coverOverlay}
-                pointerEvents="none"
-              />
-            )}
-          </>
-        ) : shouldUsePlainScreenBackground() ? (
-          <View style={[styles.cover, { backgroundColor: colors.surfaceElevated }]} />
+        <Pressable onPress={() => setViewerUrls([profile.coverUrl!])} style={styles.coverPress}>
+          <Image source={{ uri: profile.coverUrl! }} style={styles.cover} contentFit="cover" cachePolicy="memory-disk" recyclingKey={profile.coverUrl!} />
+        </Pressable>
+        {shouldUsePlainScreenBackground() ? (
+          <View
+            style={[styles.coverOverlay, { backgroundColor: themedAlphaHex(colors.background, 'D9') }]}
+            pointerEvents="none"
+          />
         ) : (
           <SafeLinearGradient
-            colors={asGradientColors(
-              premiumBadge || profile.isBusinessVerified
-                ? ['#1A1508', '#2A2010', colors.background]
-                : [
-                    themedAlphaHex(colors.primary, '44'),
-                    colors.surfaceElevated,
-                    colors.background,
-                  ],
-            )}
-            style={styles.cover}
+            colors={['transparent', themedAlphaHex(colors.background, 'D9')]}
+            style={styles.coverOverlay}
+            pointerEvents="none"
           />
         )}
 
@@ -131,19 +128,30 @@ export function ProfileHeader({
         ) : null}
 
         <View style={styles.avatarOverlay}>
-          <ProfileAvatar
-            username={profile.username}
-            avatarUrl={profile.avatarUrl}
-            size={96}
-            isPremium={deleted ? false : premiumBadge}
-            isVerified={deleted ? false : profile.isVerified}
-            isBusinessVerified={deleted ? false : profile.isBusinessVerified}
-            displayInitial={profile.displayName}
-            isDeleted={deleted}
-            onPress={avatarPressable ? handleAvatarPress : undefined}
-          />
+          {avatar}
         </View>
       </View>
+      ) : (
+        <View style={styles.avatarPlain}>
+          {avatar}
+          {premiumBadge ? (
+            <View style={styles.premiumRibbon}>
+              <Ionicons name="diamond" size={12} color="#FFB300" />
+              <Text variant="caption" style={styles.premiumText}>
+                Premium
+              </Text>
+            </View>
+          ) : null}
+          {boosted ? (
+            <View style={[styles.boostRibbon, { backgroundColor: colors.primary }]}>
+              <Ionicons name="trending-up" size={12} color="#fff" />
+              <Text variant="caption" style={{ color: '#fff', fontSize: 10, fontWeight: '700' }}>
+                Öne Çıkan
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      )}
 
       <View style={styles.info}>
         <View style={styles.nameRow}>
@@ -242,10 +250,22 @@ export function ProfileHeader({
 
 const styles = StyleSheet.create({
   container: { gap: spacing.md },
-  coverWrap: { position: 'relative', marginBottom: 48 },
-  cover: { width: '100%', height: 160, borderRadius: radius.xl },
+  coverWrap: { position: 'relative', paddingBottom: 48 },
+  avatarPlain: { position: 'relative', minHeight: 96, justifyContent: 'center' },
+  coverPress: {
+    width: '100%',
+    height: 160,
+    borderRadius: radius.xl,
+    overflow: 'hidden',
+    backgroundColor: '#1A2230',
+  },
+  cover: { width: '100%', height: '100%' },
   coverOverlay: {
-    ...StyleSheet.absoluteFill,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 160,
     borderRadius: radius.xl,
   },
   premiumRibbon: {
@@ -274,7 +294,13 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: radius.full,
   },
-  avatarOverlay: { position: 'absolute', bottom: -48, left: spacing.md },
+  avatarOverlay: {
+    position: 'absolute',
+    left: spacing.md,
+    bottom: 0,
+    zIndex: 2,
+    elevation: 4,
+  },
   info: { paddingTop: spacing.xs, paddingHorizontal: spacing.xs, gap: spacing.sm },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
   identityMeta: {

@@ -1,4 +1,4 @@
-import { Alert, InteractionManager, Linking } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { router } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { resolveAppRouteFromShareUrl } from '@/lib/sharing/resolveIncomingShareUrl';
@@ -122,6 +122,13 @@ async function openHttpInApp(url: string, options?: OpenUrlOptions): Promise<boo
   return openWithLinking(url);
 }
 
+/** Yorum kartı kapanmadan açılan ikinci pencere iOS'ta görünmeden takılıyor. */
+const SHEET_DISMISS_MS = 600;
+
+function afterSheetDismiss(task: () => void) {
+  setTimeout(task, SHEET_DISMISS_MS);
+}
+
 /**
  * Harici link açar.
  * Web siteleri: expo-web-browser (Safari sheet / Chrome Custom Tab) → sistem tarayıcısı
@@ -131,8 +138,7 @@ export async function openUrl(raw: string, options?: OpenUrlOptions): Promise<vo
   if (inAppRoute) {
     devLog('openUrl', 'in-app share route', { raw, inAppRoute });
     options?.onBeforeNavigate?.();
-    // Modal/sheet kapandıktan sonra push et — aksi halde navigasyon arkada kalır
-    InteractionManager.runAfterInteractions(() => {
+    afterSheetDismiss(() => {
       router.push(inAppRoute as never);
     });
     return;
@@ -141,19 +147,41 @@ export async function openUrl(raw: string, options?: OpenUrlOptions): Promise<vo
   const url = normalizeLinkInput(raw);
   if (!url) return;
 
-  options?.onBeforeNavigate?.();
-
   const mode = resolveOpenMode(url);
-  devLog('openUrl', 'open', { raw, url, mode });
+  const openExternal = async () => {
+    devLog('openUrl', 'open', { raw, url, mode });
+    if (mode === 'in_app_web') {
+      if (await openHttpInApp(url, options)) return;
+    } else {
+      if (await openWithLinking(url)) return;
+      if (hasHttpScheme(url) && (await openHttpInApp(url, options))) return;
+    }
+    if (__DEV__) {
+      Alert.alert('Link açılamadı', url);
+    }
+  };
 
-  if (mode === 'in_app_web') {
-    if (await openHttpInApp(url, options)) return;
-  } else {
-    if (await openWithLinking(url)) return;
-    if (hasHttpScheme(url) && (await openHttpInApp(url, options))) return;
+  if (options?.onBeforeNavigate) {
+    options.onBeforeNavigate();
+    const afterSheet: OpenUrlOptions = {
+      ...options,
+      presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+    };
+    afterSheetDismiss(() => {
+      void (async () => {
+        devLog('openUrl', 'open after sheet', { raw, url, mode });
+        if (mode === 'in_app_web') {
+          if (await openHttpInApp(url, afterSheet)) return;
+        } else if (await openWithLinking(url)) {
+          return;
+        } else if (hasHttpScheme(url) && (await openHttpInApp(url, afterSheet))) {
+          return;
+        }
+        if (__DEV__) Alert.alert('Link açılamadı', url);
+      })();
+    });
+    return;
   }
 
-  if (__DEV__) {
-    Alert.alert('Link açılamadı', url);
-  }
+  await openExternal();
 }

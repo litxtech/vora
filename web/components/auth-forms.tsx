@@ -24,13 +24,14 @@ function Note({ state }: { state: AuthState }) {
   );
 }
 
-export function LoginForm({ reset }: { reset?: boolean }) {
+export function LoginForm({ reset, accessMessage }: { reset?: boolean; accessMessage?: string }) {
   const [state, action, pending] = useActionState(loginAction, initial);
   return (
     <form className="stack auth-card" action={action}>
       <h1>Giriş yap</h1>
-      <p className="muted">E-posta veya kullanıcı adınla devam et. Hesap, mobil uygulamadaki hesabınla aynıdır.</p>
+      <p className="muted">E-posta veya kullanıcı adınla devam et. Hesap, mobil uygulamadaki hesabınla aynıdır. Oturum bu tarayıcıda açık kalır.</p>
       {reset ? <p className="form-ok">Şifren güncellendi. Yeni şifrenle giriş yap.</p> : null}
+      {accessMessage ? <p className="form-error">{accessMessage}</p> : null}
       <label htmlFor="identifier">E-posta veya kullanıcı adı</label>
       <input id="identifier" name="identifier" autoComplete="username" required />
       <label htmlFor="password">Şifre</label>

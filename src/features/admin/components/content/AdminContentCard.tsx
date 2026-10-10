@@ -28,6 +28,8 @@ type PostCardProps = {
   onRemove: () => void;
   onRestore?: () => void;
   onDeletePermanent?: () => void;
+  onInstantDelete?: () => void;
+  onViewers?: () => void;
   busy?: boolean;
 };
 
@@ -39,6 +41,8 @@ export function AdminPostContentCard({
   onRemove,
   onRestore,
   onDeletePermanent,
+  onInstantDelete,
+  onViewers,
   busy = false,
 }: PostCardProps) {
   const { colors } = useTheme();
@@ -91,11 +95,17 @@ export function AdminPostContentCard({
 
       <View style={styles.actions}>
         <AdminActionChip label="Önizle" icon="eye-outline" tone="primary" compact onPress={onPreview} />
+        {onViewers ? (
+          <AdminActionChip label="Görüntüleyenler" icon="people-outline" compact onPress={onViewers} />
+        ) : null}
         {item.status === 'published' ? (
           <>
             <AdminActionChip label="Uyar" icon="alert-circle-outline" tone="warning" compact loading={busy} onPress={onWarn} />
             <AdminActionChip label="Gizle" icon="eye-off-outline" compact loading={busy} onPress={onHide} />
             <AdminActionChip label="Kaldır" icon="trash-outline" tone="danger" compact loading={busy} onPress={onRemove} />
+            {onInstantDelete ? (
+              <AdminActionChip label="Anında sil" icon="flash-outline" tone="danger" compact loading={busy} onPress={onInstantDelete} />
+            ) : null}
           </>
         ) : (
           <>
@@ -120,6 +130,8 @@ type ReelCardProps = {
   onRemove: () => void;
   onRestore?: () => void;
   onDeletePermanent?: () => void;
+  onInstantDelete?: () => void;
+  onViewers?: () => void;
   busy?: boolean;
 };
 
@@ -131,6 +143,8 @@ export function AdminReelContentCard({
   onRemove,
   onRestore,
   onDeletePermanent,
+  onInstantDelete,
+  onViewers,
   busy = false,
 }: ReelCardProps) {
   const { colors } = useTheme();
@@ -174,11 +188,17 @@ export function AdminReelContentCard({
 
       <View style={styles.actions}>
         <AdminActionChip label="Önizle" icon="eye-outline" tone="primary" compact onPress={onPreview} />
+        {onViewers ? (
+          <AdminActionChip label="Görüntüleyenler" icon="people-outline" compact onPress={onViewers} />
+        ) : null}
         {item.status === 'published' ? (
           <>
             <AdminActionChip label="Uyar" icon="alert-circle-outline" tone="warning" compact loading={busy} onPress={onWarn} />
             <AdminActionChip label="Gizle" icon="eye-off-outline" compact loading={busy} onPress={onHide} />
             <AdminActionChip label="Kaldır" icon="trash-outline" tone="danger" compact loading={busy} onPress={onRemove} />
+            {onInstantDelete ? (
+              <AdminActionChip label="Anında sil" icon="flash-outline" tone="danger" compact loading={busy} onPress={onInstantDelete} />
+            ) : null}
           </>
         ) : (
           <>

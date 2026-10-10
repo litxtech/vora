@@ -14,6 +14,8 @@ type SoundCardProps = {
   onPress?: () => void;
   onPreview?: () => void;
   onUse?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
   compact?: boolean;
 };
 
@@ -24,6 +26,8 @@ export function SoundCard({
   onPress,
   onPreview,
   onUse,
+  onEdit,
+  onDelete,
   compact = false,
 }: SoundCardProps) {
   const { colors } = useTheme();
@@ -67,10 +71,22 @@ export function SoundCard({
           {formatSoundDuration(sound.durationSec)}
           {' · '}
           {sound.usageCount.toLocaleString('tr-TR')} kullanım
+          {sound.privacy === 'private' ? ' · Gizli' : ''}
         </Text>
       </View>
 
-      {onUse ? (
+      {onEdit ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Düzenle" onPress={onEdit} hitSlop={8} style={styles.iconBtn}>
+          <Ionicons name="create-outline" size={20} color={colors.text} />
+        </Pressable>
+      ) : null}
+      {onDelete ? (
+        <Pressable accessibilityRole="button" accessibilityLabel="Kaldır" onPress={onDelete} hitSlop={8} style={styles.iconBtn}>
+          <Ionicons name="trash-outline" size={20} color={colors.danger} />
+        </Pressable>
+      ) : null}
+
+      {onUse && !onEdit && !onDelete ? (
         <Pressable
           onPress={onUse}
           disabled={!isSoundPlayable(sound.audioUrl)}
@@ -127,6 +143,12 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: '700',
+  },
+  iconBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   useBtn: {
     paddingHorizontal: spacing.sm,

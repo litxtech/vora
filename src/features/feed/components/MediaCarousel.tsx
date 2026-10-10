@@ -1,5 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Image as RnImage, LayoutChangeEvent, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Image as RnImage, LayoutChangeEvent, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import type { ImageContentFit, ImageLoadEventData } from 'expo-image';
 import { FEED_MEDIA_ASPECT_RATIO } from '@/features/feed/constants';
 import { getFeedMediaMaxHeight } from '@/lib/device/androidPerfProfile';
@@ -16,6 +16,19 @@ const MAX_INLINE_ASPECT = 1.91;
 const DEFAULT_INLINE_ASPECT = 1;
 const VIDEO_INLINE_ASPECT = 4 / 5;
 const SLIDE_WINDOW = 1;
+/** Akış kartı: yatay padding + satır boşluğu + avatar (40 + halka). İlk karede onLayout beklemeden yükseklik. */
+const FEED_INLINE_MEDIA_CHROME = spacing.md * 2 + spacing.sm + 44;
+
+const feedAspectCache = new Map<string, number>();
+
+function readCachedAspects(urls: string[]): Record<string, number> {
+  const seeded: Record<string, number> = {};
+  for (const url of urls) {
+    const cached = feedAspectCache.get(url);
+    if (cached != null) seeded[url] = cached;
+  }
+  return seeded;
+}
 
 type MediaCarouselProps = {
   urls: string[];
@@ -61,12 +74,29 @@ export const MediaCarousel = memo(function MediaCarousel({
 }: MediaCarouselProps) {
   const { colors } = useTheme();
   const isInline = variant === 'inline';
+  const { width: screenWidth } = useWindowDimensions();
+  const urlsKey = urls.join('\n');
 
   const [index, setIndex] = useState(0);
-  const [width, setWidth] = useState(0);
-  const [aspectByUrl, setAspectByUrl] = useState<Record<string, number>>({});
+  const indexRef = useRef(0);
+  indexRef.current = index;
+  const [measuredWidth, setMeasuredWidth] = useState(0);
+  const [aspectByUrl, setAspectByUrl] = useState<Record<string, number>>(() => readCachedAspects(urls));
+  const [trackedUrlsKey, setTrackedUrlsKey] = useState(urlsKey);
+
+  // Geri dönüşümde eski gönderinin oranı kalmasın; önbellek varsa ilk karede doğru yükseklik.
+  if (trackedUrlsKey !== urlsKey) {
+    setTrackedUrlsKey(urlsKey);
+    setAspectByUrl(readCachedAspects(urls));
+    indexRef.current = 0;
+    setIndex(0);
+  }
+
+  const estimatedInlineWidth = Math.max(0, Math.round(screenWidth - FEED_INLINE_MEDIA_CHROME));
+  const width = measuredWidth > 0 ? measuredWidth : isInline ? estimatedInlineWidth : 0;
 
   const rememberAspect = useCallback((url: string, nextAspect: number) => {
+    feedAspectCache.set(url, nextAspect);
     setAspectByUrl((prev) => {
       if (prev[url] != null && Math.abs(prev[url] - nextAspect) < 0.01) return prev;
       return { ...prev, [url]: nextAspect };
@@ -76,12 +106,14 @@ export const MediaCarousel = memo(function MediaCarousel({
   useEffect(() => {
     let cancelled = false;
     for (const url of urls) {
-      if (!url || isVideoUrl(url)) continue;
+      if (!url || isVideoUrl(url) || feedAspectCache.has(url)) continue;
       RnImage.getSize(
         url,
         (w, h) => {
+          const aspect = clampFeedAspect(w, h);
+          feedAspectCache.set(url, aspect);
           if (cancelled) return;
-          rememberAspect(url, clampFeedAspect(w, h));
+          rememberAspect(url, aspect);
         },
         () => undefined,
       );
@@ -105,10 +137,13 @@ export const MediaCarousel = memo(function MediaCarousel({
 
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const next = Math.round(e.nativeEvent.layout.width);
-    if (next > 0) {
-      setWidth((prev) => (prev === next ? prev : next));
-    }
-  }, []);
+    if (next <= 0) return;
+    setMeasuredWidth((prev) => {
+      const current = prev > 0 ? prev : estimatedInlineWidth;
+      if (Math.abs(current - next) <= 1) return prev;
+      return next;
+    });
+  }, [estimatedInlineWidth]);
 
   const resolveHeight = useCallback(
     (layoutWidth: number, aspect: number) => {
@@ -128,10 +163,22 @@ export const MediaCarousel = memo(function MediaCarousel({
 
   const updateIndex = useCallback(
     (next: number) => {
+      if (next === indexRef.current) return;
+      indexRef.current = next;
       setIndex(next);
       onSlideIndexChange?.(next);
     },
     [onSlideIndexChange],
+  );
+
+  const syncFromOffset = useCallback(
+    (offsetX: number) => {
+      if (width <= 0) return;
+      const next = Math.round(offsetX / width);
+      if (next < 0 || next >= urls.length) return;
+      updateIndex(next);
+    },
+    [updateIndex, urls.length, width],
   );
 
   const handleImageLoad = useCallback(
@@ -148,7 +195,7 @@ export const MediaCarousel = memo(function MediaCarousel({
   const borderRadius = isInline ? radius.xl : 0;
   const inlineHeight = width > 0 ? resolveHeight(width, mediaAspect) : 0;
   const showDots = isInline && urls.length > 1;
-  // İlk paint'te aspectRatio ile yer ayır; ölçüldükten sonra sabit height (maxHeight ile çakışmasın).
+  // Genişlik biliniyorsa sabit height — aspectRatio → height geçişi yukarı kaydırmada satırı oynatır.
   const frameLayoutStyle = isInline
     ? {
         borderColor: `${colors.border}88`,
@@ -177,13 +224,14 @@ export const MediaCarousel = memo(function MediaCarousel({
             <ScrollView
               horizontal
               pagingEnabled
+              directionalLockEnabled
+              nestedScrollEnabled={false}
               showsHorizontalScrollIndicator={false}
               removeClippedSubviews={false}
               style={[styles.carouselScroll, { height: inlineHeight }]}
-              onMomentumScrollEnd={(e) => {
-                const next = Math.round(e.nativeEvent.contentOffset.x / width);
-                updateIndex(next);
-              }}
+              scrollEventThrottle={32}
+              onScroll={(e) => syncFromOffset(e.nativeEvent.contentOffset.x)}
+              onMomentumScrollEnd={(e) => syncFromOffset(e.nativeEvent.contentOffset.x)}
             >
               {urls.map((url, i) => {
                 const slideHeight = isInline ? inlineHeight : resolveHeight(width, mediaAspect);

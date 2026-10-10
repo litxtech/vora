@@ -24,7 +24,7 @@ const RequestRow = memo(function RequestRow({ item }: RequestRowProps) {
 
 export function MessageRequestsInbox() {
   const { user } = useAuth();
-  const { conversations, refresh } = useConversationList();
+  const { conversations, ready, refresh } = useConversationList();
   const [restrictedIds, setRestrictedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -69,9 +69,11 @@ export function MessageRequestsInbox() {
         onRefresh={refresh}
         {...getAndroidFlatListPerfProps()}
         ListEmptyComponent={
-          <Text secondary style={styles.empty}>
-            Mesaj isteği yok.
-          </Text>
+          ready ? (
+            <Text secondary style={styles.empty}>
+              Mesaj isteği yok.
+            </Text>
+          ) : null
         }
       />
     </View>
