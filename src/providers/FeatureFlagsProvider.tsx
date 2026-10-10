@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { AppState } from 'react-native';
+import { featureOwnDefaultVisible } from '@/features/feature-flags/constants';
 import { fetchFeatureVisibility } from '@/features/feature-flags/services/featureFlags';
 import { isFeatureForcedHidden } from '@/features/feature-flags/services/featureFlagsCore';
 import { getFeatureAncestors, isEffectivelyVisible } from '@/features/feature-flags/services/featureTree';
@@ -30,10 +31,17 @@ function isForcedOff(featureId: string): boolean {
   return getFeatureAncestors(featureId).some((id) => isFeatureForcedHidden(id));
 }
 
+function isVisibleBeforeFlags(featureId: string): boolean {
+  if (!featureId) return true;
+  if (isForcedOff(featureId)) return false;
+  if (!featureOwnDefaultVisible(featureId)) return false;
+  return getFeatureAncestors(featureId).every((id) => featureOwnDefaultVisible(id));
+}
+
 const FEATURE_FLAGS_FALLBACK: FeatureFlagsContextValue = {
   isReady: false,
   visibility: {},
-  isVisible: (featureId) => !featureId || !isForcedOff(featureId),
+  isVisible: (featureId) => isVisibleBeforeFlags(featureId),
   refresh: async () => undefined,
 };
 
@@ -125,7 +133,7 @@ export function FeatureFlagsProvider({ children }: { children: ReactNode }) {
     (featureId: FeatureId) => {
       if (!featureId) return true;
       if (isForcedOff(featureId)) return false;
-      if (!isReady) return true;
+      if (!isReady) return isVisibleBeforeFlags(featureId);
       return isEffectivelyVisible(featureId, visibility);
     },
     [isReady, visibility],

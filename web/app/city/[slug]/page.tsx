@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { OfflineTools } from '@/components/offline/offline-tools';
 import { Breadcrumbs, CtaBand, JsonLd, ShareBar } from '@/components/site';
 import { cityById } from '@/lib/cities';
 import { displayName, listBlogByCity, listEvents, listPosts, listProfiles, postHeadline } from '@/lib/data';
@@ -8,6 +9,14 @@ import { breadcrumbLd, graph, toMetadata, trimDescription } from '@/lib/seo/engi
 import { absoluteUrl } from '@/lib/site';
 
 type Params = { slug: string };
+
+const FACTS = [
+  { key: 'history', label: 'Tarih' },
+  { key: 'social', label: 'Sosyal yaşam' },
+  { key: 'culture', label: 'Kültür' },
+  { key: 'local', label: 'Yerel' },
+  { key: 'community', label: 'Vora topluluğu' },
+] as const;
 
 export async function generateMetadata({ params }: { params: Promise<Params> }): Promise<Metadata> {
   const { slug } = await params;
@@ -48,102 +57,169 @@ export default async function CityPage({ params }: { params: Promise<Params> }) 
       containedInPlace: { '@type': 'AdministrativeArea', name: 'Karadeniz, Türkiye' },
     },
   ]);
+  const facts = FACTS.map((fact) => ({ ...fact, body: city[fact.key] }));
+  const related = city.related.flatMap((id) => {
+    const item = cityById(id);
+    return item ? [item] : [];
+  });
 
   return (
-    <article className="block">
+    <article>
       <JsonLd data={jsonLd} />
-      <div className="wrap prose">
-        <Breadcrumbs items={crumbs} />
-        <h1>{city.name}</h1>
-        <p>{city.intro}</p>
-        <ShareBar path={absoluteUrl(`/city/${city.id}`)} title={`${city.name} · Vora`} />
-        <h2>Şehir hakkında</h2>
-        <p>{city.history}</p>
-        <h2>Sosyal yaşam</h2>
-        <p>{city.social}</p>
-        <h2>Kültürel yapı</h2>
-        <p>{city.culture}</p>
-        <h2>Yerel özellikler</h2>
-        <p>{city.local}</p>
-        <h2>Vora topluluğu</h2>
-        <p>{city.community}</p>
-        <p>
-          <Link href="/features/city-rooms">{city.name} şehir odası uygulamada</Link>
-        </p>
-      </div>
-      <div className="wrap">
-        <h2>{`${city.name}’u keşfet`}</h2>
-        {city.topics.length > 0 ? (
-          <ul>
-            {city.topics.map((topic) => (
-              <li key={topic.slug}>
-                <Link href={`/city/${city.id}/${topic.slug}`}>{topic.title}</Link>
-              </li>
+      <header className="city-hero">
+        <div className="wrap">
+          <Breadcrumbs items={crumbs} />
+          <p className="kicker">Karadeniz</p>
+          <h1>{city.name}</h1>
+          <p className="lead">{city.intro}</p>
+          <OfflineTools kind="city" title={city.name} href={`/city/${city.id}`} />
+          <ShareBar path={absoluteUrl(`/city/${city.id}`)} title={`${city.name} · Vora`} />
+          <nav className="jump" aria-label={`${city.name} bölümleri`}>
+            <a href="#tani">Şehri tanı</a>
+            {city.topics.length > 0 ? <a href="#konular">Konular</a> : null}
+            <a href="#insanlar">İnsanlar</a>
+            <a href="#paylasimlar">Paylaşımlar</a>
+            <a href="#etkinlikler">Etkinlikler</a>
+            <a href="#blog">Yazılar</a>
+            <a href="#yakin">Yakın iller</a>
+          </nav>
+        </div>
+      </header>
+      <div className="wrap block">
+        <section id="tani" className="atlas-section">
+          <div className="section-head">
+            <h2>{`${city.name} şehrinde Vora`}</h2>
+            <p>Tarih, sosyal hayat, kültür, yerel duraklar ve Vora topluluğu.</p>
+          </div>
+          <div className="fact-grid">
+            {facts.map((fact) => (
+              <article key={fact.key} className="fact-card">
+                <span>{fact.label}</span>
+                <p>{fact.body}</p>
+              </article>
             ))}
-          </ul>
-        ) : (
-          <p className="muted">Bu il için ayrı konu sayfası, özgün metin yazılmadan açılmadı.</p>
-        )}
-        <h2>{`${city.name}’daki Vora kullanıcıları`}</h2>
-        {locals.length === 0 ? (
-          <p className="empty">Bu ile bağlı herkese açık profil şu an listelenmiyor.</p>
-        ) : (
-          <div className="grid-3">
-            {locals.map((person) => (
-              <Link className="card" key={person.id} href={`/u/${person.username}`}>
-                <h3>{displayName(person.full_name, person.username)}</h3>
-                <p className="meta">@{person.username}</p>
+          </div>
+          <p>
+            <Link href="/features/city-rooms">{city.name} şehir odası uygulamada</Link>
+          </p>
+        </section>
+
+        <section id="konular" className="atlas-section">
+          <div className="section-head">
+            <h2>Bu şehirde gez</h2>
+            <p>Ayrı konu sayfaları yalnızca özgün metin yazıldığında açılır.</p>
+          </div>
+          {city.topics.length === 0 ? (
+            <p className="empty">Bu il için ayrı konu sayfası henüz yok.</p>
+          ) : (
+            <div className="topic-grid">
+              {city.topics.map((topic) => (
+                <Link key={topic.slug} href={`/city/${city.id}/${topic.slug}`} className="topic-card">
+                  <span>Konu</span>
+                  <strong>{topic.title}</strong>
+                  <p>{topic.description}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section id="insanlar" className="atlas-section">
+          <div className="section-head">
+            <h2>İnsanlar</h2>
+            <p>Bu ile bağlı, herkese açık profiller.</p>
+          </div>
+          {locals.length === 0 ? (
+            <p className="empty">Bu ile bağlı herkese açık profil şu an listelenmiyor.</p>
+          ) : (
+            <div className="grid-3">
+              {locals.map((person) => (
+                <Link className="card" key={person.id} href={`/u/${person.username}`}>
+                  <h3>{displayName(person.full_name, person.username)}</h3>
+                  <p className="meta">@{person.username}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section id="paylasimlar" className="atlas-section">
+          <div className="section-head">
+            <h2>Paylaşımlar</h2>
+            <p>Yalnızca herkese açık gönderiler.</p>
+          </div>
+          {posts.length === 0 ? (
+            <p className="empty">Bu ilde koşulları sağlayan herkese açık paylaşım yok.</p>
+          ) : (
+            <div className="grid-2">
+              {posts.map((post) => (
+                <Link className="card" key={post.id} href={`/p/${post.id}`}>
+                  <h3>{postHeadline(post)}</h3>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section id="etkinlikler" className="atlas-section">
+          <div className="section-head">
+            <h2>Etkinlikler</h2>
+            <p>
+              <Link href="/events">Tüm Karadeniz etkinlikleri</Link>
+            </p>
+          </div>
+          {events.length === 0 ? (
+            <p className="empty">Yayında etkinlik yok.</p>
+          ) : (
+            <div className="topic-grid">
+              {events.map((event) => (
+                <Link key={event.id} href={`/events/${event.id}`} className="link-card">
+                  <strong>{event.title}</strong>
+                  <p>{new Date(event.starts_at).toLocaleString('tr-TR', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section id="blog" className="atlas-section">
+          <div className="section-head">
+            <h2>Yazılar</h2>
+            <p>Bu şehre bağlı yayımlanmış blog yazıları.</p>
+          </div>
+          {blogs.length === 0 ? (
+            <p className="empty">Bu şehre bağlı yayımlanmış blog yazısı yok.</p>
+          ) : (
+            <div className="topic-grid">
+              {blogs.map((post) => (
+                <Link key={post.id} href={`/blog/${post.slug}`} className="link-card">
+                  <strong>{post.title}</strong>
+                  {post.excerpt ? <p>{post.excerpt}</p> : null}
+                </Link>
+              ))}
+            </div>
+          )}
+        </section>
+
+        <section id="yakin" className="atlas-section">
+          <div className="section-head">
+            <h2>Yakın iller</h2>
+            <p>Aynı hat üzerindeki komşu şehir sayfaları.</p>
+          </div>
+          <div className="city-grid">
+            {related.map((item) => (
+              <Link key={item.id} href={`/city/${item.id}`} className="city-card">
+                <span className="city-mark" aria-hidden="true">
+                  {item.name.slice(0, 1).toLocaleUpperCase('tr')}
+                </span>
+                <span className="city-card-copy">
+                  <strong>{item.name}</strong>
+                  <span className="city-card-intro">{item.intro}</span>
+                </span>
               </Link>
             ))}
           </div>
-        )}
-        <h2>{`${city.name}’dan son paylaşımlar`}</h2>
-        {posts.length === 0 ? (
-          <p className="empty">Bu ilde koşulları sağlayan herkese açık paylaşım yok.</p>
-        ) : (
-          <div className="grid-2">
-            {posts.map((post) => (
-              <Link className="card" key={post.id} href={`/p/${post.id}`}>
-                <h3>{postHeadline(post)}</h3>
-              </Link>
-            ))}
-          </div>
-        )}
-        <h2>{`${city.name}’daki etkinlikler`}</h2>
-        {events.length === 0 ? (
-          <p className="empty">Yayında etkinlik yok.</p>
-        ) : (
-          <ul>
-            {events.map((event) => (
-              <li key={event.id}>
-                <Link href={`/events/${event.id}`}>{event.title}</Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        <h2>{`${city.name} rehberleri`}</h2>
-        {blogs.length === 0 ? (
-          <p className="empty">Bu şehre bağlı yayımlanmış blog yazısı yok.</p>
-        ) : (
-          <ul>
-            {blogs.map((post) => (
-              <li key={post.id}>
-                <Link href={`/blog/${post.slug}`}>{post.title}</Link>
-              </li>
-            ))}
-          </ul>
-        )}
-        <h2>İlgili şehirler</h2>
-        <ul>
-          {city.related.map((id) => {
-            const related = cityById(id);
-            return related ? (
-              <li key={id}>
-                <Link href={`/city/${related.id}`}>{related.name}</Link>
-              </li>
-            ) : null;
-          })}
-        </ul>
+        </section>
       </div>
       <CtaBand />
     </article>

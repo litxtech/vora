@@ -78,7 +78,9 @@ export function CentersDrawerMenu({
 
   const showEmptySearch = query.length > 0 && sections.length === 0;
   const showSupport = isCenterVisible('support-center') && showHubSupport;
-  const showFeedShortcuts = showLeaderboard || showLivePulse || showMap || showCitySystem;
+  const cityInCenterList = showCentersHub && isCenterVisible('city-system');
+  const showCityShortcut = showCitySystem && !cityInCenterList;
+  const showFeedShortcuts = showLeaderboard || showLivePulse || showMap || showCityShortcut;
 
   const handleSupportPress = () => {
     router.push('/support-center' as Href);
@@ -172,7 +174,7 @@ export function CentersDrawerMenu({
               onNavigate={onCenterNavigate}
             />
           ) : null}
-          {showCitySystem ? (
+          {showCityShortcut ? (
             <CentersDrawerLinkRow
               icon="business-outline"
               label="Şehir"

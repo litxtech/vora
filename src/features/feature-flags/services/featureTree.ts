@@ -1,4 +1,4 @@
-import { APP_FEATURE_BY_ID, APP_FEATURE_REGISTRY } from '@/features/feature-flags/constants';
+import { APP_FEATURE_BY_ID, APP_FEATURE_REGISTRY, featureOwnDefaultVisible } from '@/features/feature-flags/constants';
 import type { AppFeatureDef, FeatureGroup, FeatureVisibilityMap } from '@/features/feature-flags/types';
 
 export function getChildFeatures(parentId: string): AppFeatureDef[] {
@@ -22,7 +22,7 @@ export function getFeatureAncestors(featureId: string): string[] {
 }
 
 export function isDirectlyVisible(featureId: string, visibility: FeatureVisibilityMap): boolean {
-  return visibility[featureId] ?? true;
+  return visibility[featureId] ?? featureOwnDefaultVisible(featureId);
 }
 
 /** Kendi bayrağı ve tüm üst özellikler açıksa görünür. */

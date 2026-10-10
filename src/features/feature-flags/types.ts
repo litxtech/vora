@@ -13,6 +13,8 @@ export type AppFeatureDef = {
   kind?: FeatureKind;
   /** Admin panelinde kısa açıklama */
   hint?: string;
+  /** Kayıt yokken görünürlük. Varsayılan açık. */
+  defaultVisible?: boolean;
   /** Route prefixes guarded when the feature is hidden. */
   routes?: string[];
 };

@@ -121,11 +121,12 @@ const SOCIAL_FEATURES: AppFeatureDef[] = [
     label: 'Şehir Sistemi',
     group: 'social',
     kind: 'root',
-    routes: ['/city'],
-    hint: 'Şehir topluluğu, liderlik ve diplomasi ana ekranı',
+    routes: ['/city', '/city-agenda'],
+    hint: 'Şehir topluluğu, liderlik ve diplomasi ana ekranı. Kapalıyken uygulamada kullanılmaz.',
+    defaultVisible: false,
   },
   { id: 'city-elections', label: 'Şehir Seçimleri', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city', '/election'], hint: 'Liderlik seçimleri' },
-  { id: 'city-diplomacy', label: 'Şehir Diplomasisi', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city'], hint: 'Liderler arası diplomasi' },
+  { id: 'city-diplomacy', label: 'Şehir Diplomasisi', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city', '/leader-line'], hint: 'Liderler arası diplomasi' },
   { id: 'city-council', label: 'Şehir Meclisi', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/city', '/council'], hint: 'Meclis ve halk gündemi' },
   { id: 'city-voice-rooms', label: 'Şehir Sesli Odaları', group: 'social', parentId: 'city-system', kind: 'root', routes: ['/room'], hint: 'Ortak şehir sesli odaları' },
 ];
@@ -165,6 +166,11 @@ export const APP_FEATURE_REGISTRY: AppFeatureDef[] = [
   ...ACTION_FEATURES,
   ...FEATURE_SUB_REGISTRY,
 ];
+
+/** Kayıt yokken özelliğin kendi varsayılanı. Üst özelliğin kapalı olması ayrıca kontrol edilir. */
+export function featureOwnDefaultVisible(featureId: string): boolean {
+  return APP_FEATURE_BY_ID[featureId]?.defaultVisible !== false;
+}
 
 export const APP_FEATURE_BY_ID = Object.fromEntries(
   APP_FEATURE_REGISTRY.filter((feature): feature is AppFeatureDef => Boolean(feature?.id)).map(

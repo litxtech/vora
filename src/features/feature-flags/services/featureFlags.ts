@@ -1,4 +1,4 @@
-import { APP_FEATURE_BY_ID, APP_FEATURE_REGISTRY } from '@/features/feature-flags/constants';
+import { APP_FEATURE_BY_ID, APP_FEATURE_REGISTRY, featureOwnDefaultVisible } from '@/features/feature-flags/constants';
 import { isFeatureForcedHidden } from '@/features/feature-flags/services/featureFlagsCore';
 import type { FeatureVisibilityMap } from '@/features/feature-flags/types';
 import { supabase } from '@/lib/supabase/client';
@@ -27,7 +27,7 @@ export function mergeVisibility(rows: FeatureFlagRow[]): FeatureVisibilityMap {
 
   for (const feature of APP_FEATURE_REGISTRY) {
     const row = rows.find((entry) => entry.feature_id === feature.id);
-    const visible = row?.is_button_visible ?? true;
+    const visible = row?.is_button_visible ?? featureOwnDefaultVisible(feature.id);
     map[feature.id] = isFeatureForcedHidden(feature.id) ? false : visible;
   }
 
@@ -38,7 +38,7 @@ function buildDefaultMap(): FeatureVisibilityMap {
   return Object.fromEntries(
     APP_FEATURE_REGISTRY.map((feature) => [
       feature.id,
-      isFeatureForcedHidden(feature.id) ? false : true,
+      isFeatureForcedHidden(feature.id) ? false : featureOwnDefaultVisible(feature.id),
     ]),
   );
 }

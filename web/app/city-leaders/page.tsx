@@ -13,20 +13,39 @@ export const metadata: Metadata = toMetadata({
 
 export default function CityLeadersPage() {
   return (
-    <article className="block">
-      <div className="wrap prose">
+    <article className="block atlas">
+      <div className="wrap">
+        <p className="kicker">Şehir yönetimi</p>
         <h1>Şehir liderleri</h1>
-        <p>
+        <p className="lead">
           Lider, bir ilin Vora topluluğunda meclis ve diplomasi hattının parçasıdır. Görev uygulama içindedir. Bu sayfa kişi listesi, telefon, adres veya özel mesaj yayınlamaz.
         </p>
-        <p>Bir ilin herkese açık yüzü için şehir sayfasına geçin:</p>
-        <ul>
-          {CITIES.map((city) => (
-            <li key={city.id}>
-              <Link href={`/city/${city.id}`}>{city.name}</Link>
-            </li>
-          ))}
-        </ul>
+        <div className="atlas-note">
+          <span>Kişi listesi yok</span>
+          <span>İletişim bilgisi yok</span>
+          <span>Herkese açık yüz şehir sayfasında</span>
+        </div>
+        <section className="belt">
+          <div className="belt-head">
+            <div>
+              <h2>İlin herkese açık sayfası</h2>
+              <p>Liderliği görmek için uygulamaya geç. Web’de şehrin açık yüzeyini oku.</p>
+            </div>
+          </div>
+          <div className="city-grid">
+            {CITIES.map((city) => (
+              <Link key={city.id} href={`/city/${city.id}`} className="city-card">
+                <span className="city-mark" aria-hidden="true">
+                  {city.name.slice(0, 1).toLocaleUpperCase('tr')}
+                </span>
+                <span className="city-card-copy">
+                  <strong>{city.name}</strong>
+                  <span className="city-card-intro">{city.community}</span>
+                </span>
+              </Link>
+            ))}
+          </div>
+        </section>
       </div>
     </article>
   );
