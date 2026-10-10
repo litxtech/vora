@@ -12,6 +12,10 @@ import { LobbyWelcomeCard } from '@/features/auth/components/LobbyWelcomeCard';
 import { LobbyDeveloperFeedbackSheet } from '@/features/auth/components/LobbyDeveloperFeedbackSheet';
 import { isAppleSignInAvailable, signInWithApple } from '@/features/auth/services/appleSignIn';
 import {
+  signInWithSocialProvider,
+  type SocialAuthProvider,
+} from '@/features/auth/services/oauthSignIn';
+import {
   clearLoginAttempts,
   getLoginLockoutMessage,
   recordFailedLogin,
@@ -37,7 +41,8 @@ export function LobbyScreen() {
   const { config: appearance } = useAppearance();
   const lobby = appearance.lobby;
   const insets = useSafeAreaInsets();
-  const { enterGuestMode, savedLoginAccounts, rememberLoginAccountAfterSuccess, forgetLoginAccount } = useAuth();
+  const { enterGuestMode, savedLoginAccounts, rememberLoginAccountAfterSuccess, forgetLoginAccount, refreshProfile } =
+    useAuth();
   const [loginId, setLoginId] = useState('');
   const [password, setPassword] = useState('');
   const [manualEntry, setManualEntry] = useState(false);
@@ -45,9 +50,13 @@ export function LobbyScreen() {
   const [guestLoading, setGuestLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
   const [appleAvailable, setAppleAvailable] = useState(false);
+  const [socialLoading, setSocialLoading] = useState<SocialAuthProvider | null>(null);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const showAppleFeature = useFeatureVisible('apple-sign-in');
+  const showGoogleSignIn = useFeatureVisible('google-sign-in');
+  const showXSignIn = useFeatureVisible('x-sign-in');
+  const showTwitchSignIn = useFeatureVisible('twitch-sign-in');
   const showLobbyFeedback = useFeatureVisible(AUTH_FEATURE.lobbyFeedback);
 
   useEffect(() => {
@@ -183,6 +192,30 @@ export function LobbyScreen() {
     router.replace(result.destination);
   };
 
+  const continueWithSocial = async (provider: SocialAuthProvider) => {
+    setSocialLoading(provider);
+    setError(null);
+
+    const result = await signInWithSocialProvider(provider);
+    setSocialLoading(null);
+
+    if (!result.ok && result.cancelled) return;
+    if (!result.ok && result.review) return;
+
+    if (!result.ok) {
+      if (result.error) setError(result.error);
+      return;
+    }
+
+    if (result.pending) return;
+
+    if (result.email) {
+      await rememberLoginAccountAfterSuccess(result.email, result.userId);
+    }
+    await refreshProfile();
+    router.replace(result.destination);
+  };
+
   return (
     <GradientBackground>
       <ScrollView
@@ -217,6 +250,10 @@ export function LobbyScreen() {
           loginLoading={loginLoading}
           guestLoading={guestLoading}
           appleLoading={appleLoading}
+          socialLoading={socialLoading}
+          showGoogleSignIn={showGoogleSignIn}
+          showXSignIn={showXSignIn}
+          showTwitchSignIn={showTwitchSignIn}
           error={error}
           onLoginIdChange={handleLoginIdChange}
           onPasswordChange={setPassword}
@@ -230,6 +267,9 @@ export function LobbyScreen() {
           onGuest={continueAsGuest}
           onForgotPassword={() => router.push('/(auth)/forgot-password')}
           onAppleSignIn={canUseAppleSignIn ? continueWithApple : undefined}
+          onGoogleSignIn={showGoogleSignIn ? () => void continueWithSocial('google') : undefined}
+          onXSignIn={showXSignIn ? () => void continueWithSocial('x') : undefined}
+          onTwitchSignIn={showTwitchSignIn ? () => void continueWithSocial('twitch') : undefined}
         />
 
         <View style={styles.legal}>

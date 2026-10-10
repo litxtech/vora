@@ -149,6 +149,9 @@ const ACTION_FEATURES: AppFeatureDef[] = [
 
 const AUTH_FEATURES: AppFeatureDef[] = [
   { id: 'apple-sign-in', label: 'Apple ile Giriş', group: 'auth', kind: 'root', routes: ['/(welcome)/lobby'] },
+  { id: 'google-sign-in', label: 'Google ile Giriş', group: 'auth', kind: 'root', routes: ['/(welcome)/lobby'] },
+  { id: 'x-sign-in', label: 'X ile Giriş', group: 'auth', kind: 'root', routes: ['/(welcome)/lobby'] },
+  { id: 'twitch-sign-in', label: 'Twitch ile Giriş', group: 'auth', kind: 'root', routes: ['/(welcome)/lobby'] },
   { id: 'auth-login', label: 'Giriş Yap', group: 'auth', kind: 'root', routes: ['/(auth)/login'] },
   { id: 'auth-register', label: 'Kayıt Ol', group: 'auth', kind: 'root', routes: ['/(auth)/register'] },
   { id: 'auth-guest', label: 'Misafir Girişi', group: 'auth', kind: 'root', routes: ['/(welcome)/lobby'] },

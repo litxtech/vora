@@ -2,7 +2,9 @@ import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { AppleSignInButton } from '@/features/auth/components/AppleSignInButton';
+import { OAuthSignInButtons } from '@/features/auth/components/OAuthSignInButtons';
 import { SavedLoginAccountsSection } from '@/features/auth/components/SavedLoginAccountsSection';
+import type { SocialAuthProvider } from '@/features/auth/services/oauthSignIn';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import type { SavedLoginAccount } from '@/features/auth/types/savedLoginAccounts';
 import { radius, spacing } from '@/constants/theme';
@@ -18,6 +20,10 @@ type LobbyWelcomeCardProps = {
   loginLoading: boolean;
   guestLoading: boolean;
   appleLoading?: boolean;
+  socialLoading?: SocialAuthProvider | null;
+  showGoogleSignIn?: boolean;
+  showXSignIn?: boolean;
+  showTwitchSignIn?: boolean;
   error: string | null;
   onLoginIdChange: (value: string) => void;
   onPasswordChange: (value: string) => void;
@@ -31,6 +37,9 @@ type LobbyWelcomeCardProps = {
   onGuest: () => void;
   onForgotPassword: () => void;
   onAppleSignIn?: () => void;
+  onGoogleSignIn?: () => void;
+  onXSignIn?: () => void;
+  onTwitchSignIn?: () => void;
 };
 
 export function LobbyWelcomeCard({
@@ -43,6 +52,10 @@ export function LobbyWelcomeCard({
   loginLoading,
   guestLoading,
   appleLoading = false,
+  socialLoading = null,
+  showGoogleSignIn = false,
+  showXSignIn = false,
+  showTwitchSignIn = false,
   error,
   onLoginIdChange,
   onPasswordChange,
@@ -56,6 +69,9 @@ export function LobbyWelcomeCard({
   onGuest,
   onForgotPassword,
   onAppleSignIn,
+  onGoogleSignIn,
+  onXSignIn,
+  onTwitchSignIn,
 }: LobbyWelcomeCardProps) {
   const { colors, isDark } = useTheme();
   const showAppleFeature = useFeatureVisible('apple-sign-in');
@@ -64,6 +80,8 @@ export function LobbyWelcomeCard({
   const showGuest = useFeatureVisible('auth-guest');
   const showForgotPassword = useFeatureVisible('auth-forgot-password');
   const showAppleSignIn = showAppleFeature && Platform.OS === 'ios' && Boolean(onAppleSignIn);
+  const showSocialSignIn = showGoogleSignIn || showXSignIn || showTwitchSignIn;
+  const socialBusy = Boolean(socialLoading);
 
   return (
     <View
@@ -138,21 +156,35 @@ export function LobbyWelcomeCard({
         </View>
       ) : null}
 
+      {showAppleSignIn || showSocialSignIn ? (
+        <View style={styles.dividerRow}>
+          <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border }]} />
+          <Text variant="caption" muted>
+            veya
+          </Text>
+          <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border }]} />
+        </View>
+      ) : null}
+
       {showAppleSignIn ? (
-        <>
-          <View style={styles.dividerRow}>
-            <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border }]} />
-            <Text variant="caption" muted>
-              veya
-            </Text>
-            <View style={[styles.dividerLine, { backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : colors.border }]} />
-          </View>
-          <AppleSignInButton
-            onPress={onAppleSignIn!}
-            disabled={guestLoading || loginLoading}
-            loading={appleLoading}
-          />
-        </>
+        <AppleSignInButton
+          onPress={onAppleSignIn!}
+          disabled={guestLoading || loginLoading || socialBusy}
+          loading={appleLoading}
+        />
+      ) : null}
+
+      {showSocialSignIn ? (
+        <OAuthSignInButtons
+          disabled={guestLoading || loginLoading || appleLoading}
+          loadingProvider={socialLoading}
+          showGoogle={showGoogleSignIn}
+          showX={showXSignIn}
+          showTwitch={showTwitchSignIn}
+          onGoogle={onGoogleSignIn}
+          onX={onXSignIn}
+          onTwitch={onTwitchSignIn}
+        />
       ) : null}
 
       <View style={styles.accessCards}>
@@ -160,13 +192,13 @@ export function LobbyWelcomeCard({
           <View style={styles.guestBlock}>
             <Pressable
               onPress={onGuest}
-              disabled={guestLoading || loginLoading}
+              disabled={guestLoading || loginLoading || socialBusy || appleLoading}
               style={({ pressed }) => [
                 styles.accessCard,
                 {
                   borderColor: isDark ? 'rgba(255,255,255,0.14)' : colors.border,
                   backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : colors.background,
-                  opacity: guestLoading || loginLoading ? 0.6 : pressed ? 0.9 : 1,
+                  opacity: guestLoading || loginLoading || socialBusy || appleLoading ? 0.6 : pressed ? 0.9 : 1,
                 },
               ]}
             >

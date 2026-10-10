@@ -54,6 +54,7 @@ import {
   saveBusinessBrandingDraft,
 } from '@/features/profile/components/EditBusinessProfileSection';
 import { EmailChangePanel } from '@/features/profile/components/EmailChangePanel';
+import { LinkedAccountsSection } from '@/features/profile/components/LinkedAccountsSection';
 import { ProfileLinksEditor } from '@/features/profile/components/ProfileLinksEditor';
 import { fetchOwnProfileContactFields } from '@/features/profile/services/profileContactFields';
 import { fetchWebSearchVisible, updateProfile } from '@/features/profile/services/profileData';
@@ -551,6 +552,13 @@ export function EditProfileScreen() {
             />
             <OptionPicker label="Cinsiyet" options={GENDER_OPTIONS} value={gender} onChange={setGender} />
           </EditProfileSection>
+
+          <LinkedAccountsSection
+            isGuest={isGuest}
+            onChanged={() => {
+              void refreshProfile?.();
+            }}
+          />
 
           <EditProfileSection icon="mail-outline" title="İletişim">
             <EmailChangePanel
