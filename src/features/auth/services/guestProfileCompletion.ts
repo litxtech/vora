@@ -110,6 +110,43 @@ export type CompleteGuestProfileInput = {
   username: string;
 };
 
+export type CompleteGuestIdentityInput = {
+  userId: string;
+  firstName: string;
+  lastName: string;
+  username: string;
+};
+
+export async function completeGuestIdentity(
+  input: CompleteGuestIdentityInput,
+): Promise<{ error: string | null }> {
+  const firstNameError = validateTurkishName(input.firstName, 'Ad');
+  if (firstNameError) return { error: firstNameError };
+
+  const lastNameError = validateTurkishName(input.lastName, 'Soyad');
+  if (lastNameError) return { error: lastNameError };
+
+  const usernameError = validateUsername(input.username);
+  if (usernameError) return { error: usernameError };
+
+  const normalizedUsername = normalizeUsernameInput(input.username);
+  if (!(await isUsernameAvailable(normalizedUsername, input.userId))) {
+    return { error: 'Bu kullanıcı adı zaten kullanılıyor.' };
+  }
+
+  const { error } = await updateProfile(input.userId, {
+    firstName: input.firstName.trim(),
+    lastName: input.lastName.trim(),
+    username: normalizedUsername,
+  });
+
+  if (error) {
+    return { error: mapUsernameDatabaseError(error) ?? error };
+  }
+
+  return { error: null };
+}
+
 export async function completeGuestProfile(
   input: CompleteGuestProfileInput,
 ): Promise<{ error: string | null }> {

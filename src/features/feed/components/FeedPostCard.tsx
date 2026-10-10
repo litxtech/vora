@@ -42,6 +42,7 @@ import {
   navigateToFeedDetail,
   prefetchFeedDetail,
 } from '@/features/feed/services/feedNavigation';
+import { rememberFeedItem } from '@/features/feed/services/feedItemMemory';
 import { formatPinExpiry } from '@/features/feed/services/postPinning';
 import { useStandaloneMusicPlayer } from '@/features/music/hooks/useStandaloneMusicPlayer';
 import { ensureReelFeedAudioMode } from '@/features/music/services/audioPreview';
@@ -289,11 +290,13 @@ const FeedPostCardInnerMemo = memo(function FeedPostCardInner({
 
   const prefetchDetail = () => {
     if (isDetail) return;
+    rememberFeedItem(item);
     prefetchFeedDetail(item.sourceType, item.sourceId);
   };
 
   const openDetail = () => {
     if (isDetail) return;
+    rememberFeedItem(item);
     navigateToFeedDetail(item.sourceType, item.sourceId, item.isDemo);
   };
 

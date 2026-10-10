@@ -72,13 +72,12 @@ function buildFeedDetailHref(
 }
 
 export function prefetchFeedDetail(sourceType: FeedSourceType, sourceId: string): void {
-  // Dev client: router.prefetch + lazy chunk import Metro'da binlerce modül derler.
+  // Modül parmak inince ısınır. router.prefetch dev'de bütün grafiği derlediği için atlanır.
+  prefetchFeedDetailRoute(sourceType);
   if (__DEV__) return;
 
   const href = buildFeedDetailHref(sourceType, sourceId);
   if (href) router.prefetch(href);
-
-  prefetchFeedDetailRoute(sourceType);
 
   const mapType = FEED_SOURCE_TO_MAP_DETAIL[sourceType];
   if (mapType) prefetchMapDetail(mapType, sourceId);

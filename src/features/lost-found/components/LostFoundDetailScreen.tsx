@@ -111,8 +111,10 @@ export function LostFoundDetailScreen() {
   const showDetailDelete = useFeatureVisible(LOST_FEATURE.detailDelete);
   const showDetailShare = useFeatureVisible(LOST_FEATURE.detailShare);
 
-  const [record, setRecord] = useState<MapDetailRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [record, setRecord] = useState<MapDetailRecord | null>(() =>
+    id && demo !== '1' ? getCachedMapDetail('lost_found', id) : null,
+  );
+  const [loading, setLoading] = useState(() => !(id && demo !== '1' && getCachedMapDetail('lost_found', id)));
   const [error, setError] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
   const [showTipSheet, setShowTipSheet] = useState(false);

@@ -7,6 +7,7 @@ import {
   readMemoryFeedCache,
   writeFeedCache,
 } from '@/features/feed/services/feedCache';
+import { rememberFeedItems } from '@/features/feed/services/feedItemMemory';
 import { fetchFeedPage, enrichFeedPageWithAds } from '@/features/feed/services/feedData';
 import type { FeedItem } from '@/features/feed/types';
 import { shouldRefreshInBackground, shouldUseSilentListRefresh } from '@/lib/ui/listRefresh';
@@ -60,6 +61,10 @@ export function useFeed() {
   const [cursor, setCursor] = useState<string | null>(initialCache?.cursor ?? null);
   const [hasMore, setHasMore] = useState(initialCache?.hasMore ?? true);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    rememberFeedItems(items);
+  }, [items]);
 
   const latestFetchId = useRef(0);
   const activeKeyRef = useRef(cacheKey);

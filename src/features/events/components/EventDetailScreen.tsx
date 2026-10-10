@@ -193,8 +193,10 @@ export function EventDetailScreen() {
   const { requireAuth } = useRequireAuth();
   const { id, demo, checkout } = useLocalSearchParams<{ id: string; demo?: string; checkout?: string }>();
 
-  const [record, setRecord] = useState<MapDetailRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [record, setRecord] = useState<MapDetailRecord | null>(() =>
+    id && demo !== '1' ? getCachedMapDetail('events', id) : null,
+  );
+  const [loading, setLoading] = useState(() => !(id && demo !== '1' && getCachedMapDetail('events', id)));
   const [error, setError] = useState<string | null>(null);
   const [showReport, setShowReport] = useState(false);
   const [rsvpStatus, setRsvpStatus] = useState<EventRsvpStatus | null>(null);

@@ -55,8 +55,10 @@ export function VoraNeedDetailScreen() {
   const showDetailHide = useFeatureVisible(VORA_NEEDS_FEATURE.detailHide);
   const showDetailDelete = useFeatureVisible(VORA_NEEDS_FEATURE.detailDelete);
 
-  const [listing, setListing] = useState<VoraNeedListing | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [listing, setListing] = useState<VoraNeedListing | null>(() =>
+    id ? getCachedVoraNeedDetail(id, user?.id ?? null) : null,
+  );
+  const [loading, setLoading] = useState(() => !(id && getCachedVoraNeedDetail(id, user?.id ?? null)));
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
 

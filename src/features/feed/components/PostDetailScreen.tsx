@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ComponentType } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,16 +9,21 @@ import { ScreenBackButton } from '@/components/ui/ScreenBackButton';
 import { Text } from '@/components/ui/Text';
 import { CommentSheet } from '@/features/feed/components/CommentSheet';
 import { FeedPostCard } from '@/features/feed/components/FeedPostCard';
-import { PostShareSheet } from '@/features/feed/components/PostShareSheet';
+import { PostDetailPending } from '@/features/feed/components/PostDetailPending';
 import { fetchFeedPostById } from '@/features/feed/services/feedData';
-import { readCachedFeedItemBySource } from '@/features/feed/services/feedCache';
+import { readRememberedFeedItem, rememberFeedItem } from '@/features/feed/services/feedItemMemory';
 import { useFeatureVisible } from '@/features/feature-flags/hooks/useFeatureVisible';
 import { FEED_FEATURE } from '@/features/feed/featureFlags';
 import type { FeedItem } from '@/features/feed/types';
-import { DetailLoadingShell } from '@/components/ui/DetailLoadingShell';
 import { radius, spacing } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 import { useTheme } from '@/providers/ThemeProvider';
+
+type ShareSheetProps = {
+  visible: boolean;
+  item: FeedItem;
+  onClose: () => void;
+};
 
 export function PostDetailScreen() {
   const { id, demo, focusVideo, mediaIndex } = useLocalSearchParams<{
@@ -30,12 +35,13 @@ export function PostDetailScreen() {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const { user } = useAuth();
-  const cachedItem = id && demo !== '1' ? readCachedFeedItemBySource('post', id) : null;
+  const cachedItem = id && demo !== '1' ? readRememberedFeedItem('post', id) : null;
   const [item, setItem] = useState<FeedItem | null>(cachedItem);
   const [loading, setLoading] = useState(!cachedItem);
   const [error, setError] = useState<string | null>(null);
   const [showComments, setShowComments] = useState(false);
   const [showShare, setShowShare] = useState(false);
+  const [ShareSheet, setShareSheet] = useState<ComponentType<ShareSheetProps> | null>(null);
   const showDetailShare = useFeatureVisible(FEED_FEATURE.postDetailShare);
   const showDetailComments = useFeatureVisible(FEED_FEATURE.postDetailComments);
 
@@ -46,7 +52,7 @@ export function PostDetailScreen() {
       return;
     }
 
-    const cachedPost = readCachedFeedItemBySource('post', id);
+    const cachedPost = readRememberedFeedItem('post', id);
     if (cachedPost) {
       setItem(cachedPost);
       setLoading(false);
@@ -59,6 +65,7 @@ export function PostDetailScreen() {
       setError('Gönderi bulunamadı veya kaldırılmış.');
       setItem(null);
     } else {
+      rememberFeedItem(post);
       setItem(post);
     }
     setLoading(false);
@@ -83,8 +90,16 @@ export function PostDetailScreen() {
 
   const parsedMediaIndex = mediaIndex ? Math.max(0, Number.parseInt(mediaIndex, 10) || 0) : 0;
 
-  if (loading) {
-    return <DetailLoadingShell gradient />;
+  const openShare = useCallback(() => {
+    setShowShare(true);
+    if (ShareSheet) return;
+    void import('@/features/feed/components/PostShareSheet').then((mod) => {
+      setShareSheet(() => mod.PostShareSheet);
+    });
+  }, [ShareSheet]);
+
+  if (loading && !item) {
+    return <PostDetailPending item={null} />;
   }
 
   if (error || !item) {
@@ -121,7 +136,7 @@ export function PostDetailScreen() {
           )}
         </View>
         {showDetailShare ? (
-          <Pressable onPress={() => setShowShare(true)} hitSlop={8} style={styles.shareBtn}>
+          <Pressable onPress={openShare} hitSlop={8} style={styles.shareBtn}>
             <Ionicons name="share-outline" size={20} color={colors.text} />
           </Pressable>
         ) : (
@@ -192,7 +207,9 @@ export function PostDetailScreen() {
         onCommentDeleted={() => handleUpdate({ commentCount: Math.max(0, item.commentCount - 1) })}
       />
 
-      <PostShareSheet visible={showShare} item={item} onClose={() => setShowShare(false)} />
+      {showShare && ShareSheet ? (
+        <ShareSheet visible item={item} onClose={() => setShowShare(false)} />
+      ) : null}
     </GradientBackground>
   );
 }

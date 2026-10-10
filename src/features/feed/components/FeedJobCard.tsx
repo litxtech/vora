@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text } from '@/components/ui/Text';
 import { UserBadge } from '@/features/feed/components/UserBadge';
 import { navigateToFeedDetail, prefetchFeedDetail } from '@/features/feed/services/feedNavigation';
+import { rememberFeedItem } from '@/features/feed/services/feedItemMemory';
 import { formatFeedTime } from '@/features/feed/utils';
 import type { FeedItem } from '@/features/feed/types';
 import { EmployerNameChip } from '@/features/personnel-center/components/EmployerNameChip';
@@ -53,6 +54,7 @@ export const FeedJobCard = memo(function FeedJobCard({ item }: FeedJobCardProps)
   const timeLabel = formatFeedTime(item.createdAt);
 
   const warmDetail = () => {
+    rememberFeedItem(item);
     prefetchFeedDetail('job', item.sourceId);
   };
 

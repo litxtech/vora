@@ -232,7 +232,7 @@ export async function convertGuestEmail(email: string): Promise<{ error: string 
 /** Misafir hesabı gerçek e-posta ile bireysel hesaba dönüştürür. */
 export async function completeGuestEmailConversion(
   policyConsents?: Json,
-  options?: { confirmedEmail?: string },
+  options?: { confirmedEmail?: string; keepDeviceLogin?: boolean },
 ): Promise<{ error: string | null }> {
   const { error: sessionError } = await supabase.auth.refreshSession();
   if (sessionError) return { error: sessionError.message };
@@ -260,7 +260,9 @@ export async function completeGuestEmailConversion(
 
   if (profileError) return { error: profileError.message };
 
-  await SecureStore.deleteItemAsync(GUEST_CREDS_KEY).catch(() => undefined);
+  if (!options?.keepDeviceLogin) {
+    await SecureStore.deleteItemAsync(GUEST_CREDS_KEY).catch(() => undefined);
+  }
   await supabase.auth.refreshSession().catch(() => undefined);
   return { error: null };
 }

@@ -198,7 +198,9 @@ export function MarketplaceDetailScreen() {
   const showDetailEdit = useFeatureVisible(MARKETPLACE_FEATURE.detailEdit);
   const showDetailOwnerMenu = useFeatureVisible(MARKETPLACE_FEATURE.detailOwnerMenu);
 
-  const [listing, setListing] = useState<MarketplaceListing | null>(null);
+  const [listing, setListing] = useState<MarketplaceListing | null>(() =>
+    id ? getCachedMarketplaceListing(id) : null,
+  );
   const [similar, setSimilar] = useState<MarketplaceListing[]>([]);
   const [variants, setVariants] = useState<MarketplaceListing[]>([]);
   const [comments, setComments] = useState<MarketplaceComment[]>([]);
@@ -208,7 +210,7 @@ export function MarketplaceDetailScreen() {
   const [commentSubmitting, setCommentSubmitting] = useState(false);
   const [priceHistory, setPriceHistory] = useState<MarketplacePricePoint[]>([]);
   const [order, setOrder] = useState<MarketplaceOrder | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => !(id && getCachedMarketplaceListing(id)));
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [photoIndex, setPhotoIndex] = useState(0);
   const [viewerOpen, setViewerOpen] = useState(false);

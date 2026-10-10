@@ -62,8 +62,10 @@ export function MapDetailScreen({ type }: MapDetailScreenProps) {
   const { user } = useAuth();
   const { requireAuth } = useRequireAuth();
   const { id, demo, checkout } = useLocalSearchParams<{ id: string; demo?: string; checkout?: string }>();
-  const [record, setRecord] = useState<MapDetailRecord | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [record, setRecord] = useState<MapDetailRecord | null>(() =>
+    id && demo !== '1' ? getCachedMapDetail(type, id) : null,
+  );
+  const [loading, setLoading] = useState(() => !(id && demo !== '1' && getCachedMapDetail(type, id)));
   const [error, setError] = useState<string | null>(null);
   const { applyTarget, openApplySheet, closeApplySheet, submitApplication, submitting } =
     usePersonnelApply(user?.id);

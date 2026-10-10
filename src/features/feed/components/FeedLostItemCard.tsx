@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { formatLostTimeAgo } from '@/features/lost-found/constants';
 import { LostItemAvatar } from '@/features/lost-found/components/LostItemAvatar';
 import { navigateToFeedDetail, prefetchFeedDetail } from '@/features/feed/services/feedNavigation';
+import { rememberFeedItem } from '@/features/feed/services/feedItemMemory';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
 import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
@@ -21,6 +22,7 @@ export const FeedLostItemCard = memo(function FeedLostItemCard({ item }: FeedLos
   const itemType = item.lostItemType ?? 'lost';
 
   const warmDetail = () => {
+    rememberFeedItem(item);
     prefetchFeedDetail('lost_found', item.sourceId);
   };
 

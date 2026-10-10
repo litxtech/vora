@@ -5,6 +5,7 @@ import { Text } from '@/components/ui/Text';
 import { EventAvatar } from '@/features/events/components/EventAvatar';
 import { formatEventDateCompact, isEventLiveNow } from '@/features/events/constants';
 import { navigateToFeedDetail, prefetchFeedDetail } from '@/features/feed/services/feedNavigation';
+import { rememberFeedItem } from '@/features/feed/services/feedItemMemory';
 import type { FeedItem } from '@/features/feed/types';
 import { spacing } from '@/constants/theme';
 import { getAndroidInstantPressableProps } from '@/lib/device/androidPerfProfile';
@@ -20,6 +21,7 @@ export const FeedEventCard = memo(function FeedEventCard({ item }: FeedEventCard
   const live = isEventLiveNow(item.createdAt, item.endsAt);
 
   const warmDetail = () => {
+    rememberFeedItem(item);
     prefetchFeedDetail('event', item.sourceId);
   };
 

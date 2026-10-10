@@ -2,7 +2,7 @@
 export const HEAVY_ROUTE_WARMUP_LOADERS: Array<() => Promise<unknown> | unknown> = [
   () => import('@/features/messaging/components/ChatScreen'),
   () => import('@/features/compose/components/ComposeScreen'),
-  () => import('@/features/feed/components/PostDetailScreen'),
+  () => import('@/lib/navigation/lazyRouteScreens').then((m) => m.prefetchPostDetailRoute()),
   () => import('@/features/businesses/components/BusinessDetailScreen'),
   () => import('@/features/profile/components/ProfileScreen'),
   () => import('@/features/events/components/EventDetailScreen'),
